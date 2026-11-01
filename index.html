@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>方塊卡牌抽卡模擬器</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+:root{--bg:#d9d4c7;--panel:#efe9da;--ink:#2a2418;--line:#2a2418;--soft:#c4bda8;--em:#0b9a42;--btn:#6fa84a;--btnink:#10200a;--up:#0b8a3a;--dn:#c0392b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1a16;--panel:#2b2620;--ink:#f1ead8;--line:#0b0907;--soft:#443d33;--em:#3be37a;--btn:#4f8a34;--btnink:#fff;--up:#4be58a;--dn:#ff7a6b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1d1a16;--panel:#2b2620;--ink:#f1ead8;--line:#0b0907;--soft:#443d33;--em:#3be37a;--btn:#4f8a34;--btnink:#fff;--up:#4be58a;--dn:#ff7a6b;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'DotGothic16','Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif;font-size:15px;line-height:1.45;padding-bottom:170px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--panel);z-index:10}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--panel);border-bottom:3px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:8px 12px}
+header h1{font-size:16px;margin:0}
+#emw{font-size:18px;font-weight:700;color:var(--em)}
+main{padding:12px;max-width:640px;margin:0 auto}
+h3{margin:16px 0 8px;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.blk{background:var(--panel);border:3px solid var(--line);box-shadow:inset -3px -3px 0 rgba(0,0,0,.2),inset 3px 3px 0 rgba(255,255,255,.3)}
+.b{font:inherit;font-weight:700;background:var(--btn);color:var(--btnink);border:3px solid var(--line);padding:8px 12px;box-shadow:inset -3px -3px 0 rgba(0,0,0,.3),inset 3px 3px 0 rgba(255,255,255,.3);cursor:pointer;min-height:40px}
+.b:active{transform:translateY(2px)}.b:disabled{opacity:.45}
+.b:focus-visible,select:focus-visible{outline:3px solid var(--em);outline-offset:2px}
+select{font:inherit;background:var(--panel);color:var(--ink);border:3px solid var(--line);padding:6px}
+.pk{display:flex;align-items:center;gap:12px;padding:10px;margin-bottom:10px}
+.pk>div:nth-child(2){flex:1}.big{font-size:40px;line-height:1}
+small,.note{opacity:.75;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.card{aspect-ratio:3/4;border:3px solid var(--rc);background:linear-gradient(var(--panel),var(--soft));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;position:relative;text-align:center;padding:4px;cursor:pointer;overflow:hidden;box-shadow:inset 0 0 0 2px rgba(0,0,0,.15)}
+.card{justify-content:flex-start;aspect-ratio:2/3}.card .nm{align-self:stretch;margin:-4px -4px 3px;padding:2px;background:var(--rc);color:#111;font-size:11px;white-space:nowrap;overflow:hidden}.card .em{background:rgba(0,0,0,.12);border:2px solid var(--line);width:84%;padding:4px 0;font-size:28px;line-height:1.1}.card small{font-size:10px}.card .et{color:#a855f7;font-weight:700}
+.ench{border-color:#b160ff;box-shadow:0 0 8px #b160ff,inset 0 0 0 2px rgba(0,0,0,.15)}.ench::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(177,96,255,.45) 50%,transparent 66%);background-size:250% 100%;animation:sh 3s linear infinite;pointer-events:none}.card.dn::before{display:none}
+.card .pr{font-weight:700;color:var(--em);opacity:1}
+.card.gen .nm{background:linear-gradient(90deg,#00e5ff,#b160ff,#ff4d6d,#ffb020)}.card.gen{box-shadow:0 0 14px #00e5ff,0 0 26px #b160ff,inset 0 0 0 2px rgba(0,0,0,.15)}
+.glow{box-shadow:0 0 14px var(--rc),inset 0 0 0 2px rgba(0,0,0,.15)}
+.foil::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.5) 48%,transparent 66%);background-size:250% 100%;animation:sh 2.6s linear infinite;pointer-events:none}
+@keyframes sh{from{background-position:150% 0}to{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.foil::after,.ench::before{animation:none}}
+.sel{outline:4px solid var(--em);outline-offset:-1px}
+.slab{position:absolute;bottom:0;left:0;right:0;background:var(--line);color:#fff;font-size:10px;padding:1px 0}
+.slab.gh{background:#c9a400;color:#000}
+.dn{--rc:#555!important;background:repeating-linear-gradient(45deg,#3a6b2a 0 8px,#2f5a22 8px 16px)!important;box-shadow:none}
+.dn>*{visibility:hidden;animation:none}.dn::after{content:"?";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff;background:none;animation:none}
+.row{display:flex;align-items:center;gap:10px;padding:8px;margin-bottom:8px}
+.row .card{width:84px;flex:none}.row>div:nth-child(2){flex:1}
+.bar{height:10px;border:2px solid var(--line);background:var(--soft);margin:4px 0}.bar i{display:block;height:100%;background:var(--em)}
+table{width:100%;border-collapse:collapse}td{padding:5px 4px;border-bottom:2px solid var(--soft)}
+.up{color:var(--up)}.dnc{color:var(--dn)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+#actbar{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));padding:8px 12px;display:none;z-index:8;background:var(--panel);border-top:3px solid var(--line)}
+#actbar .in{max-width:640px;margin:0 auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;background:var(--panel);border-top:3px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;font:inherit;background:none;color:var(--ink);border:0;padding:8px 2px;min-height:58px;cursor:pointer;font-size:12px}
+nav button[aria-selected=true]{background:var(--btn);color:var(--btnink);font-weight:700}
+#toast{position:fixed;top:calc(60px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:#2a2418;color:#fff;padding:8px 14px;z-index:20;display:none;max-width:90%;text-align:center;border:2px solid #3be37a}
+details{margin-top:14px;padding:8px 10px}summary{cursor:pointer;font-weight:700}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;font:inherit;color:var(--ink);cursor:pointer}.pt b{font-size:13px}.pt .big{font-size:30px}.pt:active{transform:translateY(2px)}.pt:focus-visible{outline:3px solid var(--em)}
+.spk{display:flex;flex-direction:column;align-items:center;width:70px;font-size:12px;background:linear-gradient(135deg,var(--soft),var(--btn));border:3px solid var(--line);padding:6px 2px}.edge{display:flex;flex-direction:column;gap:2px}.edge i{display:block;height:9px;border:2px solid var(--line)}.edge i.ef{box-shadow:0 0 6px #fff,inset 0 0 0 2px rgba(255,255,255,.8)}.edge i.ee{border-right:10px solid #b160ff}.ab{display:flex;flex-direction:column;gap:4px}.ab .b{padding:4px 8px;min-height:34px;font-size:13px}.hrt{position:absolute;top:0;right:0;font-style:normal;font-size:14px;line-height:1;z-index:2;padding:3px;cursor:pointer}ul{margin:6px 0;padding-left:20px}
+</style>
+</head>
+<body>
+<header><h1>⛏️ 方塊卡牌店</h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="go('sv')" aria-label="存檔與跨裝置">💾</button></header>
+<main id="v"></main>
+<div id="actbar"><div class="in" id="act"></div></div>
+<nav role="tablist"><button role="tab" onclick="go('pack')" id="t-pack">📦<br>開包</button><button role="tab" onclick="go('col')" id="t-col">🎒<br>收藏</button><button role="tab" onclick="go('gr')" id="t-gr">🔍<br>鑑定</button><button role="tab" onclick="go('mkt')" id="t-mkt">📈<br>市場</button><button role="tab" onclick="go('tr')" id="t-tr">🤝<br>交易</button><button role="tab" onclick="go('pass')" id="t-pass">🎫<br>通行證</button></nav>
+<div id="toast" role="status"></div>
+<script>
+const R=[['普通','#9aa0a6'],['稀有','#4aa3ff'],['史詩','#b160ff'],['傳說','#ffb020'],['神話','#ff4d6d'],['創世','#00e5ff']];
+const RUN=[9999,2000,500,100,25,8];
+const PTY=20,PREM=100000,ETER=1000000,PCN=()=>S.eter?80:200,PT=()=>S.eter?12:PTY;
+const D=[['泥土','🟫',0,3],['圓石','🪨',0,3],['橡木','🪵',0,3],['小麥','🌾',0,3],['蘋果','🍎',0,4],['骨頭','🦴',0,3],['種子','🌱',0,3],['雪球','❄️',0,4],
+['鐵錠','⛓️',1,12],['金錠','🟨',1,14],['紅石','🔴',1,12],['青金石','🔷',1,13],['殭屍','🧟',1,12],['骷髏','💀',1,13],['蜘蛛','🕷️',1,12],['野狼','🐺',1,15],
+['鑽石','💎',2,55],['終界珍珠','🟣',2,50],['烈焰棒','🔥',2,52],['附魔書','📖',2,58],['村民','🧑‍🌾',2,48],['終界使者','🌑',2,60],
+['苦力怕','💥',3,230],['地獄之星','⭐',3,280],['不死圖騰','🗿',3,260],['鞘翅','🦋',3,300],['信標','🔆',3,270],
+['終界龍','🐉',4,1500],['凋零怪','☠️',4,1400],['Herobrine','👁️',4,1800],
+['沙子','🏖️',0,3],['礫石','⚪',0,3],['玻璃','🪟',0,3],['工作台','🛠️',0,4],['箱子','🧰',0,4],['南瓜','🎃',0,3],['西瓜','🍉',0,3],['仙人掌','🌵',0,3],['蜘蛛網','🕸️',0,3],['木棒','🥢',0,3],['麵包','🍞',0,3],['生牛肉','🥩',0,3],['鱈魚','🐟',0,3],['雞蛋','🥚',0,3],['馬鈴薯','🥔',0,3],['胡蘿蔔','🥕',0,3],['甘蔗','🎋',0,3],['蘑菇','🍄',0,3],['羽毛','🪶',0,3],['火把','🔦',0,4],
+['鐵鎬','⛏️',1,13],['木劍','🗡️',1,12],['弓','🏹',1,14],['釣竿','🎣',1,13],['盾牌','🛡️',1,14],['鐵胸甲','🦺',1,15],['鐵頭盔','⛑️',1,14],['水桶','🪣',1,12],['剪刀','✂️',1,12],['指南針','🧭',1,14],['時鐘','🕰️',1,14],['地圖','🗺️',1,13],['床','🛏️',1,13],['門','🚪',1,12],['TNT','🧨',1,15],['熔岩桶','🌋',1,15],['雞','🐔',1,12],['羊','🐑',1,12],['馬','🐴',1,15],['貓','🐱',1,14],['蝙蝠','🦇',1,12],['鸚鵡','🦜',1,14],['海龜','🐢',1,14],['熊貓','🐼',1,15],['北極熊','🐻‍❄️',1,15],['河豚','🐡',1,13],['蜜蜂','🐝',1,13],['青蛙','🐸',1,13],['狐狸','🦊',1,14],['活塞','🔧',1,14],['漏斗','🔻',1,13],['發射器','🎯',1,14],['礦車','🚃',1,15],['船','⛵',1,13],
+['鑽石鎬','💠',2,55],['鑽石劍','⚔️',2,58],['鑽石胸甲','🥋',2,60],['三叉戟','🔱',2,60],['弩','🪃',2,52],['金蘋果','🍑',2,52],['終界水晶','🔮',2,58],['烈焰人','🧯',2,50],['惡魂','👻',2,58],['岩漿怪','🟥',2,48],['史萊姆','🟢',2,48],['女巫','🧙',2,55],['掠奪者','🏴‍☠️',2,50],['鐵傀儡','🤖',2,58],['雪人','⛄',2,48],['蘑菇牛','🐮',2,55],['守衛者','🐠',2,52],['幻翼','🦅',2,50],['終界石','⬛',2,48],['黑曜石','🟪',2,52],['地獄磚','🧱',2,48],['靈魂沙','👣',2,48],['發光石','💡',2,52],['海晶燈','🏮',2,55],['唱片','📀',2,56],['命名牌','🏷️',2,50],['拴繩','🪢',2,48],
+['獄髓錠','🔶',3,260],['獄髓劍','🔪',3,290],['獄髓鎬','🪓',3,280],['獄髓胸甲','🧥',3,300],['海洋之心','🌊',3,250],['潛影盒','🎁',3,270],['終界箱','🧿',3,260],['重錘','🔨',3,300],['風彈','🌀',3,280],['試煉鑰匙','🗝️',3,240],['凋零骷髏頭','☣️',3,300],['遠古守衛者','🦑',3,290],['劫毀獸','🦏',3,300],['衛道士','🧔',3,270],
+['監守者','👹',4,1700],['龍首','🐲',4,1600],['命令方塊','🟧',4,1900],['基岩','🧊',4,1500],['Steve','🧑',4,1800],['Alex','👩',4,1700],['龍蛋','🥥',4,2000],
+['終界傳送門','🌌',5,9000],['附魔金蘋果','🍏',5,8000],['終界城','🏰',5,10000],['遠古城市','🏛️',5,8500],['森林府邸','🏚️',5,12000],['海底神殿','🐚',5,9500],['地獄要塞','🏯',5,11000],['彩虹羊','🌈',5,8800]];
+const TW=[[63.5,26,9.3,1.1,.015,0],[41,35,19,4.7,.04,0],[22,37,29,11,.25,.015],[10,33,37,16.5,.45,.015],[0,18,42,31,1.2,.04]],PR=[100,200,400,600,1100];
+const PK=[['農場包','🌾',0,[3,4,6,35,36,37,40,41,43,44,45,46,47,66,67,76]],['礦工包','⛏️',0,[0,1,5,8,9,10,11,16,50,57,102,103]],['工匠包','🛠️',0,[2,32,33,34,39,49,58,62,63,79,80,81]],['森林包','🌲',0,[2,3,47,48,69,71,77,78,12,14,15]],['沙漠包','🏜️',0,[30,31,37,96,101,38,72,35]],['雪原包','🥶',0,[7,74,98,15,42,1]],
+['海洋包','🌊',1,[42,57,72,75,83,87,100,107,115,122]],['洞穴包','🕳️',1,[0,1,8,10,11,16,64,82,94,106,38,70,5,12,13]],['村莊包','🏘️',1,[20,97,95,96,62,63,54,66,34,40,124,60,61]],['紅石包','🔴',1,[10,64,79,80,81,82,60,59,106,108]],['動物園包','🐾',1,[15,66,67,68,69,70,71,72,73,74,75,76,77,78,99,110]],['怪物包','👹',1,[12,13,14,22,91,92,93,94,95,96,101,124,121]],
+['戰士包','⚔️',2,[51,52,53,54,55,56,85,86,87,88,112,114,118]],['附魔包','📖',2,[19,89,109,110,115,120,84,85,86,113,59],{en:.5}],['下界包','🔥',2,[9,17,18,65,91,92,93,104,105,111,112,113,114,121]],['終界包','🟣',2,[17,21,27,90,101,102,116,117,119,123]],
+['傳說包','👑',3,[22,23,24,25,26,111,112,113,114,115,116,117,118,119,120,121,122,123,124]],['Boss包','🐉',4,[27,28,29,125,126,127,128,129,130,131]]].map(([n,e,t,pool,x])=>({n,e,t,p:PR[t],w:TW[t],c:5,pool,en:x?x.en:0}));
+const G=[0,.3,.4,.5,.6,.7,.8,1,1.4,2.2,5],W=[2,3,4,6,8,12,20,22,15,8];
+const T=[['標準',90,1],['快速',30,2.5],['特急',8,6]];
+const P=[0,1,2,3,4,5].map(r=>D.map((d,i)=>d[2]==r?i:-1).filter(i=>i>=0));
+PK.push({n:'篩界包',e:'🌠',t:4,p:10000,w:[0,0,0,99.7,.3,.01],c:5,pool:P[3].concat(P[4],P[5]),en:0,lock:1,foil:1});
+let S,tab='pack',sel=new Set(),rev=[],sort='new',flt='all',rst=false,to=null,ts=new Set(),trRes=null,trm='p',inc=null,ps=new Set(),pr=new Set(),got=[],pasteTxt='',bq=1,exCode='',impTxt='',impS=null;
+try{S=JSON.parse(localStorage.getItem('mcg1'))}catch(e){}
+if(!S)S={em:500,cards:[],id:1,pity:0,dex:[],m:D.map(()=>1),pm:D.map(()=>1),opened:0,log:[]};
+S.inv=S.inv||[];S.pp=S.pp||{};S.auto=S.auto||{r:[0,0,0,0,0,0],f:1};S.esc=S.esc||[];S.seen=S.seen||{};S.rep=S.rep||[];
+S.esc=S.esc.filter(e=>{if(e.code&&e.code.startsWith('MCT.')){S.cards.push(...e.cs);return false}return true});S.rep=S.rep.filter(r=>!(r.code&&r.code.startsWith('MCT.')));
+D.forEach((d,i)=>{if(S.m[i]==null){S.m[i]=1;S.pm[i]=1}});
+const $=s=>document.querySelector(s);
+let THM='auto';try{THM=localStorage.getItem('mcg1theme')||'auto'}catch(e){}
+function applyTheme(){try{const r=document.documentElement;THM=='auto'?r.removeAttribute('data-theme'):r.setAttribute('data-theme',THM)}catch(e){}}
+function setTheme(t){THM=t;try{localStorage.setItem('mcg1theme',t)}catch(e){}applyTheme();render()}
+applyTheme();
+let AC=null;const snd={on:true,vol:.6};try{const x=JSON.parse(localStorage.getItem('mcg1snd'));if(x)Object.assign(snd,x)}catch(e){}
+const sndSave=()=>{try{localStorage.setItem('mcg1snd',JSON.stringify(snd))}catch(e){}};
+function ac(){if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;AC=new C()}if(AC.state=='suspended')AC.resume();return AC}
+function tone(f,t0,d,type='square',v=.2,f2){const a=ac();if(!a)return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;o.type=type;o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(Math.max(.0001,v*snd.vol),t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+.02)}
+function noise(t0,d,v,f0,f1){const a=ac();if(!a)return;const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),x=b.getChannelData(0);for(let i=0;i<n;i++)x[i]=Math.random()*2-1;const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain(),t=a.currentTime+t0;s.buffer=b;fl.type='bandpass';fl.frequency.setValueAtTime(f0,t);fl.frequency.exponentialRampToValueAtTime(f1,t+d);g.gain.setValueAtTime(Math.max(.0001,v*snd.vol),t);g.gain.exponentialRampToValueAtTime(.0001,t+d);s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(t)}
+const SFX={click:()=>tone(900,0,.04,'square',.08),mine:()=>{noise(0,.12,.5,1800,300);tone(160,0,.1,'square',.2,70)},buy:()=>{tone(988,0,.07,'sine',.25);tone(1319,.07,.14,'sine',.25)},peek:()=>noise(0,.15,.25,600,2500),
+open:()=>{noise(0,.3,.5,400,4000);tone(220,0,.25,'sawtooth',.12,440)},coin:()=>{tone(1319,0,.06,'square',.15);tone(1760,.06,.18,'square',.15)},ench:()=>[0,1,2,3,4].forEach(i=>tone(880*Math.pow(1.26,i),i*.06,.15,'sine',.2)),
+err:()=>tone(150,0,.2,'sawtooth',.2,90),ding:()=>tone(1047,0,.2,'sine',.3),fan:()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,i*.1,.25,'triangle',.3)),
+f0:()=>tone(500,0,.05,'square',.08),f1:()=>tone(784,0,.15,'sine',.25),f2:()=>{tone(659,0,.12,'triangle',.3);tone(988,.1,.2,'triangle',.3)},f3:()=>[523,659,784,1047].forEach((f,i)=>tone(f,i*.08,.2,'triangle',.3)),
+f4:()=>{[392,523,659,784,1047].forEach((f,i)=>tone(f,i*.09,.28,'square',.18));noise(.4,.4,.25,3000,6000)},f5:()=>{[262,330,392,523,659,784,1047,1319].forEach((f,i)=>tone(f,i*.08,.5,'triangle',.3));noise(.6,.8,.3,2000,8000);tone(130,0,.9,'sine',.35,260)}};
+function sfx(n){if(!snd.on)return;try{SFX[n]&&SFX[n]()}catch(e){}}
+const save=()=>{try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}cloudQ()};
+const CL={pid:'',name:'',t:0,d:0};
+try{CL.pid=localStorage.getItem('mcg1pid')||'';if(!CL.pid){CL.pid=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,12));localStorage.setItem('mcg1pid',CL.pid)}CL.name=localStorage.getItem('mcg1name')||''}catch(e){}
+function cloudQ(){CL.d=1;clearTimeout(CL.t);CL.t=setTimeout(cloudSend,15000)}
+function cloudName(){if(CL.name)return;try{let n='';for(let i=0;i<5&&!n;i++)n=(prompt('請輸入你的玩家名稱（必填）','')||'').trim().slice(0,20);CL.name=n||'玩家'+CL.pid.slice(0,4);localStorage.setItem('mcg1name',CL.name)}catch(e){CL.name='玩家'}}
+function cloudFp(){try{return[navigator.userAgent,navigator.language,screen.width+'x'+screen.height,screen.colorDepth,devicePixelRatio,new Date().getTimezoneOffset(),navigator.hardwareConcurrency,navigator.deviceMemory,navigator.platform].join('|')}catch(e){return''}}
+function cloudBan(m){document.body.replaceChildren();const h=document.createElement('h2');h.style.cssText='padding:40px 20px;color:#fff;background:#000;text-align:center;min-height:100vh';h.textContent='🚫 你的帳號已被停權'+(m?'（'+m+'）':'');document.body.append(h)}
+function cloudCmd(c){try{
+if(c.t=='em'){S.em=Math.max(0,Math.floor(S.em+c.n));toast((c.n>=0?'🎁 管理員送你 💚':'管理員扣除 💚')+Math.abs(c.n))}
+else if(c.t=='tier'){S.vip=S.prem=S.eter=0;if(c.v!='none'){S.vip=1;S.pp=S.pp||{};S.pc=S.pc||0;if(c.v=='prem'||c.v=='eter')S.prem=1;if(c.v=='eter')S.eter=1}toast('管理員已調整你的通行證')}
+else if(c.t=='msg')alert('📢 管理員訊息：\n'+c.s)
+else if(c.t=='name'){CL.name=String(c.v).slice(0,20);localStorage.setItem('mcg1name',CL.name)}
+else if(c.t=='reset'){localStorage.removeItem('mcg1');location.reload();return}
+}catch(e){}}
+async function cloudSend(){if(!CL.pid)return;CL.d=0;cloudName();try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
+if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
+if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));alert('📢 公告\n'+j.ann.text)}}catch(e){}}
+addEventListener('visibilitychange',()=>{if(document.hidden){if(CL.d)cloudSend()}else cloudSend()});
+addEventListener('load',()=>setTimeout(cloudSend,300));setInterval(()=>{if(!document.hidden)cloudSend()},30000);
+
+function pick(w){let t=w.reduce((a,b)=>a+b),x=Math.random()*t;for(let i=0;i<w.length;i++){if((x-=w[i])<0)return i}return 0}
+const EN=[['鋒利',1.3],['保護',1.25],['效率',1.25],['無限',1.5],['經驗修補',1.4],['幸運',1.3],['耐久',1.2],['荊棘',1.15],['火焰附加',1.2],['水下呼吸',1.1]],RN=['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ'];
+function rollEn(r,f){if(!f&&Math.random()>=[.06,.1,.15,.22,.3,.4][r])return[];const n=1+(Math.random()<.35)+(Math.random()<.12),ids=[];while(ids.length<n){const i=Math.floor(Math.random()*EN.length);if(!ids.includes(i))ids.push(i)}return ids.map(i=>[i,1+Math.min(4,Math.floor(Math.random()*Math.random()*5.5))])}
+const enMul=c=>(c.en||[]).reduce((m,[i,l])=>m*(1+(EN[i][1]-1)*l/3),1);
+const enTxt=c=>c.en&&c.en.length?`<small class="et">✨${c.en.slice(0,2).map(([i,l])=>EN[i][0]+RN[l-1]).join(' ')}${c.en.length>2?'…':''}</small>`:'';
+function mkCard(k){const r=D[k][2],max=RUN[r];return{id:S.id++,k,foil:Math.random()<.08,ser:1+Math.floor(Math.random()*max),max,grade:0,pend:0,pd:0,en:rollEn(r),t:Date.now()}}
+const rk=r=>P[r][Math.floor(Math.random()*P[r].length)];
+function val(c){const sb=c.ser==1?10:c.ser<=10?3:c.ser<=c.max*.01?1.5:1;return D[c.k][3]*S.m[c.k]*(c.grade?G[c.grade]:.75)*(c.foil?2.5:1)*sb*enMul(c)}
+const price=c=>Math.max(1,Math.floor(val(c)*(S.eter?1.1:.92)));
+const fee=(c,t)=>Math.ceil((10+D[c.k][3]*S.m[c.k]*.12)*T[t][2]*(S.eter?.5:1));
+const sp=c=>Math.ceil((S.eter?.5:1)*Math.max(1,(c.pend-Date.now())/1000)*(.5+D[c.k][3]*S.m[c.k]*.01));
+function toast(t){if(/不足|無效|無法|有誤|已經用過|找不到|失敗|不對/.test(t))sfx('err');const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',2400)}
+function head(){$('#em').textContent=S.em;$('header h1').textContent=S.eter?'♾️ 方塊卡牌店 永恆':S.prem?'💎 方塊卡牌店 至尊':S.vip?'👑 方塊卡牌店 VIP':'⛏️ 方塊卡牌店';$('#t-col').innerHTML='🎒<br>收藏 '+S.cards.filter(c=>!c.pend).length;$('#t-gr').innerHTML='🔍<br>鑑定 '+S.cards.filter(c=>c.pend).length}
+const SP={
+cube:'oooooooooo/occcccccao/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/obbbbbbbbo/oooooooooo',
+ore:'oooooooooo/occcccccao/ocaadaaabo/ocadddaabo/ocaadaaabo/ocaaaadabo/ocaaaddabo/ocaaaadabo/obbbbbbbbo/oooooooooo',
+glass:'oooooooooo/oayaaaaaao/oyaaaaaaao/oaaaaaaaao/oaaaaaayao/oaaaaaayao/oaaaaaaaao/oaayaaaaao/oaaaaaaaao/oooooooooo',
+chest:'oooooooooo/obaaaaaabo/obaaaaaabo/oooooooooo/obaaddaabo/obaaddaabo/obaaaaaabo/obaaaaaabo/obbbbbbbbo/oooooooooo',
+ingot:'........../........../...oooooo./..occccaao/.occaaaabo/oaaaaaabbo/obbbbbbbo./.oooooooo./........../..........',
+gem:'........../...oooo.../..occcao../.occcaaao./occaaaabbo/.oaaabbbo./..oabbbo../...obbo.../....oo..../..........',
+sword:'.......ooo/......occo/.....occao/....occao./...occao../.o.occao../oooocao.../.oddo...../.owxo...../oo.oo.....',
+pick:'...oooo.../.ooccaaoo./oca.ow.abo/oa..owo.bo/o...owo..o/....owo.../....owo.../....owo.../....ooo.../..........',
+stick:'........oo/.......oco/......ocao/.....ocao./....ocao../...ocao.../..ocao..../.ocao...../ocao....../oo......../',
+axe:'..ooooo.../.occcaao../.occaaabo./.ocaaabbo./..obabbo../...owo..../...owo..../...owo..../...owo..../...ooo..../',
+apple:'.....w.a../....ow.ao./..ooowooo./.occaaaabo/ocaaaaaabo/ocaaaaaabo/.oaaaaabo./.obaaabbo./..obbbbo../...oooo.../',
+bone:'........../.oo....oo./occo..occo/ocaaaaaaco/obbbbbbbbo/obbo..obbo/.oo....oo./........../........../..........',
+sprout:'........../.oo....oo./ocaao.oaco/oaaaaoaaao/.oaaaaaao./..oaaaao../...owo..../...owo..../...owo..../..oooo..../',
+bread:'........../...oooo.../..occcao../.occaaaao./occaaaaabo/oaaaaaaabo/obbbbbbbbo/.oooooooo./........../..........',
+egg:'...oooo.../..occaao../.occaaaao./.ocaaaabo./oaaaaaaabo/oaaaaaaabo/oaaaaaabbo/.obaaabbo./..obbbbo../...oooo.../',
+orb:'...oooo.../..occcao../.occaaaabo/occaaaaabo/oaaaaaabbo/oaaaaabbbo/.obaabbbo./..obbbbo../...oooo.../........../',
+book:'........../.oooooooo./.obccccao./.obcddcao./.obcddcao./.obccccao./.obaaaaao./.obbbbbbo./.oooooooo./........../',
+feather:'.......ooo/.....oocco/....occcao/...occcaao/..occcaao./.occcaao../.ocacao.../ocaoo...../owo......./oo......../',
+torch:'....dd..../...dcdd.../...dcdd.../....oo..../....ow..../....ow..../....ow..../....ow..../....ow..../....oo..../',
+mush:'...oooo.../..occcaao./.occdcaaao/oacaaaaabo/oaaaaaaabo/.obbbbbbo./..oyyyo.../..oyyyo.../..oyyyo.../...ooo..../',
+dial:'...oooo.../..obbbbo../.obaaaabo./obaaoaaabo/obaaooaabo/obaaaaaabo/.obaaaabo./..obbbbo../...oooo.../........../',
+paper:'........../.oooooooo./.occccccao/.ocaaaaabo/.ocoooaabo/.ocaaaaabo/.ocooaaabo/.ocaaaaabo/.obbbbbbbo/.oooooooo./',
+door:'..oooooo../..oaaaao../..oabbao../..oaaaao../..oaaaao../..oabbao../..oaaaao../..oaaadao./..oaaaao../..oooooo../',
+shield:'.oooooooo./oaacccaabo/oaacdcaabo/oaacdcaabo/oaacccaabo/.oaaaaabo./.oaaaaabo./..oaaabo../...obbo.../....oo..../',
+armor:'.oo....oo./occo..occo/occoooocco/.occaaacco/.oaaaaaabo/.oaaaaaabo/.oaaaaaabo/.oaabbaabo/.obbbbbbbo/..oooooo../',
+helmet:'........../..oooooo../.occccaao./occaaaaabo/oaaaaaaabo/oaaooooabo/oaao..oabo/obbo..obbo/.oo....oo./........../',
+bucket:'........../.oddddddo./..oooooo../..oaaaabo./..oaaaabo./..oaaabbo./..oaabbbo./...obbbo../....ooo.../........../',
+trident:'.o..o..o../.oc.oc.oc./.oc.oc.oc./.occcccco./..oooooo../....ob..../....ob..../....ob..../....ob..../....oo..../',
+key:'..oooo..../.occaao.../oca..abo../oca..abo../.obaabo.../..oab...../..oabooo../..oab.ab../..oabooo../..oooo..../',
+skull:'..oooooo../.occccccao/oacaaaaabo/oaaaaaaabo/oaooaaooao/oaooaaooao/oaaaaoaaabo/.oabaaabo./..obobobo./...oooooo./',
+star:'....oo..../....oo..../...occo.../ooocccaooo/.occcaaabo/..oaaaabo./..oaaaabo./.oaabbaabo/.oabooobao/..oo..oo../',
+portal:'..oooooo../.oaaaaaao./oacddddcao/oadccccdao/oadcddcdao/oadcddcdao/oadccccdao/oacddddcao/.obbbbbbo./..oooooo../',
+castle:'.o.o..o.o./oaoaooaoao/oaaaaaaaao/oaaaccaaao/oaaacdaaao/oaaaddaaao/obbbddbbbo/obbbddbbbo/obbbbbbbbo/oooooooooo',
+zombie:'..oooooo../.oaaaaaao./oaaaaaaaao/oaooaaooao/oaooaacoao/oaaaaaaaao/oaaoddoaao/.oaodddao./..obbbbo../...oooo.../',
+spider:'o........o/.o.oooo.o./..oaaaao../oooaaaaooo/.o.aaaa.o./o..aooa..o/..oabbao../.o.oooo.o./o........o/........../',
+wolf:'oo......oo/ocoo..ooco/ocaaoooaco/oaaaaaaaao/oaooaaooao/oaaaccaaao/.oaccccao./..oacoao../...oooo.../........../',
+cat:'.o......o./.oo....oo./.ocaoooaco/oaaaaaaaao/oaooaaooao/oaaaadaaao/ooaaoaaaoo/.oaaaaaao./..obbbbo../...oooo.../',
+chick:'....oo..../...orro.../..occaao../.occaaaao./.ocoaaoao./.ocaaddao./.oaaadaabo/..oaaaabo./...obbbo../...o.o..../',
+sheep:'.oooooooo./occcccccao/ocacacacao/ocaodddaao/.oddcddcdo/.oddddddo./..oddddo../..ododdo../...oooo.../........../',
+horse:'.o......o./.oo....oo./.ocoooocao/.oaaaaaabo/.oaoaaoabo/.oaaaaaabo/..oaaaabo./..oacccbo./..oaoaobo./...oooo.../',
+bat:'oo......oo/oao.oo.oao/oaaooooaao/oaaaaaaaao/.oadaadao./..oaaaao../..oabbao../...o..o.../........../........../',
+parrot:'...oooo.../..oaaaao../.oaaaaaao./.oaooaaao./.oaaaaaddo/.oabaaaddo/..obbaaoo./...obbo.../....oo..../........../',
+turtle:'..oooooo../.obbccbbo./obcbbbbcbo/obbbccbbbo/obcbbbbcbo/.obbccbbo./..oooooo../.ooa..aoo./ooaoo.oaoo/.oo....oo./',
+panda:'oddo..oddo/oddooooddo/.oaaaaaao./oaaaaaaaao/oaddaaddao/oaddaaddao/oaaaadaaao/.oaaadaao./..oaaaao../...oooo.../',
+bear:'.oo....oo./oaao..oaao/.oaooooao./oaaaaaaaao/oaooaaooao/oaaaccaaao/.oaaoooao./..oaaaao../...oooo.../........../',
+puff:'..o.oo.o../.oaaaaaao./oacaaaaaao/oaooaaooao/oaaaaaaaao/oaaoddoaao/.obbbbbbo./o.obbbbo.o/..o.oo.o../........../',
+bee:'..oo..oo../.oyyo.oyyo/.oyyo.oyyo/..oaaaao../.oddddddo./.oaaaaaao./.oddddddo./.oaaaaaao./..oddddo../...oooo.../',
+frog:'.oo....oo./oyyo..oyyo/oyooaaooyo/oaaaaaaaao/oaaaaaaaao/oaddddddao/oaaaaaaaao/.obbbbbbo./..oooooo../........../',
+fox:'oo......oo/oco....oco/ocaoooaaco/oaaaaaaaao/oaooaaooao/oyaaaaaayo/.oyyaayyo./..oyyoyo../...oooo.../........../',
+piston:'oooooooooo/owxxxxxxwo/oooooooooo/..ocaaco../..ocaaco../oooooooooo/oaaaaaaaao/oaoaaaaoao/obbbbbbbbo/oooooooooo',
+hopper:'oooooooooo/obccccccbo/oaaaaaaaao/.obaaaabo./..obaabo../..obaabo../...oaao.../...oaao.../...oooo.../........../',
+disp:'oooooooooo/occcccccao/ocaooooabo/ocaoddoabo/ocaoddoabo/ocaooooabo/ocaaaaaabo/ocaaaaaabo/obbbbbbbbo/oooooooooo',
+cart:'........../........../.o......o./.oooooooo./.obaaaabo./.obaaaabo./.obbbbbbo./..ocooco../..oo..oo../........../',
+boat:'........../........../..o....o../.oooooooo./oaaaaaaaao/obaaaaaabo/.obbbbbbo./..oooooo../........../........../',
+xbow:'oo......oo/oao....oao/.oaooooao./..oyyyyo../...owxo.../...owxo.../...owxo.../...owxo.../...oxwo.../....oo..../',
+bow:'..oo....../.oaaoy..../oaaoo.y.../oao...y.../oao...y.../oao...y.../oao...y.../oaaoo.y.../.oaaoy..../..oo....../',
+rod:'........oo/.......owo/......owxo/.....owxo./....owxo../...owxo.../..owxo..../.owxo...yy/oxo.....y./oo......yy',
+shears:'o........o/oco....oco/.oco..oco./..ococco../...occo.../...occo.../..oc..co../.oc....co./oo......oo/........../',
+bed:'........../.oooooooo./.oyyyaaabo/.oyyyaaabo/.oaaaaaabo/.oaaaaaabo/.oooooooo./.ow....wo./.oo....oo./........../',
+lead:'..oooooo../.owxxxxwo./owxooooxwo/oxo....oxo/oxo....oxo/owxo..oxwo/.owxxxxwo./..oooooo../...oxxo.../....oo..../',
+steak:'........../..oooooo../.oaaaaaao./oaccaaaaao/oacyyaaabo/oaayyaaabo/oaaaaaabbo/.obbbbbbo./..oooooo../........../',
+fish:'........../........../.ooooo..o./oaaaaaooao/oaoaaaaaao/obbbbbbooa/.ooooo..o./........../........../........../',
+carrot:'...g.g.g../....ggg.../..oooooo../..oaaccbo./...oaaabo./...oabbo../....oabo../....obo.../.....oo.../........../',
+mace:'..oooooo../.occcccao./.ocaaaabo./.ocaaaabo./.obbbbbbo./..oooooo../....owo.../....owo.../....owo.../....ooo.../',
+slime:'........../..oooooo../.occaaaao./oaccaaaaao/oaaoaaaoao/oaaaaaaaao/oaaaddaaao/obbbbbbbbo/.oooooooo./........../',
+witch:'....oo..../...oaao.../...oabo.../..oaaabo../.oddddddo./oaaaaaaaao/.oggggggo./.ogoggogo./..oggggo../...oooo.../',
+snowman:'...oooo.../..oooooo../.oyyyyyyo./.oyoyyoyo./.oyyddyyo./..oyyyyo../.oyyyyyyo./oyyoyyoyyo/oyyyyyyyyo/.oooooooo./',
+golem:'....oo..../....od..../.oooooooo./.occccccao/.ocaddadao/.ocaaaaabo/.ocaoooabo/.obbbbbbbo/.oooooooo./........../',
+cow:'oy......yo/.oo....oo./.oaaaaaao./oaddaaaaao/oaddaoaoao/oaaaaaaaao/.oaaaaaao./.oxxxxxxo./.oxoxxoxo./..oooooo../',
+elytra:'oo......oo/occo..occo/ocaaooaaco/ocaaaaaaco/.ocaaaaco./.obaaaabo./..obaabo../..obaabo../...obbo.../....oo..../',
+totem:'...oooo.../..occcao../..oaoaao../..oaaaao../ooooaaoooo/oaaaaaaaao/.oaaaaaao./..oaaaao../..oaoaao../..oo..oo../',
+dhead:'y........y/oy......yo/.oaaaaaao./oaaaaaaaao/oadaaaadao/oaaaaaaaao/.oaaaaaao./.oaoaaoao./..oyaayo../...oooo.../',
+ghost:'..oooooo../.occcccao./occaaaaaao/oaooaaooao/oaooaaooao/oaaaaoaaao/oaaaddaaao/obaobaobao/.o.o.o.o../........../',
+beast:'y........y/oy......yo/.oaaaaaao./oaaaaaaaao/oaodaadoao/oaaaaaaaao/.oaaaaaao./.oaoaaoao./.oyaaaayo./..oooooo../',
+rainbow:'..oooooo../.orrrrrro./orreeeerro/oreuuuuero/oreugggero/oreugggero/oreu..uero/orru..urro/orre..erro/oooo..oooo'};
+const PAL={dirt:['#8b5a2b','#6b4220','#a8743c','#5a3818'],stone:['#8a8a8a','#666','#b0b0b0','#4a4a4a'],wood:['#b98a4e','#8a5a2b','#d4a96a','#6b4220'],sand:['#e0d39a','#c4b574','#f2e8bd','#a89a5a'],glass:['#bfe8f5','#9ccfe0','#e8f8ff','#7fb8cc'],pump:['#e8861a','#b8620a','#f5a844','#7a4008'],melon:['#4fae3a','#357a26','#7fd060','#d9344a'],obs:['#2b1b4a','#190f2e','#4a3280','#a060ff'],brick:['#9a3a3a','#6e2424','#c05a5a','#3a1a1a'],soul:['#5a4636','#3e2f24','#78604a','#2a1f18'],glow:['#f2c94a','#c9a02a','#fff0a0','#a67c10'],sea:['#8fe0d0','#4fb0a0','#e0fff8','#2a7a70'],bed:['#4a4a4a','#2a2a2a','#6e6e6e','#111'],cmd:['#d98a2a','#a8641a','#f0b060','#5a3410'],tnt:['#d83a3a','#a02424','#f06060','#fff'],end:['#e0e0a0','#b8b870','#f5f5c8','#8a8a50'],snow:['#f4f8ff','#c8d4e8','#fff','#9fb0cc'],iron:['#d8d8d8','#9a9a9a','#f5f5f5','#6a6a6a'],gold:['#f6c630','#c8941a','#fff0a0','#8a5a10'],neth:['#4a3a3a','#2a1f1f','#6e5a5a','#8a5a5a'],dia:['#4fe0e8','#22a8b8','#b0fbff','#1a7080'],lapis:['#2f5fd0','#1a3a90','#5f8ff0','#12286a'],red:['#d82a2a','#9a1414','#f06060','#5a0808'],pur:['#7a3fd0','#4a1f90','#b080f0','#2a0f60'],egg:['#f0ece0','#c8c0a8','#fffff8','#8a7a50'],degg:['#2a1a3a','#150a20','#5a3a80','#a060ff'],wheat:['#e0c040','#b09020','#f5e070','#7a6010'],leaf:['#4fae3a','#357a26','#7fd060','#2a5a1a'],bread:['#d09a4a','#a0702a','#e8c080','#6a4818'],paper:['#f0e8cc','#c8bc98','#fffaf0','#8a7a50'],fire:['#f0a020','#c06a10','#ffd060','#ff5a10'],pot:['#c8a060','#9a7438','#e0c088','#6a4a20'],iw:['#d8d8d8','#9a9a9a','#f5f5f5','#3b82f6'],il:['#d8d8d8','#9a9a9a','#f5f5f5','#ff7a10'],zomb:['#6aa84f','#4a7a38','#9acd7a','#2a4a1a'],spid:['#3a3a3a','#222','#5a5a5a','#e04b4b'],steakp:['#d85a5a','#a03a3a','#f08080','#fff'],fishp:['#e0a070','#b07848','#f8d0a8','#7a4a28'],carrotp:['#f08a1a','#c06010','#ffb050','#f08a1a'],sheepp:['#f4f0e8','#c8c0b0','#fff','#3a3a3a'],fur:['#9a6a3a','#6e4824','#c8955a','#3a2410'],cat:['#8a8a8a','#666','#b0b0b0','#e08a9a'],bat:['#3a2a4a','#221630','#5a4a7a','#e04b4b'],parrotp:['#d82a2a','#9a1414','#f06060','#f0a020'],pandap:['#f4f8ff','#c8d4e8','#fff','#222'],beep:['#f2c94a','#c9a02a','#fff0a0','#222'],foxp:['#e8741a','#b04a0a','#f5a050','#fff'],slimep:['#6ad060','#3a9a38','#a0f090','#1a5a1a'],lava:['#e8541a','#b02a0a','#ffa050','#ffd060'],witchp:['#4a2a6a','#2a1040','#7a4aa0','#d9a040'],cowp:['#f0ece0','#c8c0a8','#fff','#3a3a3a'],wing:['#9a9ab0','#6a6a80','#c8c8d8','#6a6a80'],dragg:['#3a8a4a','#245a30','#6ac07a','#f0d040'],dragp:['#2a1a3a','#150a20','#5a3a80','#e060ff'],phan:['#2a4a6a','#142a40','#4a7aa0','#60f0ff'],stonet:['#6a8a8a','#4a6666','#9ac0c0','#d0f0e0'],beastp:['#8a8a90','#5a5a60','#b0b0b8','#e04b4b'],redbed:['#d84a4a','#a02a2a','#f08080','#fff'],teal:['#2fa8a0','#1a6e70','#70e0d8','#0e4448']};
+const TH={殭屍:['zombie','zomb'],骷髏:['skull','egg'],蜘蛛:['spider','spid'],野狼:['wolf','stone'],生牛肉:['steak','steakp'],鱈魚:['fish','fishp'],胡蘿蔔:['carrot','carrotp'],弓:['bow','wood'],釣竿:['rod','wood'],剪刀:['shears','iron'],床:['bed','redbed'],雞:['chick','egg'],羊:['sheep','sheepp'],馬:['horse','fur'],貓:['cat','cat'],蝙蝠:['bat','bat'],鸚鵡:['parrot','parrotp'],海龜:['turtle','leaf'],熊貓:['panda','pandap'],北極熊:['bear','snow'],河豚:['puff','wheat'],蜜蜂:['bee','beep'],青蛙:['frog','leaf'],狐狸:['fox','foxp'],活塞:['piston','stone'],漏斗:['hopper','iron'],發射器:['disp','stone'],礦車:['cart','iron'],船:['boat','wood'],弩:['xbow','wood'],史萊姆:['slime','slimep'],岩漿怪:['slime','lava'],女巫:['witch','witchp'],鐵傀儡:['golem','iron'],雪人:['snowman','carrotp'],蘑菇牛:['cow','cowp'],重錘:['mace','iron'],拴繩:['lead','wood'],鞘翅:['elytra','wing'],不死圖騰:['totem','gold'],龍首:['dhead','dragg'],終界龍:['dhead','dragp'],惡魂:['ghost','snow'],幻翼:['bat','phan'],守衛者:['puff','teal'],遠古守衛者:['puff','stonet'],劫毀獸:['beast','beastp'],泥土:['cube','dirt'],圓石:['cube','stone'],橡木:['cube','wood'],沙子:['cube','sand'],礫石:['ore','stone'],玻璃:['glass','glass'],工作台:['ore','wood'],箱子:['chest','wood'],南瓜:['cube','pump'],西瓜:['ore','melon'],仙人掌:['cube','leaf'],終界石:['cube','end'],黑曜石:['cube','obs'],地獄磚:['cube','brick'],靈魂沙:['cube','soul'],發光石:['cube','glow'],海晶燈:['cube','sea'],基岩:['cube','bed'],命令方塊:['ore','cmd'],TNT:['cube','tnt'],信標:['gem','sea'],
+木棒:['stick','wood'],蘋果:['apple','red'],骨頭:['bone','egg'],種子:['sprout','leaf'],雪球:['orb','snow'],小麥:['sprout','wheat'],麵包:['bread','bread'],雞蛋:['egg','egg'],馬鈴薯:['egg','pot'],甘蔗:['sprout','leaf'],蘑菇:['mush','red'],羽毛:['feather','snow'],火把:['torch','fire'],
+鐵錠:['ingot','iron'],金錠:['ingot','gold'],紅石:['orb','red'],青金石:['gem','lapis'],獄髓錠:['ingot','neth'],
+鐵鎬:['pick','iron'],木劍:['sword','wood'],盾牌:['shield','iron'],鐵胸甲:['armor','iron'],鐵頭盔:['helmet','iron'],水桶:['bucket','iw'],熔岩桶:['bucket','il'],指南針:['dial','iron'],時鐘:['dial','gold'],地圖:['paper','paper'],門:['door','wood'],
+鑽石:['gem','dia'],終界珍珠:['orb','pur'],烈焰棒:['stick','fire'],附魔書:['book','pur'],鑽石鎬:['pick','dia'],鑽石劍:['sword','dia'],鑽石胸甲:['armor','dia'],三叉戟:['trident','teal'],金蘋果:['apple','gold'],終界水晶:['gem','pur'],唱片:['dial','neth'],命名牌:['paper','wood'],
+地獄之星:['star','snow'],獄髓劍:['sword','neth'],獄髓鎬:['pick','neth'],獄髓胸甲:['armor','neth'],海洋之心:['orb','dia'],潛影盒:['chest','pur'],終界箱:['chest','obs'],風彈:['orb','snow'],試煉鑰匙:['key','gold'],凋零骷髏頭:['skull','neth'],龍蛋:['egg','degg'],
+終界傳送門:['portal','pur'],附魔金蘋果:['apple','gold'],終界城:['castle','end'],遠古城市:['castle','teal'],森林府邸:['castle','wood'],海底神殿:['castle','sea'],地獄要塞:['castle','brick'],彩虹羊:['rainbow','snow']};
+const FX={o:'#1c1a17',w:'#8a5a2b',x:'#b98a4e',y:'#f5f0e0',r:'#e04b4b',e:'#f0a030',u:'#f2e04a',g:'#4fae3a'},SVC={};
+function ico(k,s=34){const d=D[k],t=TH[d[0]];if(!t||!SP[t[0]])return d[1];const key=k+'_'+s;if(SVC[key])return SVC[key];const p=PAL[t[1]],cm={a:p[0],b:p[1],c:p[2],d:p[3]};let r='';
+SP[t[0]].split('/').slice(0,10).forEach((row,y)=>{row=row.padEnd(10,'.');let x=0;while(x<10){const ch=row[x]||'.';if(ch=='.'){x++;continue}let n=1;while(row[x+n]==ch&&x+n<10)n++;r+=`<rect x="${x}" y="${y}" width="${n}" height="1" fill="${cm[ch]||FX[ch]||'#f0f'}"/>`;x+=n}});
+return SVC[key]=`<svg viewBox="0 0 10 10" width="${s}" height="${s}" shape-rendering="crispEdges" role="img" aria-label="${d[0]}" style="display:block;margin:auto">${r}</svg>`}
+function card(c,x='',p=false){const d=D[c.k],r=R[d[2]];return `<div data-r="${d[2]}" class="card ${d[2]>=5?'gen':''} ${c.foil?'foil':''} ${c.en&&c.en.length?'ench':''} ${x}" style="--rc:${r[1]}"><b class="nm">${d[0]}</b><div class="em">${ico(c.k)}</div><small>${r[0]}${c.foil?' ✦閃卡':''}</small>${enTxt(c)}<small>#${c.ser}/${c.max}</small>${p?`<small class="pr">💚${price(c)}</small><i class="hrt" onclick="event.stopPropagation();lk(${c.id})" aria-label="上鎖">${c.lk?'❤️':'🤍'}</i>`:''}${c.grade?`<div class="slab ${c.grade>=9?'gh':''}">鑑定 ${c.grade}/10</div>`:''}</div>`}
+const PG=[[2,8],[2,8],[3,10],[4,80],[4,40]],cst=p=>Math.ceil(p.p*(p.lock?1:S.eter?.3:S.prem?.6:S.vip?.8:1));
+function drawK(r,pool){const a=pool.filter(i=>D[i][2]==r);return Math.random()<.65&&a.length?a[Math.floor(Math.random()*a.length)]:rk(r)}
+function buyOne(i){const p=PK[i],cost=cst(p);if(S.em<cost||(p.lock&&!S.eter))return 0;
+S.em-=cost;S.pity++;let rs=[];const w=S.prem?p.w.map((x,r)=>r==5?x*(S.eter?12:3):r>=3?x*(S.eter?3:1.5):x):p.w;for(let j=0;j<p.c;j++)rs.push(pick(w));
+if(Math.max(...rs)<(S.eter?2:1))rs[0]=S.eter?2:1;
+if(S.pity>=PT()&&Math.max(...rs)<3)rs[0]=Math.random()<.99?3:4;
+if(Math.max(...rs)>=3)S.pity=0;
+if(S.vip&&!p.lock){const g=PG[p.t];S.pp[i]=(S.pp[i]||0)+1;if(Math.max(...rs)>=g[0])S.pp[i]=0;else if(S.pp[i]>=g[1]){rs[0]=g[0];S.pp[i]=0}}
+if(S.prem&&!p.lock){S.pc=(S.pc||0)+1;if(Math.max(...rs)>=5)S.pc=0;else if(p.t>=2&&S.pc>=PCN()){rs[0]=5;S.pc=0}}
+rs.sort();const cs=rs.map(r=>{const c=mkCard(drawK(r,p.pool));if(p.en&&!c.en.length&&Math.random()<p.en)c.en=rollEn(r,1);if(p.foil)c.foil=true;return c});
+S.inv.push({id:S.id++,p:i,cs,pk:null,paid:cost});return 1}
+function buy(i){if(!S.prem)bq=1;if(PK[i].lock&&!S.eter){sfx('err');return toast('篩界包只有永恆通行證才能抽')}let n=0;for(let j=0;j<bq;j++){if(buyOne(i))n++;else break}if(!n)return toast('綠寶石不足，去挖礦或賣卡吧');if(n<bq)toast(`綠寶石不足，只買了 ${n} 包`);sfx('buy');save();render();const e=$('#inv');e&&e.scrollIntoView({behavior:'smooth'})}
+let AS={n:0,g:0},lastSold='';
+function autoSell(cs){const a=S.auto,kept=[];cs.forEach(c=>{S.dex[c.k]=1;const r=D[c.k][2];if(a.r[r]&&!(a.f&&(c.foil||(c.en&&c.en.length)))){const g=price(c);S.em+=g;AS.n++;AS.g+=g}else{c.t=Date.now();S.cards.push(c);kept.push(c)}});return kept}
+function asToast(){lastSold=AS.n?`上次拆包自動賣出 ${AS.n} 張，獲得 💚${AS.g}`:'';if(AS.n){sfx('coin');toast(`自動賣出 ${AS.n} 張，獲得 💚${AS.g}`)}}
+function setAuto(i,v){S.auto.r[i]=v?1:0;save();render()}
+function vAuto(){return `<div class="blk" style="padding:10px;margin-top:10px"><b>🧹 拆包自動賣出</b><br><small>勾選的稀有度，拆包時會直接賣掉，不放進收藏（賣價和一般賣卡相同）。</small><div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">${R.map((x,i)=>`<label style="border:2px solid ${x[1]};padding:4px 8px;cursor:pointer"><input type="checkbox" ${S.auto.r[i]?'checked':''} onchange="setAuto(${i},this.checked)"> <b>${x[0]}</b></label>`).join('')}</div><label><input type="checkbox" ${S.auto.f?'checked':''} onchange="S.auto.f=this.checked?1:0;save()"> 保留閃卡和有附魔的卡（不自動賣）</label>${S.auto.r[5]?'<br><small>⚠️ 已勾選創世，創世卡會被直接賣掉。</small>':''}${lastSold?`<p class="note">${lastSold}</p>`:''}</div>`}
+function openAll(){const a=S.inv.splice(0);rev=[];sfx('open');AS={n:0,g:0};a.forEach(k=>{S.opened++;autoSell(k.cs).forEach(c=>rev.push(c))});asToast();rev.sort((x,y)=>D[y.k][2]-D[x.k][2]);save();render();const e=$('#rv');e&&e.scrollIntoView({behavior:'smooth'})}
+function peek(id){const k=S.inv.find(x=>x.id==id);if(!k||k.pk)return;sfx('peek');k.pk=k.cs.map(c=>{const r=D[c.k][2];let g=r;if(Math.random()>.75)g=Math.max(0,Math.min(4,r+(Math.random()<.5?-1:1)));return{g,f:c.foil?Math.random()<.7:Math.random()<.08,e:(c.en&&c.en.length)?Math.random()<.5:Math.random()<.05}});save();render()}
+function openInv(id){const j=S.inv.findIndex(x=>x.id==id);if(j<0)return;const k=S.inv.splice(j,1)[0];S.opened++;AS={n:0,g:0};rev=autoSell(k.cs);sfx('open');asToast();save();render();const e=$('#rv');e&&e.scrollIntoView({behavior:'smooth'})}
+function sellPack(id){const j=S.inv.findIndex(x=>x.id==id);if(j<0)return;const k=S.inv.splice(j,1)[0],g=Math.floor((k.paid||PK[k.p].p)*.85);S.em+=g;sfx('coin');toast(`賣出封包，獲得 ${g} 💚`);save();render()}
+function vInv(){return `<h3 id="inv">未拆封卡包（${S.inv.length}）${S.inv.length>1?'<span><button class="b" onclick="openAll()">全部拆開</button></span>':''}</h3>`+(S.inv.length?S.inv.map(k=>{const p=PK[k.p];return `<div class="blk row"><div class="spk"><span class="big">${p.e}</span><b>${p.n}</b></div><div class="edge">${k.pk?k.pk.map(x=>`<i class="${x.f?'ef':''} ${x.e?'ee':''}" style="background:${R[x.g][1]}"></i>`).join(''):'<small>邊緣看不清楚，按瞄邊看看</small>'}</div><div class="ab"><button class="b" onclick="peek(${k.id})" ${k.pk?'disabled':''}>瞄邊</button><button class="b" onclick="openInv(${k.id})">拆開</button><button class="b" onclick="sellPack(${k.id})">賣 💚${Math.floor((k.paid||p.p)*.85)}</button></div></div>`}).join('')+`<p class="note">瞄邊會露出每張卡的側邊顏色（由上到下是開包順序，約 75% 準確）：灰＝普通、藍＝稀有、紫＝史詩、金＝傳說、紅＝神話；有亮光可能是閃卡，右側紫邊可能有附魔。不想拆可以用 85% 價格賣回。</p>`:'<small>買了卡包會先放在這裡，可以瞄邊再決定要不要拆。</small>')}
+function mine(){S.em+=(3+Math.floor(Math.random()*6))*(S.eter?10:1);sfx('mine');head();save()}
+function selCards(){return S.cards.filter(c=>sel.has(c.id)&&!c.pend&&!c.lk)}
+function tg(id){const c=S.cards.find(x=>x.id==id);if(c&&c.lk)return toast('這張卡已上鎖，點愛心解鎖後才能操作');sfx('click');sel.has(id)?sel.delete(id):sel.add(id);render()}
+function lk(id){const c=S.cards.find(x=>x.id==id);if(!c)return;c.lk=!c.lk;sel.delete(id);save();render()}
+function top2(){return S.cards.map(c=>({c,v:val(c)})).sort((a,b)=>b.v-a.v).slice(0,2)}
+function buyEter(){if(S.eter)return;if(S.em<ETER)return toast('綠寶石不足 '+ETER);S.em-=ETER;S.eter=1;S.prem=1;S.vip=1;S.pp=S.pp||{};S.pc=0;sfx('f5');toast('♾️ 已升級永恆通行證！');save();render()}
+function buyPrem(){if(S.prem)return;if(S.em<PREM)return toast('綠寶石不足 '+PREM);S.em-=PREM;S.prem=1;S.vip=1;S.pp=S.pp||{};S.pc=0;sfx('f5');toast('💎 已升級至尊通行證！');save();render()}
+function claimVip(){const t=top2();if(S.vip||t.length<2||t.reduce((x,y)=>x+y.v,0)<=10000)return;S.vip=1;S.pp={};sfx('fan');toast('🎉 已升級 VIP 通行證！');save();render()}
+function vPass(){const t=top2(),s=Math.floor(t.reduce((x,y)=>x+y.v,0));
+return `<div class="blk" style="padding:10px;margin-bottom:10px"><b>🎫 普通通行證</b><ul><li>市場每 10 秒更新</li><li>全站保底：連買 ${PTY} 包必出傳說以上</li><li>卡包原價</li></ul></div><div class="blk" style="padding:10px"><b>👑 VIP 通行證${S.vip?'（已領取）':''}</b><ul><li>每一種卡包都有各自的保底</li><li>買任何卡包 8 折</li><li>市場每 7 秒更新</li></ul>`+(S.vip?`<p>已永久升級。各卡包保底進度：</p><table>${PK.map((p,i)=>p.lock?'':`<tr><td>${p.e} ${p.n}</td><td>${S.pp[i]||0}/${PG[p.t][1]}</td><td>${R[PG[p.t][0]][0]}以上</td></tr>`).join('')}</table>`:`<p>條件：收藏中任兩張卡的價值加起來超過 10,000。<br>目前最高兩張合計 💚${s}</p><div class="bar"><i style="width:${Math.min(100,s/100)}%"></i></div><div class="grid">${t.map(x=>card(x.c)).join('')}</div><p><button class="b" ${s>10000&&t.length==2?'':'disabled'} onclick="claimVip()">領取 VIP 通行證</button></p>`)+`</div>
+<div class="blk" style="padding:10px;margin-top:10px"><b>💎 至尊通行證${S.prem?'（已領取）':''}</b><ul><li>最高級通行證，包含 VIP 所有功能</li><li>買任何卡包 6 折</li><li>傳說以上機率 ×1.5，<b style="color:${R[5][1]}">創世</b>稀有度機率 ×3</li><li>高階（史詩包以上）累積 200 包必出創世</li><li>解鎖十連抽</li><li>市場每 5 秒更新</li></ul>`+(S.prem?`<p>已永久升級，目前創世保底進度：${S.pc||0}/${PCN()}</p>`:`<p>價格：💚${PREM}（目前 💚${S.em}）</p><div class="bar"><i style="width:${Math.min(100,S.em/PREM*100)}%"></i></div><p><button class="b" ${S.em>=PREM?'':'disabled'} onclick="buyPrem()">購買至尊通行證 💚${PREM}</button></p>`)+`</div>
+<div class="blk" style="padding:10px;margin-top:10px;border-color:#00e5ff"><b>♾️ 永恆通行證${S.eter?'（已領取）':''}</b><ul><li>最高級通行證，包含至尊與 VIP 所有功能</li><li>買任何卡包 3 折</li><li>每包至少一張史詩以上</li><li>傳說以上機率 ×3，<b style="color:${R[5][1]}">創世</b>機率 ×12</li><li>全站保底連買 12 包必出傳說以上</li><li>高階（史詩包以上）累積 80 包必出創世</li><li>賣卡價格 +10%（不收手續費）</li><li>附魔 100% 成功，鑑定與加速費用 5 折</li><li>挖礦收益 ×10</li><li>解鎖「篩界包」：每包 5 張，全是傳說以上的閃卡（神話、創世極罕見，且沒有保底）</li><li>市場每 2 秒更新</li></ul>`+(S.eter?`<p>已永久升級，目前創世保底進度：${S.pc||0}/${PCN()}</p>`:`<p>價格：💚${ETER}（目前 💚${S.em}）</p><div class="bar"><i style="width:${Math.min(100,S.em/ETER*100)}%"></i></div><p><button class="b" ${S.em>=ETER?'':'disabled'} onclick="buyEter()">購買永恆通行證 💚${ETER}</button></p>`)+`</div>`}
+function sell(){const a=selCards();let t=0;a.forEach(c=>t+=price(c));S.em+=t;const ids=new Set(a.map(c=>c.id));S.cards=S.cards.filter(c=>!ids.has(c.id));sel.clear();sfx('coin');toast(`賣出 ${a.length} 張，獲得 ${t} 💚`);save();render()}
+function send(t){const a=selCards().filter(c=>!c.grade);if(!a.length)return;const f=a.reduce((s,c)=>s+fee(c,t),0);if(S.em<f)return toast('綠寶石不足');S.em-=f;a.forEach(c=>{c.pend=Date.now()+T[t][1]*1000;c.pd=T[t][1];sel.delete(c.id)});toast(`已送出 ${a.length} 張（${T[t][0]}）`);save();render()}
+function spd(id){const c=S.cards.find(x=>x.id==id),f=sp(c);if(S.em<f)return toast('綠寶石不足');S.em-=f;c.pend=Date.now();gtick();render()}
+function gtick(){let n=0;S.cards.forEach(c=>{if(c.pend&&c.pend<=Date.now()){c.pend=0;c.grade=pick(W)+1;n++;S.log.unshift(`${ico(c.k,18)} ${D[c.k][0]} → ${c.grade}/10`);S.log=S.log.slice(0,8);sfx(c.grade==10?'f4':c.grade>=8?'f2':'ding');toast(c.grade==10?`🎉 ${D[c.k][0]} 鑑定滿分 10！`:`${D[c.k][0]} 鑑定完成：${c.grade}/10`)}});if(n){save();if(tab=='col'||tab=='gr')render();else head()}}
+function mtick(){S.pm=S.m.slice();S.m=S.m.map(m=>Math.min(1.8,Math.max(.6,m+(1-m)*.1+(Math.random()-.5)*.16)));save();if(tab=='mkt'||tab=='col')render()}
+function flipAll(){let m=-1;document.querySelectorAll('.dn').forEach(e=>{m=Math.max(m,+(e.dataset.r||0));e.classList.remove('dn')});if(m>=0)sfx('f'+m)}
+document.addEventListener('click',e=>{const c=e.target.closest('.dn');if(c){c.classList.remove('dn');sfx('f'+(c.dataset.r||0))}});
+function list(){let a=S.cards.filter(c=>!c.pend);
+if(flt=='raw')a=a.filter(c=>!c.grade);else if(flt=='gr')a=a.filter(c=>c.grade);else if(flt=='foil')a=a.filter(c=>c.foil);else if(flt=='lk')a=a.filter(c=>c.lk);
+if(sort=='val')a.sort((x,y)=>val(y)-val(x));else if(sort=='rar')a.sort((x,y)=>D[y.k][2]-D[x.k][2]||val(y)-val(x));else a.sort((x,y)=>y.id-x.id);return a}
+function selAll(f){list().forEach(c=>{if(f(c)&&!c.lk)sel.add(c.id)});render()}
+function setBq(){if(!S.prem){sfx('err');return toast('十連抽需要至尊通行證（到「通行證」分頁購買）')}bq=10;render()}
+function vPack(){if(!S.prem)bq=1;return`<h3>卡包商店（19 種）<span><button class="b" style="${bq==1?'outline:4px solid var(--em)':''}" onclick="bq=1;render()">單抽</button> <button class="b" style="${bq==10?'outline:4px solid var(--em)':''}" onclick="setBq()">十連抽${S.prem?'':' 🔒'}</button></span></h3><div class="pgrid">${PK.map((p,i)=>`<button class="blk pt" onclick="buy(${i})" aria-label="${p.n}"><span class="big">${p.e}</span><b>${p.n}${p.lock&&!S.eter?' 🔒':''}</b><small>${bq>1?'×'+bq+' ':''}💚${cst(p)*bq}${S.vip&&!p.lock?' <s>'+p.p*bq+'</s>':''}</small></button>`).join('')}</div>`+vAuto()+vInv()+
+`<p class="note">每包最後一張至少稀有，卡片可能帶附魔（稀有度越高越容易）。保底：再開 ${Math.max(0,PT()-S.pity)} 包內必出傳說以上。${S.prem?`至尊保底：高階（史詩包以上）累積 ${Math.max(0,PCN()-(S.pc||0))} 包內必出創世。`:''}沒錢了可以按右上角挖礦。</p>`+
+(rev.length?`<h3 id="rv">開出的卡片 <span><button class="b" onclick="flipAll()">全部翻開</button> <button class="b" onclick="rev=[];render()">收下</button></span></h3><div class="grid">${rev.map(c=>card(c,'dn'+(D[c.k][2]>=2?' glow':''))).join('')}</div><p class="note">點卡片翻開。卡片已放進收藏，未鑑定，賣價打 75 折。</p>`:'')}
+function vCol(){const a=list();return `<div class="tools"><select onchange="sort=this.value;render()" aria-label="排序"><option value="new"${sort=='new'?' selected':''}>最新</option><option value="val"${sort=='val'?' selected':''}>價值高到低</option><option value="rar"${sort=='rar'?' selected':''}>稀有度</option></select><select onchange="flt=this.value;render()" aria-label="篩選"><option value="all"${flt=='all'?' selected':''}>全部</option><option value="raw"${flt=='raw'?' selected':''}>未鑑定</option><option value="gr"${flt=='gr'?' selected':''}>已鑑定</option><option value="foil"${flt=='foil'?' selected':''}>閃卡</option><option value="lk"${flt=='lk'?' selected':''}>已上鎖</option></select></div>
+<div class="tools"><button class="b" onclick="selAll(c=>!c.grade&&D[c.k][2]==0)">選未鑑定普通卡</button><button class="b" onclick="selAll(()=>true)">全選</button><button class="b" onclick="sel.clear();render()">清除</button></div>
+${a.length?`<div class="grid">${a.map(c=>`<div onclick="tg(${c.id})" class="${sel.has(c.id)?'sel':''}">${card(c,'',true)}</div>`).join('')}</div>`:'<p>這裡還沒有卡片，先去開包吧。</p>'}`}
+function vGr(){const a=S.cards.filter(c=>c.pend).sort((x,y)=>x.pend-y.pend);
+return (a.length?a.map(c=>{const rem=Math.max(0,Math.ceil((c.pend-Date.now())/1000));return `<div class="blk row">${card(c)}<div><b>鑑定中</b><br><small>剩餘 ${rem} 秒</small><div class="bar"><i style="width:${Math.min(100,Math.max(4,100-rem/(c.pd||90)*100))}%"></i></div></div><button class="b" onclick="spd(${c.id})">加速<br>💚${sp(c)}</button></div>`}).join(''):'<p>目前沒有送鑑定的卡片。到「收藏」選擇未鑑定的卡片，再選標準、快速或特急送評。</p>')+
+`<h3>最近結果</h3>${S.log.length?S.log.map(l=>`<div>${l}</div>`).join(''):'<small>還沒有結果</small>'}
+<details class="blk"><summary>鑑定說明</summary><p>分數 1–10，分數越高價值越高。標準 90 秒、快速 30 秒（費用 ×2.5）、特急 8 秒（費用 ×6）。費用依卡片行情計算，便宜的卡送鑑定通常不划算。鑑定中的卡片不能賣出，也可以付費加速。</p><p>價值倍率：1分 ×0.3、4分 ×0.6、7分 ×1、8分 ×1.4、9分 ×2.2、10分 ×5。</p></details>`}
+function vMkt(){const tv=S.cards.reduce((s,c)=>s+price(c),0),dx=S.dex.filter(Boolean).length;
+const rows=D.map((d,i)=>i).sort((a,b)=>D[b][2]-D[a][2]||D[b][3]-D[a][3]).map(i=>{const d=D[i],up=S.m[i]>=S.pm[i],n=S.cards.filter(c=>c.k==i).length;return `<tr><td>${S.dex[i]?ico(i,18):'❔'} ${S.dex[i]?d[0]:'？？？'}</td><td style="color:${R[d[2]][1]}">${R[d[2]][0]}</td><td>💚${(d[3]*S.m[i]).toFixed(1)} <span class="${up?'up':'dnc'}">${up?'▲':'▼'}</span></td><td>${n?'×'+n:''}</td></tr>`}).join('');
+return `<div class="blk" style="padding:10px"><b>收藏總值 💚${tv}</b><br><small>圖鑑 ${dx}/${D.length}　已開 ${S.opened} 包</small></div><h3>行情（每 ${S.eter?2:S.prem?5:S.vip?7:10} 秒更新，7 分普通版基準價）</h3><table>${rows}</table>
+<details class="blk"><summary>價值規則</summary><p>價值 = 基準價 × 行情 × 鑑定倍率 × 閃卡 ×2.5 × 序號加成。未鑑定卡打 75 折。序號 #1 價值 ×10，#2–#10 ×3，前 1% ×1.5。賣出收 8% 手續費。附魔最多三個，每個依等級增加約 3% 到 83% 的價值；可在收藏花綠寶石幫沒附魔的卡附魔，成功率 70%，失敗則材料消失。</p><p>稀有度發行量：普通 9999、稀有 2000、史詩 500、傳說 100、神話 25、創世 8（創世卡價值極高，只在高階卡包以極低機率出現，至尊通行證可提高機率）。</p><p>18 種一般卡包分五個檔次：入門 💚100、進階 200、高階 400、傳說包 600、Boss 包 1100，越貴稀有卡機率越高。每種卡包有主題，約 65% 的卡出自該主題。附魔包的卡有 50% 機率額外附魔。另有「篩界包」固定 💚10000（不打折），只有永恆通行證能買，5 張全是傳說以上的閃卡。</p><button class="b" onclick="reset()">${rst?'再按一次確認重設':'重設進度'}</button></details>`}
+function reset(){if(!rst){rst=true;render();return}try{localStorage.removeItem('mcg1')}catch(e){}location.reload()}
+function bar(){const a=selCards(),el=$('#actbar');if(tab!='col'||!sel.size){el.style.display='none';return}el.style.display='block';
+const raw=a.filter(c=>!c.grade),t=a.reduce((s,c)=>s+price(c),0),ne=a.filter(c=>!(c.en&&c.en.length)),ef=ne.reduce((s,c)=>s+ec(c),0);
+$('#act').innerHTML=`<small style="width:100%">已選 ${sel.size} 張，賣出可得 💚${t}${S.eter?'（永恆賣價 +10%）':'（含 8% 手續費）'}</small><button class="b" onclick="sell()">賣出</button><button class="b" ${ne.length?'':'disabled'} onclick="enchant()">附魔<br>💚${ef}</button>`+T.map((x,i)=>`<button class="b" ${raw.length?'':'disabled'} onclick="send(${i})">${x[0]}${x[1]}秒<br>💚${raw.reduce((s,c)=>s+fee(c,i),0)}</button>`).join('')}
+const ec=c=>Math.ceil(25+D[c.k][3]*S.m[c.k]*.25);
+function enchant(){const a=selCards().filter(c=>!(c.en&&c.en.length));if(!a.length)return;const f=a.reduce((s,c)=>s+ec(c),0);if(S.em<f)return toast('綠寶石不足');S.em-=f;let ok=0;a.forEach(c=>{if(S.eter||Math.random()<.7){c.en=rollEn(3,1);ok++}});sfx(ok?'ench':'err');toast(`附魔成功 ${ok}/${a.length} 張`);save();render()}
+const REF=40,NP=[['🧑‍🌾','農夫'],['📚','圖書管理員'],['⚒️','鐵匠'],['🥩','屠夫'],['🗺️','製圖師'],['🐑','牧羊人'],['🔮','祭司'],['🧪','牧師']];
+function genTr(){const o=[];for(let j=0;j<6;j++){const np=NP[Math.floor(Math.random()*NP.length)],r=Math.floor(Math.random()*4);
+if(j<3)o.push({id:j+1,np,t:'u',r,n:[6,5,4,4][r],g:rk(r+1)});
+else{const own=S.cards.filter(c=>D[c.k][2]==r).map(c=>c.k),k=own.length?own[Math.floor(Math.random()*own.length)]:rk(r),c2=P[r].filter(i=>i!=k),un=c2.filter(i=>!S.dex[i]),pl=un.length?un:c2;o.push({id:j+1,np,t:'s',r,k,g:pl[Math.floor(Math.random()*pl.length)],fee:Math.ceil(D[k][3]*.1)+5})}}
+S.tr={exp:Date.now()+300000,o};to=null;ts.clear();save()}
+function ensureTr(){if(!S.tr||Date.now()>S.tr.exp)genTr()}
+function refTr(){if(S.em<REF)return toast('綠寶石不足');S.em-=REF;genTr();render()}
+const need=o=>o.t=='u'?o.n:1,elig=o=>S.cards.filter(c=>!c.pend&&!c.lk&&(o.t=='u'?D[c.k][2]==o.r:c.k==o.k)),cn=k=>`<b style="color:${R[D[k][2]][1]}">${ico(k,18)} ${D[k][0]}</b>（${R[D[k][2]][0]}）`;
+function openTr(id){to=to==id?null:id;ts.clear();render()}
+function trTg(id){const o=S.tr.o.find(x=>x.id==to);if(!o)return;if(ts.has(id))ts.delete(id);else if(ts.size<need(o))ts.add(id);render()}
+function doTr(){const o=S.tr.o.find(x=>x.id==to);if(!o)return;const n=need(o),ok=new Set(elig(o).map(c=>c.id)),ids=[...ts].filter(i=>ok.has(i)),fee=o.fee||0;
+if(ids.length!=n)return toast('選的卡片數量不對');if(S.em<fee)return toast('綠寶石不足');
+S.em-=fee;S.cards=S.cards.filter(c=>!ids.includes(c.id));const c=mkCard(o.g);S.cards.push(c);S.dex[o.g]=1;S.tr.o=S.tr.o.filter(x=>x.id!=o.id);trRes=c;to=null;ts.clear();sfx('coin');toast('交易成功！');save();render()}
+function vNpc(){ensureTr();const left=Math.max(0,Math.ceil((S.tr.exp-Date.now())/1000));
+return (trRes?`<h3>交易獲得 <button class="b" onclick="trRes=null;render()">收下</button></h3><div class="grid">${card(trRes)}</div>`:'')+
+`<div class="blk" style="padding:10px;margin-top:10px"><b>🤝 村民交易所</b><br><small>這批交易約 ${Math.floor(left/60)} 分 ${left%60} 秒後更新。每筆交易只能做一次。已上鎖和鑑定中的卡片不能拿來交易。</small><p><button class="b" onclick="refTr()">立即刷新 💚${REF}</button></p></div>`+
+(S.tr.o.length?S.tr.o.map(o=>{const n=need(o),e=elig(o),open=to==o.id;
+const want=o.t=='u'?`任意 ${n} 張${R[o.r][0]}卡`:cn(o.k)+' ×1';
+return `<div class="blk" style="padding:10px;margin-top:10px"><b>${o.np[0]} ${o.np[1]}</b>　<small>${o.t=='u'?'升級交易':'指定交換'}</small><br>想要：${o.t=='u'?`<b style="color:${R[o.r][1]}">${want}</b>`:want}<br>給你：${cn(o.g)}${S.dex[o.g]?'':' <small>（新圖鑑）</small>'}${o.fee?`<br><small>手續費 💚${o.fee}</small>`:''}<br><small>你有 ${e.length} 張可用</small><p><button class="b" onclick="openTr(${o.id})">${open?'收起':'選擇卡片'}</button></p>`+
+(open?`${e.length?`<div class="grid">${e.map(c=>`<div onclick="trTg(${c.id})" class="${ts.has(c.id)?'sel':''}">${card(c,'',true)}</div>`).join('')}</div>`:'<small>沒有符合條件的卡片</small>'}<p>已選 ${ts.size}/${n} <button class="b" ${ts.size==n&&S.em>=(o.fee||0)?'':'disabled'} onclick="doTr()">確認交易</button></p>`:'')+`</div>`}).join(''):'<p>這批交易都做完了，等待更新或按「立即刷新」。</p>')}
+const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.slice(i,i+8192));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')},ub=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),ch=>ch.charCodeAt(0))},ck=u=>{let a=1,b=0;for(const x of u){a=(a+x)%251;b=(b+a)%251}return[a,b]};
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),newTid=()=>Math.floor(Math.random()*4294967296).toString(36);
+function enc(ty,tid,cs){const t=parseInt(tid,36),u=[ty=='o'?0:1,t>>>24&255,t>>>16&255,t>>>8&255,t&255,cs.length];
+cs.forEach(c=>{const en=c.en||[];u.push(c.k,c.ser>>8,c.ser&255,(c.foil?1:0)|((c.grade||0)<<1)|(en.length<<5));en.forEach(([i,l])=>u.push(i<<3|l-1))});return b64(u.concat(ck(u)))}
+function dec(t){try{const u=ub(String(t).replace(/\s/g,''));if(u.length<8)return null;const body=Array.from(u.slice(0,-2)),c=ck(body);if(c[0]!=u[u.length-2]||c[1]!=u[u.length-1])return null;
+const ty=body[0]==0?'o':body[0]==1?'r':null;if(!ty)return null;const tid=(body[1]*16777216+(body[2]<<16)+(body[3]<<8)+body[4]).toString(36),n=body[5],cs=[];let p=6;
+for(let j=0;j<n;j++){const k=body[p],ser=body[p+1]*256+body[p+2],f=body[p+3];p+=4;if(f==null)return null;const en=[];for(let e=0;e<(f>>5&3);e++){const x=body[p++];if(x==null)return null;en.push([x>>3,(x&7)+1])}
+const cd=unpack([k,f&1,ser,k<D.length?RUN[D[k][2]]:0,f>>1&15,en]);if(!cd)return null;cs.push(cd)}
+return p==body.length?{ty,tid,cs}:null}catch(e){return null}}
+function unpack(a){if(!Array.isArray(a)||a.length<6)return null;const[k,f,ser,max,g,en]=a;if(!Number.isInteger(k)||k<0||k>=D.length)return null;const r=D[k][2];
+if(!Number.isInteger(ser)||ser<1||ser>RUN[r]||max!=RUN[r]||!Number.isInteger(g)||g<0||g>10||!Array.isArray(en)||en.length>3)return null;
+const us=new Set();for(const e of en){if(!Array.isArray(e)||!Number.isInteger(e[0])||e[0]<0||e[0]>=EN.length||!Number.isInteger(e[1])||e[1]<1||e[1]>5||us.has(e[0]))return null;us.add(e[0])}
+return{id:0,k,foil:!!f,ser,max,grade:g,pend:0,pd:0,en:en.map(e=>[e[0],e[1]])}}
+const TR={max:5,day:5,cool:600000,open:10,lo:.5,hi:2},dayKey=()=>new Date().toDateString(),tdn=()=>S.td&&S.td.d==dayKey()?S.td.n:0,tdAdd=n=>{S.td={d:dayKey(),n:Math.max(0,tdn()+n)}};
+const addCard=c=>{c.id=S.id++;c.t=Date.now();S.dex[c.k]=1;S.cards.push(c)},tradeable=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&!(c.t&&Date.now()-c.t<TR.cool)).sort((a,b)=>b.id-a.id),hold=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&c.t&&Date.now()-c.t<TR.cool).length;
+function trOk(){if((S.opened||0)<TR.open){sfx('err');toast(`需要先開過 ${TR.open} 包卡包才能交易（目前 ${S.opened||0} 包）`);return false}if(tdn()>=TR.day){sfx('err');toast(`今天的交易次數已達上限（${TR.day} 次）`);return false}return true}
+function psTg(id){ps.has(id)?ps.delete(id):ps.size<TR.max&&ps.add(id);render()}
+function prTg(id){pr.has(id)?pr.delete(id):pr.size<TR.max&&pr.add(id);render()}
+function cp(id){const el=$('#'+id);if(!el)return;el.select();const f=()=>{try{document.execCommand('copy');toast('已複製')}catch(e){toast('請手動複製')}};try{navigator.clipboard.writeText(el.value).then(()=>toast('已複製'),f)}catch(e){f()}}
+function mkOffer(){const a=tradeable().filter(c=>ps.has(c.id));if(!a.length)return toast('請先選擇要交易的卡片');if(!trOk())return;if(a.length>TR.max)return toast(`每次最多 ${TR.max} 張`);
+const tid=newTid(),ids=new Set(a.map(c=>c.id));
+S.cards=S.cards.filter(c=>!ids.has(c.id));S.esc.push({tid,code:enc('o',tid,a),cs:a,t:Date.now()});ps.clear();tdAdd(1);toast('已建立交易碼，卡片暫存中');save();render()}
+function cancelOffer(tid){const e=S.esc.find(x=>x.tid==tid);if(!e)return;e.cs.forEach(c=>S.cards.push(c));tdAdd(-1);S.esc=S.esc.filter(x=>x!=e);toast('已取消，卡片已取回');save();render()}
+function dismissRep(tid){S.rep=S.rep.filter(x=>x.tid!=tid);save();render()}
+function readCode(){const d=dec(pasteTxt);if(!d)return toast('交易碼無效或不完整，請重新複製');
+const cs=d.cs;if(cs.length>10)return toast('交易碼內容有誤');
+if(d.ty=='o'){if(S.esc.some(e=>e.tid==d.tid))return toast('這是你自己發出的交易碼，請傳給對方');if(S.seen[d.tid])return toast('這個交易碼已經用過了');if(!cs.length)return toast('交易碼內沒有卡片');if(cs.some(c=>D[c.k][2]>=5))return toast('交易碼無效：創世卡不能交易');if(cs.length>TR.max)return toast('交易碼無效：一次最多 '+TR.max+' 張');inc={tid:d.tid,cs};pr.clear();pasteTxt='';render()}
+else if(d.ty=='r'){const e=S.esc.find(x=>x.tid==d.tid);if(!e)return toast('找不到對應的交易（可能已取消或已完成）');if(cs.some(c=>D[c.k][2]>=5))return toast('回覆碼無效：創世卡不能交易');cs.forEach(addCard);got=cs;S.esc=S.esc.filter(x=>x!=e);S.seen[d.tid]=1;pasteTxt='';sfx('coin');toast(`交易完成，收到 ${cs.length} 張卡`);save();render()}
+else toast('無法辨識的碼')}
+function acceptOffer(){if(!inc||S.seen[inc.tid])return;const mine=tradeable().filter(c=>pr.has(c.id)),ids=new Set(mine.map(c=>c.id)),tid=inc.tid;if(!trOk())return;if(!mine.length||mine.length>TR.max)return toast('請選擇 1 到 '+TR.max+' 張要回送的卡');const iv=inc.cs.reduce((a,c)=>a+price(c),0),mv=mine.reduce((a,c)=>a+price(c),0);if(mv<iv*TR.lo||mv>iv*TR.hi)return toast(`價值差太大：你回送的要在 💚${Math.ceil(iv*TR.lo)} 到 💚${Math.floor(iv*TR.hi)} 之間（目前 💚${mv}）`);
+S.cards=S.cards.filter(c=>!ids.has(c.id));const code=enc('r',tid,mine);
+inc.cs.forEach(addCard);got=inc.cs;S.seen[tid]=1;S.rep.push({tid,code,n:mine.length});inc=null;pr.clear();tdAdd(1);sfx('coin');toast('交易成功，請把回覆碼傳給對方');save();render()}
+const TA='width:100%;margin-top:6px;font:inherit;font-size:12px;background:var(--panel);color:var(--ink);border:3px solid var(--line)',tsel=(f,s)=>`${hold()?`<small>⏳ 有 ${hold()} 張卡還在冷卻中，暫時不能交易</small>`:''}<div class="grid">${tradeable().map(c=>`<div onclick="${f}(${c.id})" class="${s.has(c.id)?'sel':''}">${card(c,'',true)}</div>`).join('')||'<small>沒有可交易的卡片</small>'}</div>`;
+function vP(){return (got.length?`<h3>剛收到的卡 <button class="b" onclick="got=[];render()">收下</button></h3><div class="grid">${got.map(c=>card(c)).join('')}</div>`:'')+
+`<div class="blk" style="padding:10px;margin-top:10px"><b>📨 貼上對方給你的碼</b><br><small>貼上「交易碼」可以接受對方的交易；貼上「回覆碼」可以完成你發出的交易。</small><textarea rows="3" style="${TA}" oninput="pasteTxt=this.value" placeholder="MCT.…">${esc(pasteTxt)}</textarea><p><button class="b" onclick="readCode()">讀取</button></p></div>`+
+(inc?`<div class="blk" style="padding:10px;margin-top:10px"><b>🎁 收到交易邀請</b><br><small>對方要給你 ${inc.cs.length} 張卡，約值 💚${inc.cs.reduce((s,c)=>s+price(c),0)}</small><div class="grid">${inc.cs.map(c=>card(c)).join('')}</div><p><b>選擇你要回送的卡片</b><small>（價值需在對方卡片的 ${TR.lo*100}% 到 ${TR.hi*100}% 之間）</small></p>${tsel('prTg',pr)}<p>已選 ${pr.size}/${TR.max} 張，價值 💚${tradeable().filter(c=>pr.has(c.id)).reduce((a,c)=>a+price(c),0)}（需 💚${Math.ceil(inc.cs.reduce((a,c)=>a+price(c),0)*TR.lo)} 到 💚${Math.floor(inc.cs.reduce((a,c)=>a+price(c),0)*TR.hi)}） <button class="b" onclick="acceptOffer()">接受交易</button> <button class="b" onclick="inc=null;render()">拒絕</button></p></div>`:'')+
+(S.rep.length?`<h3>要傳給對方的回覆碼</h3>`+S.rep.map(r=>`<div class="blk" style="padding:10px;margin-bottom:8px"><small>你已收到對方的卡，並回送 ${r.n} 張。把這段回覆碼傳給對方，對方貼上就能收到。</small><textarea id="r-${r.tid}" readonly rows="3" style="${TA}">${r.code}</textarea><p><button class="b" onclick="cp('r-${r.tid}')">複製回覆碼</button> <button class="b" onclick="dismissRep('${r.tid}')">已傳給對方</button></p></div>`).join(''):'')+
+(S.esc.length?`<h3>我發出的交易</h3>`+S.esc.map(e=>`<div class="blk" style="padding:10px;margin-bottom:8px"><b>⏳ 等待對方回覆</b>　<small>${e.cs.length} 張卡暫存中</small><div class="grid">${e.cs.map(c=>card(c)).join('')}</div><small>把交易碼傳給對方，等對方傳回「回覆碼」，貼到上面讀取即可完成。</small><textarea id="c-${e.tid}" readonly rows="3" style="${TA}">${e.code}</textarea><p><button class="b" onclick="cp('c-${e.tid}')">複製交易碼</button> <button class="b" onclick="cancelOffer('${e.tid}')">取消並取回卡片</button></p></div>`).join(''):'')+
+`<div class="blk" style="padding:10px;margin-top:10px"><b>📜 交易限制</b><ul><li>需要先開過 ${TR.open} 包卡包（目前 ${S.opened||0} 包）</li><li>每天最多交易 ${TR.day} 次（今天已 ${tdn()} 次，發起或接受都算 1 次）</li><li>每次最多 ${TR.max} 張卡</li><li>剛開出或剛換到的卡要等 10 分鐘才能再交易${hold()?`（目前 ${hold()} 張冷卻中）`:''}</li><li>創世卡不能交易</li><li>雙方價值不能差太多：回送的價值要在對方卡片的 ${TR.lo*100}% 到 ${TR.hi*100}% 之間</li></ul></div>`+
+`<h3>發起交易</h3><div class="blk" style="padding:10px"><small>選擇要給對方的卡片（最多 ${TR.max} 張，已上鎖、鑑定中、冷卻中和創世卡不會出現）。建立交易碼後，卡片會先暫存，直到對方回覆或你取消。</small>${tsel('psTg',ps)}<p>已選 ${ps.size}/${TR.max} 張 <button class="b" ${ps.size?'':'disabled'} onclick="mkOffer()">建立交易碼</button></p></div>`+
+`<details class="blk"><summary>玩家交易怎麼用</summary><ol><li>A 選卡片，按「建立交易碼」，把交易碼傳給 B（LINE、Discord 等都可以）。</li><li>B 貼上交易碼按「讀取」，看到 A 的卡，選出要回送的卡，按「接受交易」。B 會立刻拿到 A 的卡。</li><li>B 把產生的「回覆碼」傳回給 A。</li><li>A 貼上回覆碼按「讀取」，就會收到 B 的卡，交易完成。</li></ol><p class="note">這個遊戲沒有伺服器，交易完全靠雙方互相信任，請只和認識的朋友交易。每個交易碼只能用一次，但程式無法阻止有人亂改程式碼或在對方接受後取消，所以重要的卡請小心。</p></details>`}
+function vTr(){return `<div class="tools"><button class="b" ${trm=='p'?'disabled':''} onclick="trm='p';render()">👥 玩家交易</button><button class="b" ${trm=='n'?'disabled':''} onclick="trm='n';render()">🧑‍🌾 村民交易</button></div>`+(trm=='p'?vP():vNpc())}
+async function zip(u,s){return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(s)).arrayBuffer())}
+async function saveCode(){const o=JSON.parse(JSON.stringify(S));o.m=o.m.map(x=>+x.toFixed(3));delete o.pm;let u=new TextEncoder().encode(JSON.stringify(o)),pre='MCS0';
+if(window.CompressionStream){u=await zip(u,new CompressionStream('deflate-raw'));pre='MCS1'}const x=new Uint8Array(u.length+2);x.set(u);x.set(ck(u),u.length);return pre+'.'+b64(x)}
+async function loadCode(t){const[pre,b]=t.replace(/\s/g,'').split('.');if((pre!='MCS0'&&pre!='MCS1')||!b)throw 0;const u=ub(b),body=u.slice(0,-2),c=ck(body);if(c[0]!=u[u.length-2]||c[1]!=u[u.length-1])throw 0;
+const j=pre=='MCS1'?await zip(body,new DecompressionStream('deflate-raw')):body,o=JSON.parse(new TextDecoder().decode(j));
+if(!o||typeof o.em!='number'||!Array.isArray(o.cards)||!Array.isArray(o.m)||!o.cards.every(c=>c&&Number.isInteger(c.k)&&c.k>=0&&c.k<D.length))throw 0;
+o.pm=o.m.slice();o.log=o.log||[];o.dex=o.dex||[];return o}
+async function exFile(){try{exCode=await saveCode();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([exCode],{type:'text/plain'}));a.download='方塊卡牌存檔.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast('已產生存檔檔案');render()}catch(e){toast('匯出失敗')}}
+async function exCopy(){try{exCode=await saveCode();render();cp('exa')}catch(e){toast('匯出失敗')}}
+async function impRead(){try{impS=await loadCode(impTxt)}catch(e){impS=null;toast('存檔無效或不完整，請重新複製或選檔')}render()}
+function impFile(el){const f=el.files[0];if(!f)return;f.text().then(t=>{impTxt=t.trim();return impRead()}).catch(()=>toast('讀取檔案失敗'))}
+function impGo(){if(!impS)return;try{S=impS;save();localStorage.getItem('mcg1')}catch(e){return toast('無法寫入存檔')}location.reload()}
+function vSv(){return `<div class="blk" style="padding:10px;margin-bottom:10px"><b>🎨 外觀</b><br><small>「自動」會跟著裝置的淺色／深色模式；設定只記在這台裝置。</small><p>${[['auto','自動'],['light','淺色'],['dark','深色']].map(([k,n])=>`<button class="b" ${THM==k?'disabled':''} onclick="setTheme('${k}')">${n}</button>`).join(' ')}</p></div>
+<div class="blk" style="padding:10px;margin-bottom:10px"><b>🔊 音效</b><p><button class="b" onclick="snd.on=!snd.on;sndSave();sfx('buy');render()">${snd.on?'音效：開':'音效：關'}</button></p><label>音量 <input type="range" min="0" max="100" value="${Math.round(snd.vol*100)}" oninput="snd.vol=this.value/100" onchange="sndSave();sfx('buy')"></label></div>
+<div class="blk" style="padding:10px"><b>💾 匯出存檔</b><br><small>把整份進度（綠寶石、卡片、通行證、交易暫存等）存起來，在另一個裝置匯入就能接著玩。</small><p><button class="b" onclick="exFile()">下載存檔檔案</button> <button class="b" onclick="exCopy()">複製存檔代碼</button></p><small>卡片多的話代碼會很長，建議下載檔案，再用 LINE、雲端或 Email 傳到另一個裝置。</small>${exCode?`<textarea id="exa" readonly rows="4" style="${TA}">${exCode}</textarea>`:''}</div>
+<div class="blk" style="padding:10px;margin-top:10px"><b>📥 匯入存檔</b><br><small>選擇存檔檔案，或貼上存檔代碼。</small><p><input type="file" accept=".txt,.mcsave,text/plain" onchange="impFile(this)"></p><textarea rows="4" style="${TA}" oninput="impTxt=this.value" placeholder="MCS1.…">${esc(impTxt.slice(0,3000))}</textarea><p><button class="b" onclick="impRead()">讀取存檔</button></p>`+
+(impS?`<p>存檔內容：💚${impS.em}　卡片 ${impS.cards.length} 張　已開 ${impS.opened||0} 包${impS.prem?'　💎至尊':impS.vip?'　👑VIP':''}</p><p><small>載入後會覆蓋這個裝置目前的進度（目前 💚${S.em}、卡片 ${S.cards.length} 張），無法復原。</small></p><p><button class="b" onclick="impGo()">覆蓋並載入</button></p>`:'')+`</div>`}
+function go(t){sfx('click');tab=t;rst=false;render()}
+function render(){head();['pack','col','gr','mkt','tr','pass'].forEach(t=>$('#t-'+t).setAttribute('aria-selected',t==tab));
+$('#v').innerHTML=tab=='pack'?vPack():tab=='col'?vCol():tab=='gr'?vGr():tab=='tr'?vTr():tab=='sv'?vSv():tab=='pass'?vPass():vMkt();bar()}
+setInterval(()=>{gtick();if(tab=='gr'||(tab=='tr'&&trm=='n'&&S.tr&&Date.now()>S.tr.exp))render()},1000);(function ml(){setTimeout(()=>{mtick();ml()},S.eter?2000:S.prem?5000:S.vip?7000:10000)})();
+gtick();render();
+</script>
+</body>
+</html>
