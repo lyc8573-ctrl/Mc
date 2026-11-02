@@ -18,16 +18,32 @@ function maxPrice(c, tf) {
 const pmax = r => { const rows = ECON.TW.map(w => w[r] / w.reduce((a, b) => a + b, 0)); const m = Math.max(...rows) * (r === 5 ? 12 : r >= 3 ? 3 : 1); return Math.max(m, r === 4 ? .003 * 3 : 0); };
 function guard(P, N, x) { // 回傳 {bad:原因} 或 {ok:1, ub:新的未見額度}
   if (!N || typeof N.em !== 'number' || !isFinite(N.em) || N.em < 0 || N.em > 1e13 || !Array.isArray(N.cards) || typeof N.id !== 'number') return { bad: '存檔格式錯誤' };
-  const dt = Math.min(Math.max(x.dt, 5), 21600), rP = RANK(P), allowR = x.adm ? 3 : rP, rN = RANK(N), tf = x.adm ? 1.5 : allowR === 3 ? 1.1 : .92, mult = x.adm ? 100 : allowR === 3 ? 10 : 1;
+  const dt = Math.min(Math.max(x.dt, 5), 1800), rP = RANK(P), allowR = x.adm ? 3 : rP, rN = RANK(N), tf = x.adm ? 1.5 : allowR === 3 ? 1.1 : .92, mult = x.adm ? 100 : allowR === 3 ? 10 : 1;
   if (!(N.id >= P.id)) return { bad: '卡片編號倒退' };
   const ids = a => new Set((a || []).map(c => c.id)), known = ids(P.cards), nIds = ids(N.cards);
   (P.inv || []).forEach(k => (k.cs || []).forEach(c => known.add(c.id))); (P.esc || []).forEach(e => (e.cs || []).forEach(c => known.add(c.id)));
   let sales = 0; P.cards.forEach(c => { if (!nIds.has(c.id)) sales += maxPrice(c, tf); });
   const nInv = new Set((N.inv || []).map(k => k.id)); (P.inv || []).forEach(k => { if (!nInv.has(k.id)) { sales += Math.floor((k.paid || 0) * .85) + 1; (k.cs || []).forEach(c => { sales += maxPrice(c, tf); }); } });
-  const mine = dt * 20 * 8 * mult, base = mine + sales;
+  const mine = dt * 10 * 8 * mult, base = mine + sales; // 挖礦上限：每秒 10 下、每下最多 8
   // 新卡檢查
   const seen = new Set(); let newCards = [], bad = null;
   N.cards.forEach(c => { if (seen.has(c.id)) bad = '卡片編號重複'; seen.add(c.id); if (!known.has(c.id)) { newCards.push(c); if (!(c.id >= P.id && c.id < N.id)) bad = '憑空出現的卡片'; if (!ECON.D[c.k]) bad = '不存在的卡片'; } });
+  if (bad) return { bad };
+  // 已存在的卡片：稀有度、序號、閃卡不可改；鑑定分只能從 0 變成 1~10；附魔只能從無變有
+  const enOk = en => Array.isArray(en) && en.length <= 3 && en.every((e, i) => Array.isArray(e) && Number.isInteger(e[0]) && e[0] >= 0 && e[0] < ECON.EN.length && Number.isInteger(e[1]) && e[1] >= 1 && e[1] <= 5 && en.findIndex(y => y[0] === e[0]) === i);
+  const shapeOk = c => { const d = ECON.D[c.k]; if (!d || !Number.isInteger(c.id)) return false; const m = ECON.RUN[d[2]], g = c.grade || 0; return Number.isInteger(c.ser) && c.ser >= 1 && c.ser <= m && c.max === m && Number.isInteger(g) && g >= 0 && g <= 10 && enOk(c.en || []); };
+  const old = new Map(); P.cards.forEach(c => old.set(c.id, c)); (P.inv || []).forEach(k => (k.cs || []).forEach(c => old.set(c.id, c))); (P.esc || []).forEach(e => (e.cs || []).forEach(c => old.set(c.id, c)));
+  const all = N.cards.slice(); (N.inv || []).forEach(k => (k.cs || []).forEach(c => all.push(c))); (N.esc || []).forEach(e => (e.cs || []).forEach(c => all.push(c)));
+  let newGraded = 0;
+  all.forEach(c => {
+    if (!c || !ECON.D[c.k]) { bad = '不存在的卡片'; return; }
+    const o = old.get(c.id);
+    if (!o) { if (!shapeOk(c)) bad = '卡片資料異常'; if (c.grade) newGraded++; return; }
+    if (o.k !== c.k || o.ser !== c.ser || !!o.foil !== !!c.foil || o.max !== c.max) bad = '卡片內容被竄改';
+    const og = o.grade || 0, ng = c.grade || 0; if (ng !== og && !(og === 0 && Number.isInteger(ng) && ng >= 1 && ng <= 10)) bad = '卡片鑑定分被竄改';
+    const oe = JSON.stringify(o.en || []), ne = JSON.stringify(c.en || []); if (oe !== ne && !(oe === '[]' && enOk(c.en || []))) bad = '卡片附魔被竄改';
+  });
+  if (newGraded > 10) bad = '憑空出現已鑑定的卡片';
   if (bad) return { bad };
   const newInv = (N.inv || []).filter(k => k.id >= P.id), created = N.id - P.id, used = newCards.length + newInv.reduce((a, k) => a + 1 + (k.cs || []).length, 0), unseen = Math.max(0, created - used);
   const minCost = 100 * (x.adm ? .1 : allowR === 3 ? .3 : allowR === 2 ? .6 : allowR === 1 ? .8 : 1), packs = Math.ceil(created / 6);
@@ -47,6 +63,7 @@ function guard(P, N, x) { // 回傳 {bad:原因} 或 {ok:1, ub:新的未見額�
   }
   return { ok: 1, ub: nub };
 }
+const freshState = () => ({ em: 500, cards: [], id: 1, pity: 0, dex: [], m: ECON.D.map(() => 1), pm: ECON.D.map(() => 1), opened: 0, log: [], inv: [], pp: {}, auto: { r: [0, 0, 0, 0, 0, 0], f: 1 }, esc: [], seen: {}, rep: [] });
 const BANPAGE = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#000;color:#fff;font:20px sans-serif;text-align:center;padding:80px 20px"><h1>🚫</h1><p>你的帳號或裝置已被停權</p>';
 const send = (res, s, o, h) => { res.writeHead(s, Object.assign({ 'content-type': 'application/json;charset=utf-8', 'cache-control': 'no-store' }, h)); res.end(JSON.stringify(o)); };
 const body = (req, max = 1000000) => new Promise((ok, no) => { let n = 0; const a = []; req.on('data', c => { n += c.length; if (n > max) { no(new Error('too big')); req.destroy(); } else a.push(c); }); req.on('end', () => ok(Buffer.concat(a).toString())); req.on('error', no); });
@@ -95,7 +112,7 @@ function applyServer(P, c) {
   if (c.t === 'em') P.em = Math.max(0, Math.floor(P.em + c.n));
   else if (c.t === 'emset') P.em = Math.max(0, Math.floor(c.n));
   else if (c.t === 'tier') { const f = FLAGS[c.v]; if (!f) return false; const cur = P.adm ? (P.admBase || {}) : P; if (c.up && RANK(cur) >= RANK(f)) return false; if (P.adm) P.admBase = f; else { P.vip = f.vip; P.prem = f.prem; P.eter = f.eter; } if (f.vip) { P.pp = P.pp || {}; P.pc = P.pc || 0; } }
-  else if (c.t === 'cards') { c.cs = []; for (const t of c.tpl || []) for (let i = 0; i < t.n; i++) { const card = mkGrantCard(t, P); P.cards.push(card); c.cs.push(card); P.dex = P.dex || []; P.dex[t.k] = 1; } delete c.tpl; }
+  else if (c.t === 'cards') { c.cs = []; for (const t of c.tpl || []) for (let i = 0; i < t.n; i++) { const card = mkGrantCard(t, P); P.cards.push(card); c.cs.push(card); P.dex = P.dex || []; P.dex[t.k] = 1; } c.gid = P.gid; delete c.tpl; }
   else if (c.t === 'state') { return 'state'; }
   else return false;
   return true;
@@ -116,10 +133,14 @@ async function save(req, res) {
   const prev = (await q('SELECT data,tok,updated,adm,trust,ub,banned FROM players WHERE pid=$1', [pid]))[0];
   let P = null; if (prev && prev.data) { try { P = JSON.parse(prev.data); } catch {} }
   let verdict = { ok: 1, ub: UCAP };
-  if (P && !prev.trust && !prev.banned) verdict = guard(P, d, { dt: (now - (prev.tok || prev.updated || now)) / 1000, adm: prev.adm, ub: prev.ub });
+  if (!(prev && (prev.trust || prev.banned))) {
+    if (P) verdict = guard(P, d, { dt: (now - (prev.tok || prev.updated || now)) / 1000, adm: prev.adm, ub: prev.ub });
+    else verdict = guard(freshState(), d, { dt: 60, adm: prev ? prev.adm : 0, ub: 5000 }); // 首次同步：必須和全新存檔差不多，否則先擋下來等管理員確認
+  }
   let base = d, fixState = null;
   if (verdict.bad) {
-    fixState = JSON.parse(JSON.stringify(P)); base = P;
+    if (P) { fixState = JSON.parse(JSON.stringify(P)); base = P; }
+    else { base = freshState(); fixState = JSON.parse(JSON.stringify(base)); await q(UPSERT, [pid, name, JSON.stringify(base), 500, 0, 0, '普通', ip, fp, ua, now, 5000]); }
     await q('UPDATE players SET name=$1,ip=$2,ua=$3,updated=$4,hits=COALESCE(hits,0)+1,strikes=COALESCE(strikes,0)+1,rej=$5 WHERE pid=$6', [name, ip, ua, now, JSON.stringify(d), pid]);
     log('cheat', pid, name + ' 數值異常，已還原：' + verdict.bad);
   } else {
@@ -142,12 +163,13 @@ async function save(req, res) {
     if (!got.length) cmds = [];
     else if (base) {
       let dirty = false, reset = false;
+      if (P && base !== P && (P.gid || 0) > (base.gid || 0)) base.gid = P.gid; // 發卡編號不能因為客戶端沒帶而重複
       for (const c of cmds) { if (c.t === 'reset') { reset = true; continue; } const x = applyServer(base, c); if (x === 'state') { try { Object.keys(base).forEach(k => delete base[k]); Object.assign(base, JSON.parse(c.s)); } catch {} dirty = true; } else dirty = x || dirty; }
       if (reset) await q("UPDATE players SET data='',tok=NULL,strikes=0,rej=NULL WHERE pid=$1", [pid]); else if (dirty) await storeState(pid, base);
     }
   }
   const kvs = {}; for (const x of await q("SELECT k,v FROM kv WHERE k IN ('ann','maint')")) kvs[x.k] = x.v;
-  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '' }, h);
+  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '' }, h);
 }
 const rfail = new Map(), TN = { vip: 'VIP', prem: '至尊', eter: '永恆' };
 async function redeem(req, res) {
@@ -231,7 +253,9 @@ async function adminInner(req, res, u) {
   if (p === '/api/admin/broadcast') {
     const c = b.cmd || {};
     if (c.t === 'em') { c.n = Math.floor(Number(c.n)); if (!c.n || Math.abs(c.n) > 1e9) return send(res, 400, { error: 'bad n' }); }
-    else if (c.t === 'msg') c.s = String(c.s || '').slice(0, 300); else return send(res, 400, { error: 'bad cmd' });
+    else if (c.t === 'msg') c.s = String(c.s || '').slice(0, 300);
+    else if (c.t === 'cards') { const tpl = cleanTpl(c.tpl); if (!tpl.length) return send(res, 400, { error: '沒有有效的卡片' }); c.tpl = tpl; }
+    else return send(res, 400, { error: 'bad cmd' });
     const rows = await q('SELECT pid FROM players WHERE banned=0 LIMIT 2000');
     for (const r of rows) await pushCmd(r.pid, c);
     log('broadcast', '', JSON.stringify(c)); return send(res, 200, { ok: 1, n: rows.length });

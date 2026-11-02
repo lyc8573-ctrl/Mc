@@ -53,7 +53,7 @@ table{width:100%;border-collapse:collapse}td{padding:5px 4px;border-bottom:2px s
 nav{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;background:var(--panel);border-top:3px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav button{flex:1;font:inherit;background:none;color:var(--ink);border:0;padding:8px 2px;min-height:58px;cursor:pointer;font-size:12px}
 nav button[aria-selected=true]{background:var(--btn);color:var(--btnink);font-weight:700}
-#toast{position:fixed;top:calc(60px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:#2a2418;color:#fff;padding:8px 14px;z-index:20;display:none;max-width:90%;text-align:center;border:2px solid #3be37a}
+#toast{position:fixed;top:calc(60px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:#2a2418;color:#fff;padding:8px 14px;z-index:20;display:none;max-width:90%;text-align:center;border:2px solid #3be37a;white-space:pre-line}
 details{margin-top:14px;padding:8px 10px}summary{cursor:pointer;font-weight:700}
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;font:inherit;color:var(--ink);cursor:pointer}.pt b{font-size:13px}.pt .big{font-size:30px}.pt:active{transform:translateY(2px)}.pt:focus-visible{outline:3px solid var(--em)}
 .spk{display:flex;flex-direction:column;align-items:center;width:70px;font-size:12px;background:linear-gradient(135deg,var(--soft),var(--btn));border:3px solid var(--line);padding:6px 2px}.edge{display:flex;flex-direction:column;gap:2px}.edge i{display:block;height:9px;border:2px solid var(--line)}.edge i.ef{box-shadow:0 0 6px #fff,inset 0 0 0 2px rgba(255,255,255,.8)}.edge i.ee{border-right:10px solid #b160ff}.ab{display:flex;flex-direction:column;gap:4px}.ab .b{padding:4px 8px;min-height:34px;font-size:13px}.hrt{position:absolute;top:0;right:0;font-style:normal;font-size:14px;line-height:1;z-index:2;padding:3px;cursor:pointer}ul{margin:6px 0;padding-left:20px}
@@ -120,24 +120,30 @@ function cloudFp(){try{return[navigator.userAgent,navigator.language,screen.widt
 function cloudBan(m){document.body.replaceChildren();const h=document.createElement('h2');h.style.cssText='padding:40px 20px;color:#fff;background:#000;text-align:center;min-height:100vh';h.textContent='🚫 你的帳號已被停權'+(m?'（'+m+'）':'');document.body.append(h)}
 function cloudMaint(t){let o=document.getElementById('cl-maint');if(!t){if(o)o.remove();return}if(!o){o=document.createElement('div');o.id='cl-maint';o.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:20px';document.body.append(o)}o.textContent='🛠️ '+t}
 function cloudRank(o){return o.eter?3:o.prem?2:o.vip?1:0}
+function norm(){S.inv=S.inv||[];S.pp=S.pp||{};S.auto=S.auto||{r:[0,0,0,0,0,0],f:1};S.esc=S.esc||[];S.seen=S.seen||{};S.rep=S.rep||[];S.dex=S.dex||[];S.log=S.log||[];S.cards=S.cards||[];if(!Array.isArray(S.m))S.m=D.map(()=>1);S.pm=Array.isArray(S.pm)?S.pm:S.m.slice();D.forEach((d,i)=>{if(S.m[i]==null)S.m[i]=1;if(S.pm[i]==null)S.pm[i]=1})}
+function cardsMsg(cs){const one=c=>{const d=D[c.k],t=[R[d[2]][0]];if(c.foil)t.push('✦閃卡');if(c.grade)t.push('鑑定'+c.grade+'/10');if(c.en&&c.en.length)t.push('✨'+c.en.map(([i,l])=>EN[i][0]+RN[l-1]).join('、'));return `${d[1]} ${d[0]} #${c.ser}/${c.max}（${t.join(' ')}）`};return `🎁 獲得 ${cs.length} 張卡片\n`+cs.slice(0,6).map(one).join('\n')+(cs.length>6?`\n…還有 ${cs.length-6} 張`:'')}
 function cloudFlags(v){return({none:{vip:0,prem:0,eter:0},vip:{vip:1,prem:0,eter:0},prem:{vip:1,prem:1,eter:0},eter:{vip:1,prem:1,eter:1}})[v]||null}
 function cloudTier(v,up){const f=cloudFlags(v);if(!f)return false;const base=S.adm?(S.admBase||{}):S;if(up&&cloudRank(base)>=cloudRank(f))return false;if(S.adm)S.admBase=f;else{S.vip=f.vip;S.prem=f.prem;S.eter=f.eter}if(f.vip){S.pp=S.pp||{};S.pc=S.pc||0}return true}
-function cloudAdm(on){if(on&&!S.adm){S.admBase={vip:S.vip?1:0,prem:S.prem?1:0,eter:S.eter?1:0};S.adm=1;S.vip=S.prem=S.eter=1;S.pp=S.pp||{};S.pc=S.pc||0;toast('🛡️ 你獲得了管理員特別通行證！');return true}
-if(!on&&S.adm){const b=S.admBase;S.adm=0;delete S.admBase;if(b){S.vip=b.vip;S.prem=b.prem;S.eter=b.eter}toast('管理員特別通行證已被收回');return true}return false}
+function cloudAdm(on){if(on&&!S.adm){S.admBase={vip:S.vip?1:0,prem:S.prem?1:0,eter:S.eter?1:0};S.adm=1;S.vip=S.prem=S.eter=1;S.pp=S.pp||{};S.pc=S.pc||0;pop('🛡️ 你獲得了管理員特別通行證！');return true}
+if(!on&&S.adm){const b=S.admBase;S.adm=0;delete S.admBase;if(b){S.vip=b.vip;S.prem=b.prem;S.eter=b.eter}pop('管理員特別通行證已被收回');return true}return false}
 function cloudCmd(c){try{
-if(c.t=='em'){S.em=Math.max(0,Math.floor(S.em+c.n));toast((c.n>=0?'🎁 獲得 💚':'管理員扣除 💚')+Math.abs(c.n))}
-else if(c.t=='emset'){S.em=Math.max(0,Math.floor(c.n));toast('管理員調整了你的綠寶石')}
-else if(c.t=='tier'){if(cloudTier(c.v,c.up))toast(c.up?'🎁 通行證已升級！':'管理員已調整你的通行證')}
-else if(c.t=='msg')alert('📢 管理員訊息：\n'+c.s)
-else if(c.t=='name'){CL.name=String(c.v).slice(0,20);localStorage.setItem('mcg1name',CL.name)}
+if(c.t=='em'){S.em=Math.max(0,Math.floor(S.em+c.n));pop((c.n>=0?'🎁 獲得 💚':'💚 被扣除 ')+Math.abs(c.n))}
+else if(c.t=='emset'){S.em=Math.max(0,Math.floor(c.n));pop('💚 你的綠寶石數量已被調整為 '+S.em)}
+else if(c.t=='tier'){if(cloudTier(c.v,c.up))pop(c.up?'🎁 通行證已升級！':'🎫 你的通行證已被調整')}
+else if(c.t=='msg')pop('📢 訊息\n'+c.s)
+else if(c.t=='name'){CL.name=String(c.v).slice(0,20);localStorage.setItem('mcg1name',CL.name);pop('✏️ 你的名字已改為 '+CL.name)}
+else if(c.t=='cards'){const cs=(c.cs||[]).filter(x=>x&&!S.cards.some(y=>y.id==x.id));cs.forEach(x=>{S.cards.push(x);S.dex[x.k]=1});if(c.gid>(S.gid||0))S.gid=c.gid;if(cs.length)pop(cardsMsg(cs))}
+else if(c.t=='state'){try{S=JSON.parse(c.s);norm();pop('💾 你的存檔已被更新')}catch(e){}}
 else if(c.t=='reset'){localStorage.removeItem('mcg1');location.reload();return}
 }catch(e){}}
 async function cloudSend(){if(!CL.pid)return;CL.d=0;cloudName();try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
-cloudMaint(j.maint||'');let ch=false;try{if(cloudAdm(!!j.adm))ch=true}catch(e){}
+cloudMaint(j.maint||'');let ch=false;
+if(j.fix){try{localStorage.setItem('mcg1bak',JSON.stringify(S))}catch(e){}S=j.fix;norm();ch=true;pop('⚠️ 偵測到存檔數值異常，已還原到上一次正常的進度'+(j.why?'\n（'+j.why+'）':''))}
+try{if(cloudAdm(!!j.adm))ch=true}catch(e){}
 if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);ch=true}
 if(ch){try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
-if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));alert('📢 公告\n'+j.ann.text)}}catch(e){}}
-async function cloudRedeem(code){try{const r=await fetch('/api/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,code})});const j=await r.json();if(j.error){alert('❌ '+j.error);return}toast('🎁 兌換成功：'+j.desc);await cloudSend()}catch(e){alert('連線失敗，請稍後再試')}}
+if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));pop('📢 公告\n'+j.ann.text)}}catch(e){}}
+async function cloudRedeem(code){try{const r=await fetch('/api/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,code})});const j=await r.json();if(j.error){alert('❌ '+j.error);return}pop('🎁 兌換成功：'+j.desc);await cloudSend()}catch(e){alert('連線失敗，請稍後再試')}}
 function redeem(){const c=(prompt('請輸入兌換碼')||'').trim();if(c)cloudRedeem(c)}
 function adminCard(){return`<div class="blk" style="padding:10px;margin-top:10px;border-color:#ff3b6b"><b>🛡️ 管理員特別通行證${S.adm?'（已授予）':''}</b><ul><li>只能由管理員發放，無法購買，也無法用兌換碼取得</li><li>包含永恆通行證所有功能</li><li>買任何卡包 1 折（含篩界包）</li><li>賣卡價格 +50%</li><li>挖礦收益 ×100</li></ul><p>${S.adm?'你持有這張特別通行證 🛡️':'尚未持有'}</p></div>`}
 addEventListener('visibilitychange',()=>{if(document.hidden){if(CL.d)cloudSend()}else cloudSend()});
@@ -154,7 +160,11 @@ function val(c){const sb=c.ser==1?10:c.ser<=10?3:c.ser<=c.max*.01?1.5:1;return D
 const price=c=>Math.max(1,Math.floor(val(c)*(S.adm?1.5:S.eter?1.1:.92)));
 const fee=(c,t)=>Math.ceil((10+D[c.k][3]*S.m[c.k]*.12)*T[t][2]*(S.eter?.5:1));
 const sp=c=>Math.ceil((S.eter?.5:1)*Math.max(1,(c.pend-Date.now())/1000)*(.5+D[c.k][3]*S.m[c.k]*.01));
-function toast(t){if(/不足|無效|無法|有誤|已經用過|找不到|失敗|不對/.test(t))sfx('err');const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',2400)}
+let TQ=[],TS=0,TV=0;
+function tshow(x){const e=$('#toast');clearTimeout(toast.h);TV=1;TS=x.s?1:0;e.textContent=x.t+(x.s?'\n（點一下關閉）':'');e.style.display='block';e.style.cursor=x.s?'pointer':'';e.onclick=x.s?()=>{e.onclick=null;tnext()}:null;if(!x.s)toast.h=setTimeout(tnext,Math.min(9000,3000+x.t.length*45))}
+function tnext(){const x=TQ.shift();if(x)return tshow(x);TV=0;TS=0;const e=$('#toast');e.style.display='none';e.onclick=null}
+function toast(t){if(/不足|無效|無法|有誤|已經用過|找不到|失敗|不對|異常/.test(t))sfx('err');if(TS)TQ.push({t,s:0});else tshow({t,s:0})}
+function pop(t,sticky){const x={t,s:sticky?1:0};if(TV||TQ.length)TQ.push(x);else tshow(x);sfx('ding')} // 伺服器事件的綠色彈窗：會排隊，不會互相蓋掉
 function head(){$('#em').textContent=S.em;$('header h1').textContent=S.adm?'🛡️ 方塊卡牌店 管理員':S.eter?'♾️ 方塊卡牌店 永恆':S.prem?'💎 方塊卡牌店 至尊':S.vip?'👑 方塊卡牌店 VIP':'⛏️ 方塊卡牌店';$('#t-col').innerHTML='🎒<br>收藏 '+S.cards.filter(c=>!c.pend).length;$('#t-gr').innerHTML='🔍<br>鑑定 '+S.cards.filter(c=>c.pend).length}
 const SP={
 cube:'oooooooooo/occcccccao/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/obbbbbbbbo/oooooooooo',
