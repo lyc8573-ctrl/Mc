@@ -63,7 +63,8 @@ function guard(P, N, x) { // 回傳 {bad:原因} 或 {ok:1, ub:新的未見額�
   }
   return { ok: 1, ub: nub };
 }
-const untov = d => { if (!d.tov || !d.treal || typeof d.treal !== 'object') return d; const c = JSON.parse(JSON.stringify(d)), t = d.treal; c.vip = t.vip ? 1 : 0; c.prem = t.prem ? 1 : 0; c.eter = t.eter ? 1 : 0; delete c.tov; delete c.treal; return c; }; // 全服暫時通行證：存檔和檢查一律用玩家真正的通行證
+const untov = d => { if (!d.tov || !d.treal || typeof d.treal !== 'object') return d; const c = JSON.parse(JSON.stringify(d)), t = d.treal; c.vip = t.vip ? 1 : 0; c.prem = t.prem ? 1 : 0; c.eter = t.eter ? 1 : 0; delete c.tov; delete c.treal; if (c.tadm) { c.adm = 0; delete c.tadm; } return c; };
+const tovNow = async (now, grace) => { const r = (await q("SELECT v FROM kv WHERE k='tierov'"))[0]; if (!r) return null; try { const o = JSON.parse(r.v); return !o.until || o.until > now - (grace || 0) ? o : null; } catch { return null; } }; // 全服暫時通行證：存檔和檢查一律用玩家真正的通行證
 const freshState = () => ({ em: 500, cards: [], id: 1, pity: 0, dex: [], m: ECON.D.map(() => 1), pm: ECON.D.map(() => 1), opened: 0, log: [], inv: [], pp: {}, auto: { r: [0, 0, 0, 0, 0, 0], f: 1 }, esc: [], seen: {}, rep: [] });
 const BANPAGE = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#000;color:#fff;font:20px sans-serif;text-align:center;padding:80px 20px"><h1>🚫</h1><p>你的帳號或裝置已被停權</p>';
 const send = (res, s, o, h) => { res.writeHead(s, Object.assign({ 'content-type': 'application/json;charset=utf-8', 'cache-control': 'no-store' }, h)); res.end(JSON.stringify(o)); };
@@ -133,10 +134,11 @@ async function save(req, res) {
   const hit = await banHit(pid, gid, ip, fp);
   const prev = (await q('SELECT data,tok,updated,adm,trust,ub,banned FROM players WHERE pid=$1', [pid]))[0];
   let P = null; if (prev && prev.data) { try { P = JSON.parse(prev.data); } catch {} }
+  const tvo = await tovNow(now, b.data.tadm ? 600000 : 0), tvAdm = tvo && tvo.adm ? 1 : 0; // 全服暫時管理員通行證（結束後 10 分鐘內仍容許最後一次同步）
   let verdict = { ok: 1, ub: UCAP };
   if (!(prev && (prev.trust || prev.banned))) {
-    if (P) verdict = guard(P, d, { dt: (now - (prev.tok || prev.updated || now)) / 1000, adm: prev.adm, ub: prev.ub });
-    else verdict = guard(freshState(), d, { dt: 60, adm: prev ? prev.adm : 0, ub: 5000 }); // 首次同步：必須和全新存檔差不多，否則先擋下來等管理員確認
+    if (P) verdict = guard(P, d, { dt: (now - (prev.tok || prev.updated || now)) / 1000, adm: prev.adm || tvAdm, ub: prev.ub });
+    else verdict = guard(freshState(), d, { dt: 60, adm: (prev ? prev.adm : 0) || tvAdm, ub: 5000 }); // 首次同步：必須和全新存檔差不多，否則先擋下來等管理員確認
   }
   let base = d, fixState = null;
   if (verdict.bad) {
@@ -170,7 +172,7 @@ async function save(req, res) {
     }
   }
   const kvs = {}; for (const x of await q("SELECT k,v FROM kv WHERE k IN ('ann','maint','tierov')")) kvs[x.k] = x.v;
-  let tov = null; if (kvs.tierov) { try { const o = JSON.parse(kvs.tierov); if (!o.until || o.until > now) tov = { id: o.id, v: o.v }; } catch {} }
+  let tov = null; if (kvs.tierov) { try { const o = JSON.parse(kvs.tierov); if (!o.until || o.until > now) tov = { id: o.id, v: o.v, adm: o.adm ? 1 : 0 }; } catch {} }
   send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '', tov }, h);
 }
 const rfail = new Map(), TN = { vip: 'VIP', prem: '至尊', eter: '永恆' };
@@ -248,11 +250,11 @@ async function adminInner(req, res, u) {
     if (t) await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['ann', JSON.stringify({ id: now, text: t })]); else await q("DELETE FROM kv WHERE k='ann'");
     log('announce', '', t || '(清除)'); return send(res, 200, { ok: 1 });
   }
-  if (p === '/api/admin/tierov') { // 全服暫時通行證：v = none/vip/prem/eter，空字串 = 關閉；hours 0 = 手動關閉前一直有效
+  if (p === '/api/admin/tierov') { // 全服暫時通行證：v = none/vip/prem/eter/keep，空字串 = 關閉；hours 0 = 手動關閉前一直有效；adm = 同時給管理員特別通行證
     const v = String(b.v || '');
-    if (!v) await q("DELETE FROM kv WHERE k='tierov'");
-    else { if (!FLAGS[v]) return send(res, 400, { error: 'bad' }); const h = Number(b.hours) > 0 ? Math.min(720, Number(b.hours)) : 0; await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['tierov', JSON.stringify({ id: now, v, until: h ? Math.floor(now + h * 3600000) : 0 })]); }
-    log('tierov', '', v ? v + ' ' + (b.hours || 0) + 'h' : '(關閉)'); return send(res, 200, { ok: 1 });
+    if (!v) { const r = (await q("SELECT v FROM kv WHERE k='tierov'"))[0]; let o = null; try { o = r && JSON.parse(r.v); } catch {} if (o && o.adm) { o.until = now; await q("UPDATE kv SET v=$1 WHERE k='tierov'", [JSON.stringify(o)]); } else await q("DELETE FROM kv WHERE k='tierov'"); }
+    else { const adm = b.adm ? 1 : 0; if (!(FLAGS[v] || (v === 'keep' && adm))) return send(res, 400, { error: '「不改通行證」必須搭配管理員特別通行證' }); const h = Number(b.hours) > 0 ? Math.min(720, Number(b.hours)) : 0; await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['tierov', JSON.stringify({ id: now, v, adm, until: h ? Math.floor(now + h * 3600000) : 0 })]); }
+    log('tierov', '', v ? v + (b.adm ? ' +管理員' : '') + ' ' + (b.hours || 0) + 'h' : '(關閉)'); return send(res, 200, { ok: 1 });
   }
   if (p === '/api/admin/maint') {
     const t = String(b.text || '').slice(0, 200);

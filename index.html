@@ -120,15 +120,16 @@ function cloudFp(){try{return[navigator.userAgent,navigator.language,screen.widt
 function cloudBan(m){document.body.replaceChildren();const h=document.createElement('h2');h.style.cssText='padding:40px 20px;color:#fff;background:#000;text-align:center;min-height:100vh';h.textContent='🚫 你的帳號已被停權'+(m?'（'+m+'）':'');document.body.append(h)}
 function cloudMaint(t){let o=document.getElementById('cl-maint');if(!t){if(o)o.remove();return}if(!o){o=document.createElement('div');o.id='cl-maint';o.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:20px';document.body.append(o)}o.textContent='🛠️ '+t}
 function cloudRank(o){return o.eter?3:o.prem?2:o.vip?1:0}
-function applyTov(o){if(o&&!S.adm){if(!S.tov||!S.treal)S.treal={vip:S.vip?1:0,prem:S.prem?1:0,eter:S.eter?1:0};const f=cloudFlags(o.v);if(!f)return false;const first=S.tov!=o.id;S.tov=o.id;S.vip=f.vip;S.prem=f.prem;S.eter=f.eter;if(f.vip){S.pp=S.pp||{};S.pc=S.pc||0}if(first)pop('🎫 活動：所有人的通行證暫時變成「'+({none:'普通',vip:'VIP',prem:'至尊',eter:'永恆'})[o.v]+'」');return true}
-if(S.tov){const f=S.treal||{vip:0,prem:0,eter:0};S.vip=f.vip;S.prem=f.prem;S.eter=f.eter;delete S.tov;delete S.treal;pop('🎫 活動結束，通行證已恢復原本的');return true}return false}
+function applyTov(o){const real=S.adm&&!S.tadm;
+if(o&&!real){if(!S.tov||!S.treal)S.treal={vip:S.vip?1:0,prem:S.prem?1:0,eter:S.eter?1:0};const f=o.adm?{vip:1,prem:1,eter:1}:cloudFlags(o.v);if(!f)return false;const first=S.tov!=o.id;S.tov=o.id;S.vip=f.vip;S.prem=f.prem;S.eter=f.eter;if(f.vip){S.pp=S.pp||{};S.pc=S.pc||0}if(o.adm){S.adm=1;S.tadm=1}else if(S.tadm){S.adm=0;delete S.tadm}if(first)pop(o.adm?'🛡️ 活動：所有人暫時擁有管理員特別通行證！':'🎫 活動：所有人的通行證暫時變成「'+({none:'普通',vip:'VIP',prem:'至尊',eter:'永恆'})[o.v]+'」');return true}
+if(S.tov){const f=S.treal||{vip:0,prem:0,eter:0};S.vip=f.vip;S.prem=f.prem;S.eter=f.eter;if(S.tadm){S.adm=0;delete S.tadm}delete S.tov;delete S.treal;pop('🎫 活動結束，通行證已恢復原本的');return true}return false}
 function tReal(r){if(S.tov&&S.treal&&cloudRank(S.treal)<r)S.treal=cloudFlags(['none','vip','prem','eter'][r])}
 function norm(){S.inv=S.inv||[];S.pp=S.pp||{};S.auto=S.auto||{r:[0,0,0,0,0,0],f:1};S.esc=S.esc||[];S.seen=S.seen||{};S.rep=S.rep||[];S.dex=S.dex||[];S.log=S.log||[];S.cards=S.cards||[];if(!Array.isArray(S.m))S.m=D.map(()=>1);S.pm=Array.isArray(S.pm)?S.pm:S.m.slice();D.forEach((d,i)=>{if(S.m[i]==null)S.m[i]=1;if(S.pm[i]==null)S.pm[i]=1})}
 function cardsMsg(cs){const one=c=>{const d=D[c.k],t=[R[d[2]][0]];if(c.foil)t.push('✦閃卡');if(c.grade)t.push('鑑定'+c.grade+'/10');if(c.en&&c.en.length)t.push('✨'+c.en.map(([i,l])=>EN[i][0]+RN[l-1]).join('、'));return `${d[1]} ${d[0]} #${c.ser}/${c.max}（${t.join(' ')}）`};return `🎁 獲得 ${cs.length} 張卡片\n`+cs.slice(0,6).map(one).join('\n')+(cs.length>6?`\n…還有 ${cs.length-6} 張`:'')}
 function cloudFlags(v){return({none:{vip:0,prem:0,eter:0},vip:{vip:1,prem:0,eter:0},prem:{vip:1,prem:1,eter:0},eter:{vip:1,prem:1,eter:1}})[v]||null}
-function cloudTier(v,up){const f=cloudFlags(v);if(!f)return false;const tg=S.tov&&S.treal?S.treal:S,base=S.adm?(S.admBase||{}):tg;if(up&&cloudRank(base)>=cloudRank(f))return false;if(S.adm)S.admBase=f;else{tg.vip=f.vip;tg.prem=f.prem;tg.eter=f.eter}if(f.vip){S.pp=S.pp||{};S.pc=S.pc||0}return true}
+function cloudTier(v,up){const f=cloudFlags(v);if(!f)return false;const ra=S.adm&&!S.tadm,tg=S.tov&&S.treal?S.treal:S,base=ra?(S.admBase||{}):tg;if(up&&cloudRank(base)>=cloudRank(f))return false;if(ra)S.admBase=f;else{tg.vip=f.vip;tg.prem=f.prem;tg.eter=f.eter}if(f.vip){S.pp=S.pp||{};S.pc=S.pc||0}return true}
 function cloudAdm(on){if(on&&!S.adm){S.admBase={vip:S.vip?1:0,prem:S.prem?1:0,eter:S.eter?1:0};S.adm=1;S.vip=S.prem=S.eter=1;S.pp=S.pp||{};S.pc=S.pc||0;pop('🛡️ 你獲得了管理員特別通行證！');return true}
-if(!on&&S.adm){const b=S.admBase;S.adm=0;delete S.admBase;if(b){S.vip=b.vip;S.prem=b.prem;S.eter=b.eter}pop('管理員特別通行證已被收回');return true}return false}
+if(!on&&S.adm&&!S.tadm){const b=S.admBase;S.adm=0;delete S.admBase;if(b){S.vip=b.vip;S.prem=b.prem;S.eter=b.eter}pop('管理員特別通行證已被收回');return true}return false}
 function cloudCmd(c){try{
 if(c.t=='em'){S.em=Math.max(0,Math.floor(S.em+c.n));pop((c.n>=0?'🎁 獲得 💚':'💚 被扣除 ')+Math.abs(c.n))}
 else if(c.t=='emset'){S.em=Math.max(0,Math.floor(c.n));pop('💚 你的綠寶石數量已被調整為 '+S.em)}
@@ -142,7 +143,7 @@ else if(c.t=='reset'){localStorage.removeItem('mcg1');location.reload();return}
 async function cloudSend(){if(!CL.pid)return;CL.d=0;cloudName();try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
 cloudMaint(j.maint||'');let ch=false;
 if(j.fix){try{localStorage.setItem('mcg1bak',JSON.stringify(S))}catch(e){}S=j.fix;norm();ch=true;pop('⚠️ 偵測到存檔數值異常，已還原到上一次正常的進度'+(j.why?'\n（'+j.why+'）':''))}
-if(S.tov&&j.adm&&!S.adm)applyTov(null);
+if(S.tov&&j.adm&&(!S.adm||S.tadm))applyTov(null);
 try{if(cloudAdm(!!j.adm))ch=true}catch(e){}
 try{if(applyTov(j.tov||null))ch=true}catch(e){}
 if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);ch=true}
