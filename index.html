@@ -60,7 +60,7 @@ details{margin-top:14px;padding:8px 10px}summary{cursor:pointer;font-weight:700}
 </style>
 </head>
 <body>
-<header><h1>⛏️ 方塊卡牌店</h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="go('sv')" aria-label="存檔與跨裝置">💾</button></header>
+<header><h1>⛏️ 方塊卡牌店</h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="redeem()" aria-label="兌換碼">🎁</button><button class="b" onclick="go('sv')" aria-label="存檔與跨裝置">💾</button></header>
 <main id="v"></main>
 <div id="actbar"><div class="in" id="act"></div></div>
 <nav role="tablist"><button role="tab" onclick="go('pack')" id="t-pack">📦<br>開包</button><button role="tab" onclick="go('col')" id="t-col">🎒<br>收藏</button><button role="tab" onclick="go('gr')" id="t-gr">🔍<br>鑑定</button><button role="tab" onclick="go('mkt')" id="t-mkt">📈<br>市場</button><button role="tab" onclick="go('tr')" id="t-tr">🤝<br>交易</button><button role="tab" onclick="go('pass')" id="t-pass">🎫<br>通行證</button></nav>
@@ -118,16 +118,28 @@ function cloudQ(){CL.d=1;clearTimeout(CL.t);CL.t=setTimeout(cloudSend,15000)}
 function cloudName(){if(CL.name)return;try{let n='';for(let i=0;i<5&&!n;i++)n=(prompt('請輸入你的玩家名稱（必填）','')||'').trim().slice(0,20);CL.name=n||'玩家'+CL.pid.slice(0,4);localStorage.setItem('mcg1name',CL.name)}catch(e){CL.name='玩家'}}
 function cloudFp(){try{return[navigator.userAgent,navigator.language,screen.width+'x'+screen.height,screen.colorDepth,devicePixelRatio,new Date().getTimezoneOffset(),navigator.hardwareConcurrency,navigator.deviceMemory,navigator.platform].join('|')}catch(e){return''}}
 function cloudBan(m){document.body.replaceChildren();const h=document.createElement('h2');h.style.cssText='padding:40px 20px;color:#fff;background:#000;text-align:center;min-height:100vh';h.textContent='🚫 你的帳號已被停權'+(m?'（'+m+'）':'');document.body.append(h)}
+function cloudMaint(t){let o=document.getElementById('cl-maint');if(!t){if(o)o.remove();return}if(!o){o=document.createElement('div');o.id='cl-maint';o.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:20px';document.body.append(o)}o.textContent='🛠️ '+t}
+function cloudRank(o){return o.eter?3:o.prem?2:o.vip?1:0}
+function cloudFlags(v){return({none:{vip:0,prem:0,eter:0},vip:{vip:1,prem:0,eter:0},prem:{vip:1,prem:1,eter:0},eter:{vip:1,prem:1,eter:1}})[v]||null}
+function cloudTier(v,up){const f=cloudFlags(v);if(!f)return false;const base=S.adm?(S.admBase||{}):S;if(up&&cloudRank(base)>=cloudRank(f))return false;if(S.adm)S.admBase=f;else{S.vip=f.vip;S.prem=f.prem;S.eter=f.eter}if(f.vip){S.pp=S.pp||{};S.pc=S.pc||0}return true}
+function cloudAdm(on){if(on&&!S.adm){S.admBase={vip:S.vip?1:0,prem:S.prem?1:0,eter:S.eter?1:0};S.adm=1;S.vip=S.prem=S.eter=1;S.pp=S.pp||{};S.pc=S.pc||0;toast('🛡️ 你獲得了管理員特別通行證！');return true}
+if(!on&&S.adm){const b=S.admBase;S.adm=0;delete S.admBase;if(b){S.vip=b.vip;S.prem=b.prem;S.eter=b.eter}toast('管理員特別通行證已被收回');return true}return false}
 function cloudCmd(c){try{
-if(c.t=='em'){S.em=Math.max(0,Math.floor(S.em+c.n));toast((c.n>=0?'🎁 管理員送你 💚':'管理員扣除 💚')+Math.abs(c.n))}
-else if(c.t=='tier'){S.vip=S.prem=S.eter=0;if(c.v!='none'){S.vip=1;S.pp=S.pp||{};S.pc=S.pc||0;if(c.v=='prem'||c.v=='eter')S.prem=1;if(c.v=='eter')S.eter=1}toast('管理員已調整你的通行證')}
+if(c.t=='em'){S.em=Math.max(0,Math.floor(S.em+c.n));toast((c.n>=0?'🎁 獲得 💚':'管理員扣除 💚')+Math.abs(c.n))}
+else if(c.t=='emset'){S.em=Math.max(0,Math.floor(c.n));toast('管理員調整了你的綠寶石')}
+else if(c.t=='tier'){if(cloudTier(c.v,c.up))toast(c.up?'🎁 通行證已升級！':'管理員已調整你的通行證')}
 else if(c.t=='msg')alert('📢 管理員訊息：\n'+c.s)
 else if(c.t=='name'){CL.name=String(c.v).slice(0,20);localStorage.setItem('mcg1name',CL.name)}
 else if(c.t=='reset'){localStorage.removeItem('mcg1');location.reload();return}
 }catch(e){}}
 async function cloudSend(){if(!CL.pid)return;CL.d=0;cloudName();try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
-if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
+cloudMaint(j.maint||'');let ch=false;try{if(cloudAdm(!!j.adm))ch=true}catch(e){}
+if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);ch=true}
+if(ch){try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
 if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));alert('📢 公告\n'+j.ann.text)}}catch(e){}}
+async function cloudRedeem(code){try{const r=await fetch('/api/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,code})});const j=await r.json();if(j.error){alert('❌ '+j.error);return}toast('🎁 兌換成功：'+j.desc);await cloudSend()}catch(e){alert('連線失敗，請稍後再試')}}
+function redeem(){const c=(prompt('請輸入兌換碼')||'').trim();if(c)cloudRedeem(c)}
+function adminCard(){return`<div class="blk" style="padding:10px;margin-top:10px;border-color:#ff3b6b"><b>🛡️ 管理員特別通行證${S.adm?'（已授予）':''}</b><ul><li>只能由管理員發放，無法購買，也無法用兌換碼取得</li><li>包含永恆通行證所有功能</li><li>買任何卡包 1 折（含篩界包）</li><li>賣卡價格 +50%</li><li>挖礦收益 ×100</li></ul><p>${S.adm?'你持有這張特別通行證 🛡️':'尚未持有'}</p></div>`}
 addEventListener('visibilitychange',()=>{if(document.hidden){if(CL.d)cloudSend()}else cloudSend()});
 addEventListener('load',()=>setTimeout(cloudSend,300));setInterval(()=>{if(!document.hidden)cloudSend()},30000);
 
@@ -139,11 +151,11 @@ const enTxt=c=>c.en&&c.en.length?`<small class="et">✨${c.en.slice(0,2).map(([i
 function mkCard(k){const r=D[k][2],max=RUN[r];return{id:S.id++,k,foil:Math.random()<.08,ser:1+Math.floor(Math.random()*max),max,grade:0,pend:0,pd:0,en:rollEn(r),t:Date.now()}}
 const rk=r=>P[r][Math.floor(Math.random()*P[r].length)];
 function val(c){const sb=c.ser==1?10:c.ser<=10?3:c.ser<=c.max*.01?1.5:1;return D[c.k][3]*S.m[c.k]*(c.grade?G[c.grade]:.75)*(c.foil?2.5:1)*sb*enMul(c)}
-const price=c=>Math.max(1,Math.floor(val(c)*(S.eter?1.1:.92)));
+const price=c=>Math.max(1,Math.floor(val(c)*(S.adm?1.5:S.eter?1.1:.92)));
 const fee=(c,t)=>Math.ceil((10+D[c.k][3]*S.m[c.k]*.12)*T[t][2]*(S.eter?.5:1));
 const sp=c=>Math.ceil((S.eter?.5:1)*Math.max(1,(c.pend-Date.now())/1000)*(.5+D[c.k][3]*S.m[c.k]*.01));
 function toast(t){if(/不足|無效|無法|有誤|已經用過|找不到|失敗|不對/.test(t))sfx('err');const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',2400)}
-function head(){$('#em').textContent=S.em;$('header h1').textContent=S.eter?'♾️ 方塊卡牌店 永恆':S.prem?'💎 方塊卡牌店 至尊':S.vip?'👑 方塊卡牌店 VIP':'⛏️ 方塊卡牌店';$('#t-col').innerHTML='🎒<br>收藏 '+S.cards.filter(c=>!c.pend).length;$('#t-gr').innerHTML='🔍<br>鑑定 '+S.cards.filter(c=>c.pend).length}
+function head(){$('#em').textContent=S.em;$('header h1').textContent=S.adm?'🛡️ 方塊卡牌店 管理員':S.eter?'♾️ 方塊卡牌店 永恆':S.prem?'💎 方塊卡牌店 至尊':S.vip?'👑 方塊卡牌店 VIP':'⛏️ 方塊卡牌店';$('#t-col').innerHTML='🎒<br>收藏 '+S.cards.filter(c=>!c.pend).length;$('#t-gr').innerHTML='🔍<br>鑑定 '+S.cards.filter(c=>c.pend).length}
 const SP={
 cube:'oooooooooo/occcccccao/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/obbbbbbbbo/oooooooooo',
 ore:'oooooooooo/occcccccao/ocaadaaabo/ocadddaabo/ocaadaaabo/ocaaaadabo/ocaaaddabo/ocaaaadabo/obbbbbbbbo/oooooooooo',
@@ -233,7 +245,7 @@ function ico(k,s=34){const d=D[k],t=TH[d[0]];if(!t||!SP[t[0]])return d[1];const 
 SP[t[0]].split('/').slice(0,10).forEach((row,y)=>{row=row.padEnd(10,'.');let x=0;while(x<10){const ch=row[x]||'.';if(ch=='.'){x++;continue}let n=1;while(row[x+n]==ch&&x+n<10)n++;r+=`<rect x="${x}" y="${y}" width="${n}" height="1" fill="${cm[ch]||FX[ch]||'#f0f'}"/>`;x+=n}});
 return SVC[key]=`<svg viewBox="0 0 10 10" width="${s}" height="${s}" shape-rendering="crispEdges" role="img" aria-label="${d[0]}" style="display:block;margin:auto">${r}</svg>`}
 function card(c,x='',p=false){const d=D[c.k],r=R[d[2]];return `<div data-r="${d[2]}" class="card ${d[2]>=5?'gen':''} ${c.foil?'foil':''} ${c.en&&c.en.length?'ench':''} ${x}" style="--rc:${r[1]}"><b class="nm">${d[0]}</b><div class="em">${ico(c.k)}</div><small>${r[0]}${c.foil?' ✦閃卡':''}</small>${enTxt(c)}<small>#${c.ser}/${c.max}</small>${p?`<small class="pr">💚${price(c)}</small><i class="hrt" onclick="event.stopPropagation();lk(${c.id})" aria-label="上鎖">${c.lk?'❤️':'🤍'}</i>`:''}${c.grade?`<div class="slab ${c.grade>=9?'gh':''}">鑑定 ${c.grade}/10</div>`:''}</div>`}
-const PG=[[2,8],[2,8],[3,10],[4,80],[4,40]],cst=p=>Math.ceil(p.p*(p.lock?1:S.eter?.3:S.prem?.6:S.vip?.8:1));
+const PG=[[2,8],[2,8],[3,10],[4,80],[4,40]],cst=p=>Math.ceil(p.p*(S.adm?.1:p.lock?1:S.eter?.3:S.prem?.6:S.vip?.8:1));
 function drawK(r,pool){const a=pool.filter(i=>D[i][2]==r);return Math.random()<.65&&a.length?a[Math.floor(Math.random()*a.length)]:rk(r)}
 function buyOne(i){const p=PK[i],cost=cst(p);if(S.em<cost||(p.lock&&!S.eter))return 0;
 S.em-=cost;S.pity++;let rs=[];const w=S.prem?p.w.map((x,r)=>r==5?x*(S.eter?12:3):r>=3?x*(S.eter?3:1.5):x):p.w;for(let j=0;j<p.c;j++)rs.push(pick(w));
@@ -255,7 +267,7 @@ function peek(id){const k=S.inv.find(x=>x.id==id);if(!k||k.pk)return;sfx('peek')
 function openInv(id){const j=S.inv.findIndex(x=>x.id==id);if(j<0)return;const k=S.inv.splice(j,1)[0];S.opened++;AS={n:0,g:0};rev=autoSell(k.cs);sfx('open');asToast();save();render();const e=$('#rv');e&&e.scrollIntoView({behavior:'smooth'})}
 function sellPack(id){const j=S.inv.findIndex(x=>x.id==id);if(j<0)return;const k=S.inv.splice(j,1)[0],g=Math.floor((k.paid||PK[k.p].p)*.85);S.em+=g;sfx('coin');toast(`賣出封包，獲得 ${g} 💚`);save();render()}
 function vInv(){return `<h3 id="inv">未拆封卡包（${S.inv.length}）${S.inv.length>1?'<span><button class="b" onclick="openAll()">全部拆開</button></span>':''}</h3>`+(S.inv.length?S.inv.map(k=>{const p=PK[k.p];return `<div class="blk row"><div class="spk"><span class="big">${p.e}</span><b>${p.n}</b></div><div class="edge">${k.pk?k.pk.map(x=>`<i class="${x.f?'ef':''} ${x.e?'ee':''}" style="background:${R[x.g][1]}"></i>`).join(''):'<small>邊緣看不清楚，按瞄邊看看</small>'}</div><div class="ab"><button class="b" onclick="peek(${k.id})" ${k.pk?'disabled':''}>瞄邊</button><button class="b" onclick="openInv(${k.id})">拆開</button><button class="b" onclick="sellPack(${k.id})">賣 💚${Math.floor((k.paid||p.p)*.85)}</button></div></div>`}).join('')+`<p class="note">瞄邊會露出每張卡的側邊顏色（由上到下是開包順序，約 75% 準確）：灰＝普通、藍＝稀有、紫＝史詩、金＝傳說、紅＝神話；有亮光可能是閃卡，右側紫邊可能有附魔。不想拆可以用 85% 價格賣回。</p>`:'<small>買了卡包會先放在這裡，可以瞄邊再決定要不要拆。</small>')}
-function mine(){S.em+=(3+Math.floor(Math.random()*6))*(S.eter?10:1);sfx('mine');head();save()}
+function mine(){S.em+=(3+Math.floor(Math.random()*6))*(S.adm?100:S.eter?10:1);sfx('mine');head();save()}
 function selCards(){return S.cards.filter(c=>sel.has(c.id)&&!c.pend&&!c.lk)}
 function tg(id){const c=S.cards.find(x=>x.id==id);if(c&&c.lk)return toast('這張卡已上鎖，點愛心解鎖後才能操作');sfx('click');sel.has(id)?sel.delete(id):sel.add(id);render()}
 function lk(id){const c=S.cards.find(x=>x.id==id);if(!c)return;c.lk=!c.lk;sel.delete(id);save();render()}
@@ -266,7 +278,7 @@ function claimVip(){const t=top2();if(S.vip||t.length<2||t.reduce((x,y)=>x+y.v,0
 function vPass(){const t=top2(),s=Math.floor(t.reduce((x,y)=>x+y.v,0));
 return `<div class="blk" style="padding:10px;margin-bottom:10px"><b>🎫 普通通行證</b><ul><li>市場每 10 秒更新</li><li>全站保底：連買 ${PTY} 包必出傳說以上</li><li>卡包原價</li></ul></div><div class="blk" style="padding:10px"><b>👑 VIP 通行證${S.vip?'（已領取）':''}</b><ul><li>每一種卡包都有各自的保底</li><li>買任何卡包 8 折</li><li>市場每 7 秒更新</li></ul>`+(S.vip?`<p>已永久升級。各卡包保底進度：</p><table>${PK.map((p,i)=>p.lock?'':`<tr><td>${p.e} ${p.n}</td><td>${S.pp[i]||0}/${PG[p.t][1]}</td><td>${R[PG[p.t][0]][0]}以上</td></tr>`).join('')}</table>`:`<p>條件：收藏中任兩張卡的價值加起來超過 10,000。<br>目前最高兩張合計 💚${s}</p><div class="bar"><i style="width:${Math.min(100,s/100)}%"></i></div><div class="grid">${t.map(x=>card(x.c)).join('')}</div><p><button class="b" ${s>10000&&t.length==2?'':'disabled'} onclick="claimVip()">領取 VIP 通行證</button></p>`)+`</div>
 <div class="blk" style="padding:10px;margin-top:10px"><b>💎 至尊通行證${S.prem?'（已領取）':''}</b><ul><li>最高級通行證，包含 VIP 所有功能</li><li>買任何卡包 6 折</li><li>傳說以上機率 ×1.5，<b style="color:${R[5][1]}">創世</b>稀有度機率 ×3</li><li>高階（史詩包以上）累積 200 包必出創世</li><li>解鎖十連抽</li><li>市場每 5 秒更新</li></ul>`+(S.prem?`<p>已永久升級，目前創世保底進度：${S.pc||0}/${PCN()}</p>`:`<p>價格：💚${PREM}（目前 💚${S.em}）</p><div class="bar"><i style="width:${Math.min(100,S.em/PREM*100)}%"></i></div><p><button class="b" ${S.em>=PREM?'':'disabled'} onclick="buyPrem()">購買至尊通行證 💚${PREM}</button></p>`)+`</div>
-<div class="blk" style="padding:10px;margin-top:10px;border-color:#00e5ff"><b>♾️ 永恆通行證${S.eter?'（已領取）':''}</b><ul><li>最高級通行證，包含至尊與 VIP 所有功能</li><li>買任何卡包 3 折</li><li>每包至少一張史詩以上</li><li>傳說以上機率 ×3，<b style="color:${R[5][1]}">創世</b>機率 ×12</li><li>全站保底連買 12 包必出傳說以上</li><li>高階（史詩包以上）累積 80 包必出創世</li><li>賣卡價格 +10%（不收手續費）</li><li>附魔 100% 成功，鑑定與加速費用 5 折</li><li>挖礦收益 ×10</li><li>解鎖「篩界包」：每包 5 張，全是傳說以上的閃卡（神話、創世極罕見，且沒有保底）</li><li>市場每 2 秒更新</li></ul>`+(S.eter?`<p>已永久升級，目前創世保底進度：${S.pc||0}/${PCN()}</p>`:`<p>價格：💚${ETER}（目前 💚${S.em}）</p><div class="bar"><i style="width:${Math.min(100,S.em/ETER*100)}%"></i></div><p><button class="b" ${S.em>=ETER?'':'disabled'} onclick="buyEter()">購買永恆通行證 💚${ETER}</button></p>`)+`</div>`}
+<div class="blk" style="padding:10px;margin-top:10px;border-color:#00e5ff"><b>♾️ 永恆通行證${S.eter?'（已領取）':''}</b><ul><li>最高級通行證，包含至尊與 VIP 所有功能</li><li>買任何卡包 3 折</li><li>每包至少一張史詩以上</li><li>傳說以上機率 ×3，<b style="color:${R[5][1]}">創世</b>機率 ×12</li><li>全站保底連買 12 包必出傳說以上</li><li>高階（史詩包以上）累積 80 包必出創世</li><li>賣卡價格 +10%（不收手續費）</li><li>附魔 100% 成功，鑑定與加速費用 5 折</li><li>挖礦收益 ×10</li><li>解鎖「篩界包」：每包 5 張，全是傳說以上的閃卡（神話、創世極罕見，且沒有保底）</li><li>市場每 2 秒更新</li></ul>`+(S.eter?`<p>已永久升級，目前創世保底進度：${S.pc||0}/${PCN()}</p>`:`<p>價格：💚${ETER}（目前 💚${S.em}）</p><div class="bar"><i style="width:${Math.min(100,S.em/ETER*100)}%"></i></div><p><button class="b" ${S.em>=ETER?'':'disabled'} onclick="buyEter()">購買永恆通行證 💚${ETER}</button></p>`)+`</div>`+adminCard()}
 function sell(){const a=selCards();let t=0;a.forEach(c=>t+=price(c));S.em+=t;const ids=new Set(a.map(c=>c.id));S.cards=S.cards.filter(c=>!ids.has(c.id));sel.clear();sfx('coin');toast(`賣出 ${a.length} 張，獲得 ${t} 💚`);save();render()}
 function send(t){const a=selCards().filter(c=>!c.grade);if(!a.length)return;const f=a.reduce((s,c)=>s+fee(c,t),0);if(S.em<f)return toast('綠寶石不足');S.em-=f;a.forEach(c=>{c.pend=Date.now()+T[t][1]*1000;c.pd=T[t][1];sel.delete(c.id)});toast(`已送出 ${a.length} 張（${T[t][0]}）`);save();render()}
 function spd(id){const c=S.cards.find(x=>x.id==id),f=sp(c);if(S.em<f)return toast('綠寶石不足');S.em-=f;c.pend=Date.now();gtick();render()}
