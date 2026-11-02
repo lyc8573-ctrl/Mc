@@ -138,15 +138,17 @@ else if(c.t=='msg')pop('📢 訊息\n'+c.s)
 else if(c.t=='name'){CL.name=String(c.v).slice(0,20);localStorage.setItem('mcg1name',CL.name);pop('✏️ 你的名字已改為 '+CL.name)}
 else if(c.t=='cards'){const cs=(c.cs||[]).filter(x=>x&&!S.cards.some(y=>y.id==x.id));cs.forEach(x=>{S.cards.push(x);S.dex[x.k]=1});if(c.gid>(S.gid||0))S.gid=c.gid;if(cs.length)pop(cardsMsg(cs))}
 else if(c.t=='state'){try{S=JSON.parse(c.s);norm();pop('💾 你的存檔已被更新')}catch(e){}}
-else if(c.t=='reset'){localStorage.removeItem('mcg1');location.reload();return}
+else if(c.t=='reset'){RST=1}
 }catch(e){}}
-async function cloudSend(){if(!CL.pid)return;CL.d=0;cloudName();try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
+let RST=0;
+async function cloudSend(){if(!CL.pid||RST)return;CL.d=0;cloudName();try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
 cloudMaint(j.maint||'');let ch=false;
 if(j.fix){try{localStorage.setItem('mcg1bak',JSON.stringify(S))}catch(e){}S=j.fix;norm();ch=true;pop('⚠️ 偵測到存檔數值異常，已還原到上一次正常的進度'+(j.why?'\n（'+j.why+'）':''))}
 if(S.tov&&j.adm&&(!S.adm||S.tadm))applyTov(null);
 try{if(cloudAdm(!!j.adm))ch=true}catch(e){}
 try{if(applyTov(j.tov||null))ch=true}catch(e){}
 if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);ch=true}
+if(RST){try{localStorage.removeItem('mcg1')}catch(e){}location.reload();return}
 if(ch){try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
 if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));pop('📢 公告\n'+j.ann.text)}}catch(e){}}
 async function cloudRedeem(code){try{const r=await fetch('/api/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,code})});const j=await r.json();if(j.error){alert('❌ '+j.error);return}pop('🎁 兌換成功：'+j.desc);await cloudSend()}catch(e){alert('連線失敗，請稍後再試')}}
