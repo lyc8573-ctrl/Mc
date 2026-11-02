@@ -63,6 +63,7 @@ function guard(P, N, x) { // 回傳 {bad:原因} 或 {ok:1, ub:新的未見額�
   }
   return { ok: 1, ub: nub };
 }
+const untov = d => { if (!d.tov || !d.treal || typeof d.treal !== 'object') return d; const c = JSON.parse(JSON.stringify(d)), t = d.treal; c.vip = t.vip ? 1 : 0; c.prem = t.prem ? 1 : 0; c.eter = t.eter ? 1 : 0; delete c.tov; delete c.treal; return c; }; // 全服暫時通行證：存檔和檢查一律用玩家真正的通行證
 const freshState = () => ({ em: 500, cards: [], id: 1, pity: 0, dex: [], m: ECON.D.map(() => 1), pm: ECON.D.map(() => 1), opened: 0, log: [], inv: [], pp: {}, auto: { r: [0, 0, 0, 0, 0, 0], f: 1 }, esc: [], seen: {}, rep: [] });
 const BANPAGE = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#000;color:#fff;font:20px sans-serif;text-align:center;padding:80px 20px"><h1>🚫</h1><p>你的帳號或裝置已被停權</p>';
 const send = (res, s, o, h) => { res.writeHead(s, Object.assign({ 'content-type': 'application/json;charset=utf-8', 'cache-control': 'no-store' }, h)); res.end(JSON.stringify(o)); };
@@ -124,7 +125,7 @@ async function save(req, res) {
   let b; try { b = JSON.parse(await body(req)); } catch { return send(res, 400, { error: 'bad request' }); }
   const pid = String(b.pid || '');
   if (!/^[\w-]{8,64}$/.test(pid) || !b.data || typeof b.data !== 'object') return send(res, 400, { error: 'bad request' });
-  const d = b.data, now = Date.now(), name = String(b.name || '未命名').slice(0, 20);
+  const d = untov(b.data), now = Date.now(), name = String(b.name || '未命名').slice(0, 20);
   const em = Math.floor(Number(d.em)) || 0, cards = Array.isArray(d.cards) ? d.cards.length : 0, opened = Math.floor(Number(d.opened)) || 0;
   const tier = d.eter ? '永恆' : d.prem ? '至尊' : d.vip ? 'VIP' : '普通';
   const fp = b.fp ? sha(String(b.fp).slice(0, 600)).toString('hex').slice(0, 16) : '';
@@ -168,8 +169,9 @@ async function save(req, res) {
       if (reset) await q("UPDATE players SET data='',tok=NULL,strikes=0,rej=NULL WHERE pid=$1", [pid]); else if (dirty) await storeState(pid, base);
     }
   }
-  const kvs = {}; for (const x of await q("SELECT k,v FROM kv WHERE k IN ('ann','maint')")) kvs[x.k] = x.v;
-  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '' }, h);
+  const kvs = {}; for (const x of await q("SELECT k,v FROM kv WHERE k IN ('ann','maint','tierov')")) kvs[x.k] = x.v;
+  let tov = null; if (kvs.tierov) { try { const o = JSON.parse(kvs.tierov); if (!o.until || o.until > now) tov = { id: o.id, v: o.v }; } catch {} }
+  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '', tov }, h);
 }
 const rfail = new Map(), TN = { vip: 'VIP', prem: '至尊', eter: '永恆' };
 async function redeem(req, res) {
@@ -238,12 +240,19 @@ async function adminInner(req, res, u) {
   if (p === '/api/admin/codes') return send(res, 200, { codes: await q('SELECT * FROM codes ORDER BY created DESC LIMIT 300') });
   if (p === '/api/admin/codeusers') return send(res, 200, { users: await q('SELECT r.pid,r.ts,p.name FROM redeems r LEFT JOIN players p ON p.pid=r.pid WHERE r.code=$1 ORDER BY r.ts DESC LIMIT 200', [u.searchParams.get('code') || '']) });
   if (p === '/api/admin/logs') return send(res, 200, { logs: await q('SELECT ts,act,pid,detail FROM logs ORDER BY ts DESC LIMIT 100') });
+  if (p === '/api/admin/tierov' && req.method !== 'POST') { const r = (await q("SELECT v FROM kv WHERE k='tierov'"))[0]; let o = null; try { o = r && JSON.parse(r.v); } catch {} if (o && o.until && o.until <= now) o = null; return send(res, 200, { tierov: o }); }
   if (req.method !== 'POST') return send(res, 404, { error: 'not found' });
   let b; try { b = JSON.parse(await body(req)); } catch { return send(res, 400, { error: 'bad json' }); }
   if (p === '/api/admin/announce') {
     const t = String(b.text || '').slice(0, 500);
     if (t) await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['ann', JSON.stringify({ id: now, text: t })]); else await q("DELETE FROM kv WHERE k='ann'");
     log('announce', '', t || '(清除)'); return send(res, 200, { ok: 1 });
+  }
+  if (p === '/api/admin/tierov') { // 全服暫時通行證：v = none/vip/prem/eter，空字串 = 關閉；hours 0 = 手動關閉前一直有效
+    const v = String(b.v || '');
+    if (!v) await q("DELETE FROM kv WHERE k='tierov'");
+    else { if (!FLAGS[v]) return send(res, 400, { error: 'bad' }); const h = Number(b.hours) > 0 ? Math.min(720, Number(b.hours)) : 0; await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['tierov', JSON.stringify({ id: now, v, until: h ? Math.floor(now + h * 3600000) : 0 })]); }
+    log('tierov', '', v ? v + ' ' + (b.hours || 0) + 'h' : '(關閉)'); return send(res, 200, { ok: 1 });
   }
   if (p === '/api/admin/maint') {
     const t = String(b.text || '').slice(0, 200);
