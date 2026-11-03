@@ -337,8 +337,8 @@ async function adminInner(req, res, u) {
   if (p === '/api/admin/list') {
     const where = [], a = [], qs = (u.searchParams.get('q') || '').toLowerCase(), fl = u.searchParams.get('f');
     if (qs) { a.push('%' + qs + '%'); const n = '$' + a.length; where.push(`(LOWER(name) LIKE ${n} OR LOWER(pid) LIKE ${n} OR LOWER(COALESCE(ip,'')) LIKE ${n} OR LOWER(COALESCE(acct,'')) LIKE ${n})`); }
-    if (fl === 'banned') where.push('banned=1'); else if (fl === 'adm') where.push('adm=1'); else if (fl === 'online') { a.push(now - 120000); where.push('updated>$' + a.length); }
-    const rows = await q('SELECT pid,name,em,cards,opened,tier,banned,ip,created,updated,strikes FROM players' + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ORDER BY ' + (SORT[u.searchParams.get('s')] || SORT.recent) + ' LIMIT 300', a);
+    if (fl === 'banned') where.push('banned=1'); else if (fl === 'adm') where.push('adm=1'); else if (fl === 'acct') where.push('acct IS NOT NULL'); else if (fl === 'online') { a.push(now - 120000); where.push('updated>$' + a.length); }
+    const rows = await q('SELECT pid,name,acct,em,cards,opened,tier,banned,ip,created,updated,strikes FROM players' + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ORDER BY ' + (SORT[u.searchParams.get('s')] || SORT.recent) + ' LIMIT 300', a);
     return send(res, 200, { players: rows });
   }
   if (p === '/api/admin/player') {
@@ -444,7 +444,7 @@ async function adminInner(req, res, u) {
       for (const x of [pid, ...v.map(r => r.val)]) await q('UPDATE players SET banned=0,ban_reason=NULL WHERE pid=$1', [x]);
       log('unban', pid, pl.name); break;
     }
-    case 'resetpass': { const pw = String(b.pass || ''); if (!pl.acct) return send(res, 400, { error: '這位玩家沒有註冊帳號' }); const pe = pwErr(pw, pl.acct); if (pe) return send(res, 400, { error: pe }); await q('UPDATE players SET pwh=$1 WHERE pid=$2', [await hashPw(pw), pid]); log('resetpass', pid, pl.acct); break; }
+    case 'resetpass': { let pw = String(b.pass || ''), gen = ''; if (!pl.acct) return send(res, 400, { error: '這位玩家沒有註冊帳號' }); if (!pw) { for (const x of crypto.randomBytes(10)) gen += FCAL[x % 32]; pw = gen; } const pe = pwErr(pw, pl.acct); if (pe) return send(res, 400, { error: pe }); await q('UPDATE players SET pwh=$1 WHERE pid=$2', [await hashPw(pw), pid]); log('resetpass', pid, pl.acct); return send(res, 200, { ok: 1, pass: gen }); }
     case 'clearacct': await q('UPDATE players SET acct=NULL,pwh=NULL WHERE pid=$1', [pid]); log('clearacct', pid, pl.acct || ''); break;
     case 'delete': await q('DELETE FROM friends WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
     default: return send(res, 400, { error: 'bad act' });

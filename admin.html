@@ -44,15 +44,21 @@ const o={r,get(){const en=[];ens.forEach(x=>{if(x.e.value!=='')en.push([+x.e.val
 r.append(el('div',null,'ln',e=>e.append(ks)),el('div',null,'ln',e=>e.append(el('span','數量 '),n,fo,gr)),el('div',null,'ln',e=>e.append(ser)),...ens.map(x=>el('div',null,'ln',e=>e.append(x.e,x.l))),btn('移除這張',()=>{rows.splice(rows.indexOf(o),1);r.remove()},'bad'));
 rows.push(o);box.insertBefore(r,add)}
 box.append(add);return{el:box,get:()=>rows.map(x=>x.get())}}
+// 產生和遊戲「匯出存檔」完全相同格式的存檔代碼（MCS1），可在遊戲 💾 → 匯入存檔 直接讀取
+const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.slice(i,i+8192));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')},ck=u=>{let a=1,b=0;for(const x of u){a=(a+x)%251;b=(b+a)%251}return[a,b]};
+async function zip(u,s){return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(s)).arrayBuffer())}
+async function saveCode(data){const o=JSON.parse(data);if(!o||!Array.isArray(o.cards)||!Array.isArray(o.m))throw 0;o.m=o.m.map(x=>+Number(x).toFixed(3));delete o.pm;delete o.tov;delete o.treal;delete o.tadm;let u=new TextEncoder().encode(JSON.stringify(o)),pre='MCS0';
+if(window.CompressionStream){u=await zip(u,new CompressionStream('deflate-raw'));pre='MCS1'}const x=new Uint8Array(u.length+2);x.set(u);x.set(ck(u),u.length);return pre+'.'+b64(x)}
+function dl(text,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 async function stats(){const s=await api('/api/admin/stats');const c=$('#st');c.replaceChildren();[['玩家',s.total],['在線',s.online],['24h活躍',s.active24],['停權',s.banned],['封鎖項',s.bans],['總💚',s.em],['總拆包',s.opened],['特別通行證',s.adm],['兌換碼',s.codes]].forEach(x=>c.append(el('span',x[0]+' '+x[1])))}
 async function boot(){await stats();$('#lg').hidden=true;$('#app').hidden=false;tab(TAB)}
 function tab(n){TAB=n;document.querySelectorAll('.tb button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==n));$('#d').hidden=true;({p:vPlayers,b:vBans,c:vCodes,t:async()=>{await vTools();vMaint()},l:vLogs})[n]()}
 async function vPlayers(){const m=$('#main');
 const j=await api('/api/admin/list?q='+encodeURIComponent(Q)+'&s='+SO+'&f='+FI);m.replaceChildren();
 const qi=el('input',null,null,e=>{e.placeholder='搜尋名字 / ID / IP / 帳號';e.value=Q;e.onchange=()=>{Q=e.value;vPlayers()}});
-m.append(qi,sel([['recent','最近上線'],['new','最新加入'],['em','💚最多'],['cards','卡最多'],['opened','拆包最多']],SO,v=>{SO=v;vPlayers()}),sel([['','全部'],['online','在線'],['banned','停權'],['adm','🛡️特別通行證']],FI,v=>{FI=v;vPlayers()}),btn('重新整理',()=>{stats();vPlayers()}),btn('⬇️ CSV',()=>csv(j.players)));
-const t=el('table'),h=el('tr');['玩家','💚','卡','通行證','最後上線'].forEach(x=>h.append(el('th',x)));t.append(h);
-j.players.forEach(p=>{const tr=el('tr',null,'p');tr.append(el('td',(p.banned?'🚫 ':'')+p.name),el('td',p.em),el('td',p.cards),el('td',p.tier),el('td',ago(p.updated)));tr.onclick=()=>detail(p.pid);t.append(tr)});
+m.append(qi,sel([['recent','最近上線'],['new','最新加入'],['em','💚最多'],['cards','卡最多'],['opened','拆包最多']],SO,v=>{SO=v;vPlayers()}),sel([['','全部'],['online','在線'],['banned','停權'],['adm','🛡️特別通行證'],['acct','👤 有帳號']],FI,v=>{FI=v;vPlayers()}),btn('重新整理',()=>{stats();vPlayers()}),btn('⬇️ CSV',()=>csv(j.players)));
+const t=el('table'),h=el('tr');['玩家','帳號','💚','卡','通行證','最後上線'].forEach(x=>h.append(el('th',x)));t.append(h);
+j.players.forEach(p=>{const tr=el('tr',null,'p');tr.append(el('td',(p.banned?'🚫 ':'')+p.name),el('td',p.acct||'—'),el('td',p.em),el('td',p.cards),el('td',p.tier),el('td',ago(p.updated)));tr.onclick=()=>detail(p.pid);t.append(tr)});
 m.append(el('div',null,'w',e=>e.append(t)),el('p','共顯示 '+j.players.length+' 位（最多 300）','dim'))}
 async function act(pid,a,x){await api('/api/admin/act',Object.assign({pid,act:a},x||{}));await stats();if(a=='delete'||a=='rmban'){$('#d').hidden=true}else await detail(pid);if(TAB=='p')vPlayers()}
 async function detail(pid){const j=await api('/api/admin/player?pid='+encodeURIComponent(pid)),p=j.player,d=$('#d');d.hidden=false;d.replaceChildren();
@@ -68,7 +74,7 @@ d.append(el('div',null,'row',e=>e.append(sn,btn('設定💚',()=>{if(sn.value!==
 const cp=await picker();d.append(el('div',null,'row',e=>e.append(el('b','🃏 發卡片給玩家（可選閃卡、序號、鑑定分、附魔）'))),cp.el,el('div',null,'row',e=>e.append(btn('發送卡片',()=>{const c=cp.get();if(c.length)act(pid,'givecard',{cards:c});else alert('請先加卡片')}))));
 if(p.rej||p.strikes)d.append(el('div',null,'row',e=>e.append(el('b','⚠️ 數值異常被擋下 '+(p.strikes||0)+' 次　'),p.rej?btn('✅ 接受被擋下的存檔',()=>{if(confirm('把玩家送來被擋下的存檔當成正式存檔？'))act(pid,'acceptrej')}):'',btn('清除警告',()=>act(pid,'clearstrikes')))));
 d.append(el('div',null,'row',e=>e.append(el('b',p.adm?'🛡️ 持有管理員特別通行證　':'管理員特別通行證（只有後台能發）　'),p.adm?btn('收回特別通行證',()=>act(pid,'adm',{on:0}),'bad'):btn('🛡️ 授予特別通行證',()=>{if(confirm('授予 '+p.name+' 管理員特別通行證？'))act(pid,'adm',{on:1})}))));
-if(p.acct)d.append(el('div',null,'row',e=>e.append(el('b','👤 帳號 '+p.acct+'　'),btn('重設密碼',()=>{const x=prompt('新密碼（6～64 個字）');if(x)act(pid,'resetpass',{pass:x}).then(()=>alert('已重設'))}),btn('解除帳號綁定',()=>{if(confirm('解除後這個帳號名稱可被重新註冊，玩家要重新綁定才能跨裝置登入。確定？'))act(pid,'clearacct')},'bad'))));
+if(p.acct)d.append(el('div',null,'row',e=>e.append(el('b','👤 帳號 '+p.acct+'　'),btn('重設密碼',async()=>{const x=prompt('新密碼（6～64 個字；留空＝自動產生）','');if(x===null)return;const r=await api('/api/admin/act',{pid,act:'resetpass',pass:x});prompt('已重設，這是新密碼（請複製後交給玩家）：',r.pass||x)}),btn('解除帳號綁定',()=>{if(confirm('解除後這個帳號名稱可被重新註冊，玩家要重新綁定才能跨裝置登入。確定？'))act(pid,'clearacct')},'bad'))));
 if(j.redeems&&j.redeems.length)d.append(el('div','🎁 兌換過：'+j.redeems.map(x=>x.code).join('、'),'kv'));
 const t=sel([['none','無通行證'],['vip','VIP'],['prem','至尊'],['eter','永恆']],'none',()=>{});
 d.append(el('div',null,'row',e=>e.append(t,btn('設定通行證',()=>act(pid,'tier',{v:t.value})))));
@@ -83,7 +89,8 @@ else d.append(el('div',null,'row',e=>e.append(ci,el('br'),cf,el('br'),btn('🚫 
 const pre=el('pre');pre.hidden=true;try{pre.textContent=JSON.stringify(JSON.parse(p.data),null,1).slice(0,20000)}catch(e){pre.textContent=p.data}
 d.append(el('div',null,'row',e=>e.append(
 btn('👁 看存檔',()=>pre.hidden=!pre.hidden),
-btn('⬇️ 下載存檔',()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([p.data],{type:'application/json'}));a.download=p.name+'.json';a.click()}),
+btn('⬇️ 下載存檔（可直接匯入）',async()=>{if(!p.data)return alert('這位玩家目前沒有存檔');try{const code=await saveCode(p.data);dl(code,(p.name||'玩家')+'-存檔.txt','text/plain')}catch(e){alert('產生存檔失敗：存檔內容可能損毀')}}),
+btn('原始 JSON',()=>dl(p.data||'',(p.name||'玩家')+'.json','application/json')),
 btn('🗑️ 刪除',()=>{if(confirm('刪除後雲端資料消失（玩家手機上的存檔還在）。確定？'))act(pid,'delete')},'bad'),
 btn('關閉',()=>d.hidden=true))),pre);d.scrollIntoView()}
 async function vBans(){const m=$('#main'),j=await api('/api/admin/bans');m.replaceChildren();
