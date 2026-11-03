@@ -9,18 +9,18 @@ pre{white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto;back
 #d{border:1px solid #555;padding:10px;margin:10px 0;border-radius:8px}.kv{margin:2px 0;word-break:break-all}
 .chips span{display:inline-block;background:#222;border:1px solid #444;border-radius:12px;padding:3px 10px;margin:2px}
 .cr{border:1px solid #444;border-radius:8px;padding:6px;margin:6px 0;background:#181818}.cr input[type=number]{width:84px}.cr select{max-width:100%}.cr .ln{margin:3px 0}
-.row{margin:6px 0}a.rel{color:#6af;cursor:pointer;margin-right:8px}textarea{width:95%}
+.bars{display:flex;gap:6px;align-items:flex-end;min-height:130px}.bc{flex:1;text-align:center;font-size:12px}.bb{background:#2a6;border-radius:4px 4px 0 0;margin:2px auto;width:70%}.lbs{display:flex;flex-wrap:wrap;gap:12px}.lb{flex:1;min-width:210px}.lbr:hover{background:#222}.row{margin:6px 0}a.rel{color:#6af;cursor:pointer;margin-right:8px}textarea{width:95%}
 </style></head><body>
 <h2>⛏️ 方塊卡牌店 後台</h2>
 <div id="lg"><input id="pw" type="password" placeholder="管理員密碼"><button id="go">登入</button> <span id="er" class="bad"></span></div>
 <div id="app" hidden>
 <div class="chips" id="st"></div>
-<div class="tb"><button data-t="p">👥 玩家</button><button data-t="b">🚫 封鎖清單</button><button data-t="c">🎁 兌換碼</button><button data-t="t">📢 全服工具</button><button data-t="l">📜 紀錄</button><button id="lo">登出</button></div>
+<div class="tb"><button data-t="d">📊 統計</button><button data-t="p">👥 玩家</button><button data-t="b">🚫 封鎖清單</button><button data-t="c">🎁 兌換碼</button><button data-t="t">📢 全服工具</button><button data-t="l">📜 紀錄</button><button id="lo">登出</button></div>
 <div id="d" hidden></div>
 <div id="main"></div>
 </div>
 <script>
-let PW=sessionStorage.getItem('pw')||'',TAB='p',Q='',SO='recent',FI='';
+let PW=sessionStorage.getItem('pw')||'',TAB='p',Q='',SO='recent',FI='',LOGPID='',LOGACT='',LOGQ='',SELP=new Set();
 const $=s=>document.querySelector(s);
 function el(t,x,c,k){const e=document.createElement(t);if(x!=null)e.textContent=x;if(c)e.className=c;if(k)k(e);return e}
 const fmt=t=>t?new Date(t).toLocaleString():'-';
@@ -52,13 +52,15 @@ if(window.CompressionStream){u=await zip(u,new CompressionStream('deflate-raw'))
 function dl(text,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 async function stats(){const s=await api('/api/admin/stats');const c=$('#st');c.replaceChildren();[['玩家',s.total],['在線',s.online],['24h活躍',s.active24],['停權',s.banned],['封鎖項',s.bans],['總💚',s.em],['總拆包',s.opened],['特別通行證',s.adm],['兌換碼',s.codes]].forEach(x=>c.append(el('span',x[0]+' '+x[1])))}
 async function boot(){await stats();$('#lg').hidden=true;$('#app').hidden=false;tab(TAB)}
-function tab(n){TAB=n;document.querySelectorAll('.tb button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==n));$('#d').hidden=true;({p:vPlayers,b:vBans,c:vCodes,t:async()=>{await vTools();vMaint()},l:vLogs})[n]()}
+function tab(n){TAB=n;document.querySelectorAll('.tb button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==n));$('#d').hidden=true;({d:vDash,p:vPlayers,b:vBans,c:vCodes,t:async()=>{await vTools();vMaint()},l:vLogs})[n]()}
 async function vPlayers(){const m=$('#main');
 const j=await api('/api/admin/list?q='+encodeURIComponent(Q)+'&s='+SO+'&f='+FI);m.replaceChildren();
 const qi=el('input',null,null,e=>{e.placeholder='搜尋名字 / ID / IP / 帳號';e.value=Q;e.onchange=()=>{Q=e.value;vPlayers()}});
-m.append(qi,sel([['recent','最近上線'],['new','最新加入'],['em','💚最多'],['cards','卡最多'],['opened','拆包最多']],SO,v=>{SO=v;vPlayers()}),sel([['','全部'],['online','在線'],['banned','停權'],['adm','🛡️特別通行證'],['acct','👤 有帳號']],FI,v=>{FI=v;vPlayers()}),btn('重新整理',()=>{stats();vPlayers()}),btn('⬇️ CSV',()=>csv(j.players)));
-const t=el('table'),h=el('tr');['玩家','帳號','💚','卡','通行證','最後上線'].forEach(x=>h.append(el('th',x)));t.append(h);
-j.players.forEach(p=>{const tr=el('tr',null,'p');tr.append(el('td',(p.banned?'🚫 ':'')+p.name),el('td',p.acct||'—'),el('td',p.em),el('td',p.cards),el('td',p.tier),el('td',ago(p.updated)));tr.onclick=()=>detail(p.pid);t.append(tr)});
+m.append(qi,sel([['recent','最近上線'],['new','最新加入'],['em','💚最多'],['cards','卡最多'],['opened','拆包最多'],['strikes','⚠️異常最多']],SO,v=>{SO=v;vPlayers()}),sel([['','全部'],['online','在線'],['banned','停權'],['adm','🛡️特別通行證'],['acct','👤 有帳號'],['sus','⚠️有異常紀錄'],['trust','🔰信任名單']],FI,v=>{FI=v;vPlayers()}),btn('重新整理',()=>{stats();vPlayers()}),btn('⬇️ CSV',()=>csv(j.players)));
+SELP.forEach(x=>{if(!j.players.some(p=>p.pid==x))SELP.delete(x)});
+const bb=el('div',null,'row');bb.style.cssText='border:1px solid #2a6;padding:6px;border-radius:8px';bb.hidden=true;m.append(bb);
+const t=el('table'),h=el('tr');const ha=el('input');ha.type='checkbox';ha.onclick=()=>{j.players.forEach(p=>ha.checked?SELP.add(p.pid):SELP.delete(p.pid));t.querySelectorAll('input.sc').forEach(i=>i.checked=ha.checked);batchBar(bb)};h.append(el('th',null,null,e=>e.append(ha)));['玩家','帳號','💚','卡','通行證','最後上線'].forEach(x=>h.append(el('th',x)));t.append(h);
+j.players.forEach(p=>{const tr=el('tr',null,'p');const ci=el('input',null,'sc');ci.type='checkbox';ci.checked=SELP.has(p.pid);ci.onclick=ev=>{ev.stopPropagation();ci.checked?SELP.add(p.pid):SELP.delete(p.pid);batchBar(bb)};tr.append(el('td',null,null,e=>e.append(ci)),el('td',(p.banned?'🚫 ':'')+(p.strikes?'⚠️'+p.strikes+' ':'')+p.name),el('td',p.acct||'—'),el('td',p.em),el('td',p.cards),el('td',p.tier),el('td',ago(p.updated)));tr.onclick=()=>detail(p.pid);t.append(tr)});batchBar(bb);
 m.append(el('div',null,'w',e=>e.append(t)),el('p','共顯示 '+j.players.length+' 位（最多 300）','dim'))}
 async function act(pid,a,x){await api('/api/admin/act',Object.assign({pid,act:a},x||{}));await stats();if(a=='delete'||a=='rmban'){$('#d').hidden=true}else await detail(pid);if(TAB=='p')vPlayers()}
 async function detail(pid){const j=await api('/api/admin/player?pid='+encodeURIComponent(pid)),p=j.player,d=$('#d');d.hidden=false;d.replaceChildren();
@@ -92,7 +94,7 @@ btn('👁 看存檔',()=>pre.hidden=!pre.hidden),
 btn('⬇️ 下載存檔（可直接匯入）',async()=>{if(!p.data)return alert('這位玩家目前沒有存檔');try{const code=await saveCode(p.data);dl(code,(p.name||'玩家')+'-存檔.txt','text/plain')}catch(e){alert('產生存檔失敗：存檔內容可能損毀')}}),
 btn('原始 JSON',()=>dl(p.data||'',(p.name||'玩家')+'.json','application/json')),
 btn('🗑️ 刪除',()=>{if(confirm('刪除後雲端資料消失（玩家手機上的存檔還在）。確定？'))act(pid,'delete')},'bad'),
-btn('關閉',()=>d.hidden=true))),pre);d.scrollIntoView()}
+btn('關閉',()=>d.hidden=true))),pre);detailExtra(d,p,j);d.scrollIntoView()}
 async function vBans(){const m=$('#main'),j=await api('/api/admin/bans');m.replaceChildren();
 const k=sel([['ip','IP'],['fp','裝置碼'],['pid','玩家ID']],'ip',()=>{}),v=el('input',null,null,e=>e.placeholder='要封的值'),r=el('input',null,null,e=>e.placeholder='原因');
 m.append(el('div',null,'row',e=>e.append(k,v,r,btn('新增封鎖',async()=>{await api('/api/admin/act',{act:'addban',kind:k.value,val:v.value,reason:r.value||'手動封鎖'});await stats();vBans()}))));
@@ -110,13 +112,51 @@ const s=el('input');s.placeholder='彈窗訊息';
 const bp=await picker();
 m.append(el('h3','🃏 全服發卡片'),bp.el,btn('發給所有人',async()=>{const c=bp.get();if(c.length&&confirm('把這些卡片發給所有未停權的玩家？')){const j=await api('/api/admin/broadcast',{cmd:{t:'cards',tpl:c}});alert('已排入 '+j.n+' 位玩家')}}));
 m.append(el('h3','💬 全服彈窗訊息'),s,btn('傳給所有人',async()=>{if(s.value&&confirm('傳給所有玩家？')){const j=await api('/api/admin/broadcast',{cmd:{t:'msg',s:s.value}});alert('已排入 '+j.n+' 位玩家')}}))}
-async function vLogs(){const m=$('#main'),j=await api('/api/admin/logs');m.replaceChildren();const t=el('table');j.logs.forEach(l=>{const tr=el('tr');tr.append(el('td',fmt(l.ts)),el('td',l.act),el('td',l.detail||''));t.append(tr)});m.append(el('div',null,'w',e=>e.append(t)))}
+async function vLogs(){const m=$('#main'),j=await api('/api/admin/logs?n=300&pid='+encodeURIComponent(LOGPID)+'&act='+encodeURIComponent(LOGACT)+'&q='+encodeURIComponent(LOGQ));m.replaceChildren();
+const qi=el('input',null,null,e=>{e.placeholder='搜尋內容';e.value=LOGQ;e.onchange=()=>{LOGQ=e.value;vLogs()}});
+m.append(sel([['','全部動作']].concat(j.acts.map(a=>[a,a])),LOGACT,v=>{LOGACT=v;vLogs()}),qi,btn('重新整理',vLogs));
+if(LOGPID)m.append(btn('✖ 只看某位玩家（'+LOGPID.slice(0,8)+'…）點我取消',()=>{LOGPID='';vLogs()}));
+const t=el('table');j.logs.forEach(l=>{const tr=el('tr');tr.append(el('td',fmt(l.ts)),el('td',l.act),el('td',l.detail||''),el('td',null,null,e=>{if(l.pid)e.append(btn('玩家',()=>{tab('p');detail(l.pid)}))}));t.append(tr)});
+m.append(el('div',null,'w',e=>e.append(t)),el('p','最多顯示 300 筆','dim'))}
+function batchBar(box){box.replaceChildren();if(!SELP.size){box.hidden=true;return}box.hidden=false;
+const go=async(body,msg)=>{if(msg&&!confirm(msg+'（共 '+SELP.size+' 位）'))return;const r=await api('/api/admin/batch',Object.assign({pids:[...SELP]},body));alert('完成，處理了 '+r.n+' 位');SELP.clear();stats();vPlayers()};
+box.append(el('b','已選 '+SELP.size+' 位　'),
+btn('💚 送/扣',()=>{const n=prompt('每人送多少 💚？（負數＝扣）');if(n&&+n)go({act:'gift',n:+n},'每人 '+n+' 💚')}),
+btn('💬 傳訊息',()=>{const s=prompt('訊息內容');if(s)go({act:'msg',text:s})}),
+btn('🎫 設定通行證',()=>{const v=prompt('輸入其中一個：none / vip / prem / eter');if(v)go({act:'tier',v},'通行證設為 '+v)}),
+btn('🃏 發卡片',async()=>{const cp=await picker(),pn=el('div');pn.append(cp.el,btn('發送給已選的人',()=>{const c=cp.get();if(c.length)go({act:'cards',cards:c},'發卡片');else alert('請先加卡片')}));box.append(pn)}),
+btn('🚫 停權',()=>{const r=prompt('停權原因','違規');if(r!==null)go({act:'ban',reason:r,ip:confirm('同時封 IP？（可能誤傷同網路的人）'),fp:true},'停權')},'bad'),
+btn('✅ 解除停權',()=>go({act:'unban'},'解除停權')),
+btn('🛡️ 給特別通行證',()=>go({act:'adm',on:1},'授予管理員特別通行證')),btn('收回特別通行證',()=>go({act:'adm',on:0},'收回管理員特別通行證')),
+btn('🔰 加入信任名單',()=>go({act:'trust',on:1},'加入信任名單（跳過數值檢查）')),btn('移出信任名單',()=>go({act:'trust',on:0})),
+btn('取消選取',()=>{SELP.clear();vPlayers()}))}
+function detailExtra(d,p,j){
+if(j.friends&&j.friends.length){const names=j.friends.map(f=>(f.a==p.pid?f.bn:f.an||'?')+(f.st==1?'':f.a==p.pid?'（已送出邀請）':'（待接受）'));d.append(el('div','👥 好友：'+names.join('、'),'kv'))}
+const sn=el('div',null,'row');sn.append(el('b','📸 存檔快照（自動每小時一份，最多 12 份）　'),btn('現在建立',()=>act(p.pid,'snapnow')));
+(j.snaps||[]).forEach(s=>{const r=el('div',null,'kv');r.append(el('span',fmt(s.ts)+'　💚'+s.em+'　卡'+s.cards+'　'+(s.why||'')+'　'),btn('還原',()=>{if(confirm('把玩家存檔還原成這個時間點？（目前的存檔會先自動存成快照）'))act(p.pid,'restore',{ts:s.ts})}),btn('下載',async()=>{const r=await api('/api/admin/snap?pid='+encodeURIComponent(p.pid)+'&ts='+s.ts);try{dl(await saveCode(r.data),(p.name||'玩家')+'-快照.txt','text/plain')}catch(e){alert('產生失敗')}}),btn('刪',()=>act(p.pid,'delsnap',{ts:s.ts}),'bad'));sn.append(r)});
+d.append(sn);
+const ta=el('textarea');ta.rows=8;ta.hidden=true;ta.style.fontSize='12px';
+d.append(el('div',null,'row',e=>e.append(btn('🛠️ 編輯存檔 JSON',()=>{ta.hidden=!ta.hidden;if(!ta.value)ta.value=p.data||''}),btn('套用編輯後的存檔',()=>{if(ta.hidden||!ta.value)return alert('先按「編輯存檔 JSON」並修改內容');if(confirm('用這份 JSON 取代玩家存檔？（目前的存檔會先存成快照）'))act(p.pid,'setstate',{json:ta.value})}),btn('📜 此玩家紀錄',()=>{LOGPID=p.pid;LOGACT='';LOGQ='';tab('l')}))),ta)}
+async function vDash(){const m=$('#main'),j=await api('/api/admin/dash');m.replaceChildren();
+m.append(el('div',null,'chips',e=>[['有帳號',j.c.acct],['有異常紀錄',j.c.sus],['信任名單',j.c.trust],['全服卡片總數',j.c.cards]].forEach(x=>e.append(el('span',x[0]+' '+x[1])))));
+const mx=Math.max(1,...j.days.map(x=>x.n));
+m.append(el('h3','📈 最近 7 天新玩家'),el('div',null,'bars',e=>j.days.forEach(x=>{const c=el('div',null,'bc');const b=el('div',null,'bb');b.style.height=(6+x.n/mx*80)+'px';c.append(el('div',x.n),b,el('div',x.d));e.append(c)})));
+m.append(el('h3','🎫 通行證分布'),el('div',null,'chips',e=>j.tiers.forEach(x=>e.append(el('span',(x.tier||'?')+' '+x.n)))));
+const lb=(t,a)=>{const d=el('div',null,'lb');d.append(el('b',t));a.forEach((x,i)=>d.append(el('div',(i+1)+'. '+x.name+'　'+x.v,'kv lbr',e=>{e.style.cursor='pointer';e.onclick=()=>{tab('p');detail(x.pid)}})));return d};
+m.append(el('h3','🏆 排行榜（點名字看玩家）'),el('div',null,'lbs',e=>e.append(lb('💚 綠寶石',j.em),lb('🃏 卡片數',j.cards),lb('📦 拆包數',j.opened))));
+const ab=el('input');ab.type='number';ab.min=0;ab.value=j.autoban||0;
+m.append(el('h3','🤖 自動停權'),el('p','數值異常被擋下累積幾次就自動停權（0＝關閉）。誤判的玩家可以在玩家頁「解除停權」。','dim'),ab,btn('儲存',async()=>{await api('/api/admin/autoban',{n:+ab.value||0});alert('已儲存')}));
+const mb=n=>n==null?'-':(n/1048576).toFixed(1)+' MB',up=j.sys.up;
+m.append(el('h3','🖥️ 系統'),el('div','伺服器已運行 '+Math.floor(up/3600)+' 小時 '+Math.floor(up%3600/60)+' 分｜記憶體 '+mb(j.sys.rss)+'｜資料庫大小 '+mb(j.sys.dbsize)+'｜快照 '+j.sys.snaps+' 份｜Node '+j.sys.node,'kv'),el('p','免費資料庫上限約 1 GB，快照和存檔變多時留意大小。','dim'));
+m.append(el('h3','💾 備份'),btn('下載摘要備份（玩家、兌換碼、封鎖）',async()=>{dl(JSON.stringify(await api('/api/admin/export'),null,1),'備份-摘要-'+new Date().toISOString().slice(0,10)+'.json','application/json')}),btn('下載完整備份（含所有存檔，可能很大）',async()=>{dl(JSON.stringify(await api('/api/admin/export?data=1')),'備份-完整-'+new Date().toISOString().slice(0,10)+'.json','application/json')}))}
 function csv(rows){const c=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';const t='\ufeff名字,ID,綠寶石,卡數,拆包,通行證,停權,IP,最後上線\n'+rows.map(p=>[p.name,p.pid,p.em,p.cards,p.opened,p.tier,p.banned?'是':'',p.ip,fmt(p.updated)].map(c).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download='players.csv';a.click()}
 const TN={vip:'VIP',prem:'至尊',eter:'永恆'};
 async function vCodes(){const m=$('#main'),j=await api('/api/admin/codes');m.replaceChildren();
 const c=el('input',null,null,e=>e.placeholder='代碼（留空=隨機）'),em=el('input',null,null,e=>{e.type='number';e.placeholder='💚數量'}),tr=sel([['','不給通行證'],['vip','VIP'],['prem','至尊'],['eter','永恆']],'',()=>{}),mx=el('input',null,null,e=>{e.type='number';e.placeholder='可兌換次數（0=不限）'}),hr=el('input',null,null,e=>{e.type='number';e.placeholder='有效小時（0=永久）'}),nt=el('input',null,null,e=>e.placeholder='備註');
 const cp=await picker();
-m.append(el('h3','🎁 建立兌換碼'),el('div',null,'row',e=>e.append(c,em,tr,mx,hr,nt)),el('div',null,'row',e=>e.append(el('b','🃏 附帶卡片（選填，最多 100 張；可選閃卡、序號、鑑定分、附魔）'))),cp.el,el('div',null,'row',e=>e.append(btn('建立',async()=>{const r=await api('/api/admin/act',{act:'newcode',code:c.value,em:+em.value||0,tier:tr.value,max:+mx.value||0,hours:+hr.value||0,note:nt.value,cards:cp.get()});alert('已建立：'+r.code);stats();vCodes()}))),el('p','每位玩家每組代碼只能兌換一次。通行證只會「升級」不會降級。管理員特別通行證不能用兌換碼發。','dim'));
+const cnt=el('input',null,null,e=>{e.type='number';e.placeholder='批量：要產生幾組（最多 200）'}),pf=el('input',null,null,e=>e.placeholder='批量：代碼開頭（選填，如 VIP）');
+const bulkFn=async()=>{const r=await api('/api/admin/act',{act:'newcodes',count:+cnt.value||1,prefix:pf.value,em:+em.value||0,tier:tr.value,max:mx.value===''?1:+mx.value,hours:+hr.value||0,note:nt.value,cards:cp.get()});dl(r.codes.join('\n'),'兌換碼-'+r.codes.length+'組.txt','text/plain');alert('已產生 '+r.codes.length+' 組，並下載成文字檔（可次數預設每組只能兌換 1 次）');stats();vCodes()};
+m.append(el('h3','🎁 建立兌換碼'),el('div',null,'row',e=>e.append(c,em,tr,mx,hr,nt)),el('div',null,'row',e=>e.append(el('b','🃏 附帶卡片（選填，最多 100 張；可選閃卡、序號、鑑定分、附魔）'))),cp.el,el('div',null,'row',e=>e.append(cnt,pf,btn('📦 批量產生隨機代碼',bulkFn))),el('div',null,'row',e=>e.append(btn('建立',async()=>{const r=await api('/api/admin/act',{act:'newcode',code:c.value,em:+em.value||0,tier:tr.value,max:+mx.value||0,hours:+hr.value||0,note:nt.value,cards:cp.get()});alert('已建立：'+r.code);stats();vCodes()}))),el('p','每位玩家每組代碼只能兌換一次。通行證只會「升級」不會降級。管理員特別通行證不能用兌換碼發。','dim'));
 const t=el('table'),h=el('tr');['代碼','獎勵','已用/上限','狀態','到期','備註',''].forEach(x=>h.append(el('th',x)));t.append(h);
 j.codes.forEach(c=>{const now=Date.now(),st=!c.enabled?'停用':(c.expires&&c.expires<now)?'已過期':(c.max_uses&&c.used>=c.max_uses)?'已領完':'可用';const tr=el('tr');
 let tp=[];try{tp=JSON.parse(c.cards||'[]')}catch(e){}

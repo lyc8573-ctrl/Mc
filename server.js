@@ -76,7 +76,7 @@ const log = (act, pid, detail) => q('INSERT INTO logs(ts,act,pid,detail) VALUES(
 let ready;
 const init = () => ready || (ready = (async () => {
   await q('CREATE TABLE IF NOT EXISTS players(pid TEXT PRIMARY KEY,name TEXT,data TEXT,em BIGINT,cards BIGINT,opened BIGINT,tier TEXT,banned INTEGER DEFAULT 0,gift BIGINT DEFAULT 0,created BIGINT,updated BIGINT)');
-  for (const c of ['ip TEXT', 'fp TEXT', 'ua TEXT', 'note TEXT', 'ban_reason TEXT', 'banned_at BIGINT', "cmds TEXT DEFAULT '[]'", 'hits BIGINT DEFAULT 0', 'adm INTEGER DEFAULT 0', 'tok BIGINT', 'ub BIGINT', 'strikes INTEGER DEFAULT 0', 'rej TEXT', 'trust INTEGER DEFAULT 0', 'acct TEXT', 'pwh TEXT', 'fc TEXT']) await q('ALTER TABLE players ADD COLUMN IF NOT EXISTS ' + c).catch(() => {});
+  for (const c of ['ip TEXT', 'fp TEXT', 'ua TEXT', 'note TEXT', 'ban_reason TEXT', 'banned_at BIGINT', "cmds TEXT DEFAULT '[]'", 'hits BIGINT DEFAULT 0', 'adm INTEGER DEFAULT 0', 'tok BIGINT', 'ub BIGINT', 'strikes INTEGER DEFAULT 0', 'rej TEXT', 'trust INTEGER DEFAULT 0', 'acct TEXT', 'pwh TEXT', 'fc TEXT', 'snap_at BIGINT']) await q('ALTER TABLE players ADD COLUMN IF NOT EXISTS ' + c).catch(() => {});
   await q('CREATE UNIQUE INDEX IF NOT EXISTS players_acct ON players(acct)').catch(() => {});
   await q('CREATE UNIQUE INDEX IF NOT EXISTS players_fc ON players(fc)').catch(() => {});
   await q('CREATE TABLE IF NOT EXISTS friends(a TEXT,b TEXT,st INTEGER DEFAULT 0,ts BIGINT,PRIMARY KEY(a,b))');
@@ -87,6 +87,7 @@ const init = () => ready || (ready = (async () => {
   await q('CREATE TABLE IF NOT EXISTS codes(code TEXT PRIMARY KEY,em BIGINT DEFAULT 0,tier TEXT DEFAULT \'\',max_uses INTEGER DEFAULT 0,used INTEGER DEFAULT 0,expires BIGINT DEFAULT 0,enabled INTEGER DEFAULT 1,note TEXT,created BIGINT)');
   await q('ALTER TABLE codes ADD COLUMN IF NOT EXISTS cards TEXT').catch(() => {});
   await q('CREATE TABLE IF NOT EXISTS redeems(code TEXT,pid TEXT,ts BIGINT,PRIMARY KEY(code,pid))');
+  await q('CREATE TABLE IF NOT EXISTS snaps(pid TEXT,ts BIGINT,em BIGINT,cards BIGINT,why TEXT,data TEXT,PRIMARY KEY(pid,ts))');
 })().catch(e => { ready = null; throw e; }));
 const banHit = async (pid, gid, ip, fp) => (await q("SELECT kind,pid FROM bans WHERE (kind='pid' AND val IN ($1,$2)) OR (kind='ip' AND val=$3) OR (kind='fp' AND val=$4) LIMIT 1", [pid || '-', gid || '-', ip || '-', fp || '-']))[0] || null;
 const UPSERT = 'INSERT INTO players(pid,name,data,em,cards,opened,tier,ip,fp,ua,created,updated,tok,ub) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$11,$12) ON CONFLICT(pid) DO UPDATE SET name=EXCLUDED.name,data=EXCLUDED.data,em=EXCLUDED.em,cards=EXCLUDED.cards,opened=EXCLUDED.opened,tier=CASE WHEN players.adm=1 THEN \'管理員\' ELSE EXCLUDED.tier END,ip=EXCLUDED.ip,fp=CASE WHEN EXCLUDED.fp<>\'\' THEN EXCLUDED.fp ELSE players.fp END,ua=EXCLUDED.ua,updated=EXCLUDED.updated,tok=EXCLUDED.tok,ub=EXCLUDED.ub,hits=COALESCE(players.hits,0)+1';
@@ -126,6 +127,19 @@ function applyServer(P, c) {
 async function storeState(pid, P) {
   await q('UPDATE players SET data=$1,em=$2,cards=$3,tier=CASE WHEN adm=1 THEN $4 ELSE $5 END WHERE pid=$6', [JSON.stringify(P), Math.floor(P.em) || 0, P.cards.length, '管理員', TIERNAME(P), pid]);
 }
+async function snap(pid, P, why) { // 存檔快照：每位玩家最多留 12 份，可在後台還原
+  const now = Date.now();
+  await q('INSERT INTO snaps(pid,ts,em,cards,why,data) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(pid,ts) DO NOTHING', [pid, now, Math.floor(P.em) || 0, (P.cards || []).length, why || '', JSON.stringify(P)]);
+  await q('UPDATE players SET snap_at=$1 WHERE pid=$2', [now, pid]);
+  for (const o of await q('SELECT ts FROM snaps WHERE pid=$1 ORDER BY ts DESC LIMIT 100 OFFSET 12', [pid])) await q('DELETE FROM snaps WHERE pid=$1 AND ts=$2', [pid, o.ts]);
+}
+async function autoBan(pid, name, sk) { // 異常次數達到後台設定的門檻就自動停權
+  const r = (await q("SELECT v FROM kv WHERE k='autoban'"))[0], n = r ? Math.floor(Number(r.v)) : 0; if (!(n > 0) || sk < n) return;
+  const cur = (await q('SELECT banned FROM players WHERE pid=$1', [pid]))[0]; if (!cur || cur.banned) return;
+  const why = '自動停權：數值異常 ' + sk + ' 次', now = Date.now();
+  await q("INSERT INTO bans(kind,val,pid,reason,created) VALUES('pid',$1,$1,$2,$3) ON CONFLICT(kind,val) DO NOTHING", [pid, why, now]);
+  await q('UPDATE players SET banned=1,ban_reason=$1,banned_at=$2 WHERE pid=$3', [why, now, pid]); log('autoban', pid, name + ' ' + why);
+}
 async function save(req, res) {
   let b; try { b = JSON.parse(await body(req)); } catch { return send(res, 400, { error: 'bad request' }); }
   const pid = String(b.pid || '');
@@ -136,7 +150,7 @@ async function save(req, res) {
   const fp = b.fp ? sha(String(b.fp).slice(0, 600)).toString('hex').slice(0, 16) : '';
   const ip = ipOf(req), gid = cookie(req, 'gid'), ua = String(req.headers['user-agent'] || '').slice(0, 200);
   const hit = await banHit(pid, gid, ip, fp);
-  const prev = (await q('SELECT data,tok,updated,adm,trust,ub,banned FROM players WHERE pid=$1', [pid]))[0];
+  const prev = (await q('SELECT data,tok,updated,adm,trust,ub,banned,snap_at FROM players WHERE pid=$1', [pid]))[0];
   let P = null; if (prev && prev.data) { try { P = JSON.parse(prev.data); } catch {} }
   const tvo = await tovNow(now, b.data.tadm ? 600000 : 0), tvAdm = tvo && tvo.adm ? 1 : 0; // 全服暫時管理員通行證（結束後 10 分鐘內仍容許最後一次同步）
   let verdict = { ok: 1, ub: UCAP };
@@ -150,8 +164,10 @@ async function save(req, res) {
     else { base = freshState(); fixState = JSON.parse(JSON.stringify(base)); await q(UPSERT, [pid, name, JSON.stringify(base), 500, 0, 0, '普通', ip, fp, ua, now, 5000]); }
     await q('UPDATE players SET name=$1,ip=$2,ua=$3,updated=$4,hits=COALESCE(hits,0)+1,strikes=COALESCE(strikes,0)+1,rej=$5 WHERE pid=$6', [name, ip, ua, now, JSON.stringify(d), pid]);
     log('cheat', pid, name + ' 數值異常，已還原：' + verdict.bad);
+    try { await autoBan(pid, name, (await q('SELECT strikes FROM players WHERE pid=$1', [pid]))[0].strikes); } catch (e) { console.error(e); }
   } else {
     await q(UPSERT, [pid, name, JSON.stringify(d), em, cards, opened, tier, ip, fp, ua, now, Math.floor(verdict.ub)]);
+    if (P && now - (prev.snap_at || 0) > 3600000) { try { await snap(pid, P, '自動'); } catch (e) { console.error(e); } }
     if (!P && (em > 2e6 || cards > 500)) log('sus', pid, name + ' 首次同步數值很高（💚' + em + '、卡 ' + cards + '）');
   }
   let r = (await q('SELECT banned,ban_reason,cmds,adm FROM players WHERE pid=$1', [pid]))[0];
@@ -320,7 +336,7 @@ async function isAdmin(req) {
   const w = process.env.ADMIN_PASSWORD; if (!w) return false;
   return crypto.timingSafeEqual(sha(String(req.headers['x-admin'] || '')), sha(w));
 }
-const SORT = { recent: 'updated DESC', em: 'em DESC', cards: 'cards DESC', opened: 'opened DESC', new: 'created DESC' };
+const SORT = { recent: 'updated DESC', em: 'em DESC', strikes: 'COALESCE(strikes,0) DESC', cards: 'cards DESC', opened: 'opened DESC', new: 'created DESC' };
 async function admin(req, res, u) {
   try { return await adminInner(req, res, u); } catch (e) { console.error(e); return send(res, 500, { error: 'server error: ' + String(e.message).slice(0, 150) }); }
 }
@@ -337,7 +353,7 @@ async function adminInner(req, res, u) {
   if (p === '/api/admin/list') {
     const where = [], a = [], qs = (u.searchParams.get('q') || '').toLowerCase(), fl = u.searchParams.get('f');
     if (qs) { a.push('%' + qs + '%'); const n = '$' + a.length; where.push(`(LOWER(name) LIKE ${n} OR LOWER(pid) LIKE ${n} OR LOWER(COALESCE(ip,'')) LIKE ${n} OR LOWER(COALESCE(acct,'')) LIKE ${n})`); }
-    if (fl === 'banned') where.push('banned=1'); else if (fl === 'adm') where.push('adm=1'); else if (fl === 'acct') where.push('acct IS NOT NULL'); else if (fl === 'online') { a.push(now - 120000); where.push('updated>$' + a.length); }
+    if (fl === 'banned') where.push('banned=1'); else if (fl === 'adm') where.push('adm=1'); else if (fl === 'acct') where.push('acct IS NOT NULL'); else if (fl === 'sus') where.push('COALESCE(strikes,0)>0'); else if (fl === 'trust') where.push('trust=1'); else if (fl === 'online') { a.push(now - 120000); where.push('updated>$' + a.length); }
     const rows = await q('SELECT pid,name,acct,em,cards,opened,tier,banned,ip,created,updated,strikes FROM players' + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ORDER BY ' + (SORT[u.searchParams.get('s')] || SORT.recent) + ' LIMIT 300', a);
     return send(res, 200, { players: rows });
   }
@@ -349,16 +365,66 @@ async function adminInner(req, res, u) {
     if (pl.fp) c.push('fp=$' + a.push(pl.fp)); if (pl.ip) c.push('ip=$' + a.push(pl.ip));
     const related = c.length ? await q('SELECT pid,name,banned FROM players WHERE pid<>$1 AND (' + c.join(' OR ') + ') LIMIT 20', a) : [];
     const redeems = await q('SELECT code,ts FROM redeems WHERE pid=$1 ORDER BY ts DESC LIMIT 20', [pl.pid]);
-    return send(res, 200, { player: pl, related, redeems });
+    const friends = await q('SELECT f.a,f.b,f.st,pa.name AS an,pb.name AS bn FROM friends f LEFT JOIN players pa ON pa.pid=f.a LEFT JOIN players pb ON pb.pid=f.b WHERE f.a=$1 OR f.b=$1 LIMIT 50', [pl.pid]);
+    const snaps = await q('SELECT ts,em,cards,why FROM snaps WHERE pid=$1 ORDER BY ts DESC LIMIT 12', [pl.pid]);
+    return send(res, 200, { player: pl, related, redeems, friends, snaps });
   }
   if (p === '/api/admin/bans') return send(res, 200, { bans: await q('SELECT b.kind,b.val,b.pid,b.reason,b.created,p.name FROM bans b LEFT JOIN players p ON p.pid=b.pid ORDER BY b.created DESC LIMIT 300') });
   if (p === '/api/admin/cardlist') return send(res, 200, { cards: ECON.D.map((d, k) => ({ k, n: d[0], e: d[1], r: d[2], max: ECON.RUN[d[2]] })), en: ECON.EN.map(e => e[0]) });
   if (p === '/api/admin/codes') return send(res, 200, { codes: await q('SELECT * FROM codes ORDER BY created DESC LIMIT 300') });
   if (p === '/api/admin/codeusers') return send(res, 200, { users: await q('SELECT r.pid,r.ts,p.name FROM redeems r LEFT JOIN players p ON p.pid=r.pid WHERE r.code=$1 ORDER BY r.ts DESC LIMIT 200', [u.searchParams.get('code') || '']) });
-  if (p === '/api/admin/logs') return send(res, 200, { logs: await q('SELECT ts,act,pid,detail FROM logs ORDER BY ts DESC LIMIT 100') });
+  if (p === '/api/admin/logs') {
+    const w = [], a = [], gp = u.searchParams.get('pid'), ga = u.searchParams.get('act'), gq = (u.searchParams.get('q') || '').toLowerCase();
+    if (gp) { a.push(gp); w.push('pid=$' + a.length); } if (ga) { a.push(ga); w.push('act=$' + a.length); } if (gq) { a.push('%' + gq + '%'); w.push("LOWER(COALESCE(detail,'')) LIKE $" + a.length); }
+    const lim = Math.min(500, Math.floor(Number(u.searchParams.get('n'))) || 100);
+    return send(res, 200, { logs: await q('SELECT ts,act,pid,detail FROM logs' + (w.length ? ' WHERE ' + w.join(' AND ') : '') + ' ORDER BY ts DESC LIMIT ' + lim, a), acts: (await q('SELECT DISTINCT act FROM logs ORDER BY act')).map(r => r.act) });
+  }
+  if (p === '/api/admin/dash') {
+    const top = col => q('SELECT pid,name,' + col + ' AS v FROM players WHERE banned=0 ORDER BY ' + col + ' DESC LIMIT 10');
+    const day = 86400000, off = 8 * 3600000, days = []; for (let i = 6; i >= 0; i--) { const k = Math.floor((now + off) / day) - i; days.push({ d: new Date(k * day).toISOString().slice(5, 10), n: 0, k }); }
+    for (const r of await q('SELECT created FROM players WHERE created>$1', [now - 7 * day])) { const x = days.find(y => y.k === Math.floor((r.created + off) / day)); if (x) x.n++; }
+    const c = (await q('SELECT COALESCE(SUM(CASE WHEN acct IS NOT NULL THEN 1 ELSE 0 END),0) AS acct, COALESCE(SUM(CASE WHEN COALESCE(strikes,0)>0 THEN 1 ELSE 0 END),0) AS sus, COALESCE(SUM(CASE WHEN trust=1 THEN 1 ELSE 0 END),0) AS trust, COALESCE(SUM(cards),0) AS cards FROM players'))[0];
+    let dbsize = null; try { dbsize = (await q('SELECT pg_database_size(current_database()) AS s'))[0].s; } catch {}
+    const ab = (await q("SELECT v FROM kv WHERE k='autoban'"))[0];
+    return send(res, 200, { em: await top('em'), cards: await top('cards'), opened: await top('opened'), tiers: await q('SELECT tier,COUNT(*) AS n FROM players GROUP BY tier'), days: days.map(x => ({ d: x.d, n: x.n })), c, autoban: ab ? Number(ab.v) : 0, sys: { up: Math.floor(process.uptime()), rss: process.memoryUsage().rss, node: process.version, dbsize, snaps: (await q('SELECT COUNT(*) AS n FROM snaps'))[0].n } });
+  }
+  if (p === '/api/admin/export') {
+    const rows = await q('SELECT pid,name,acct,em,cards,opened,tier,banned,ban_reason,ip,fp,note,adm,strikes,trust,fc,created,updated' + (u.searchParams.get('data') === '1' ? ',data' : '') + ' FROM players ORDER BY created LIMIT 3000');
+    return send(res, 200, { at: now, players: rows, codes: await q('SELECT * FROM codes'), bans: await q('SELECT * FROM bans'), kv: await q('SELECT k,v FROM kv') });
+  }
+  if (p === '/api/admin/snap') { const r = (await q('SELECT data FROM snaps WHERE pid=$1 AND ts=$2', [u.searchParams.get('pid') || '', Number(u.searchParams.get('ts')) || 0]))[0]; return r ? send(res, 200, { data: r.data }) : send(res, 404, { error: '找不到這份快照' }); }
   if (p === '/api/admin/tierov' && req.method !== 'POST') { const r = (await q("SELECT v FROM kv WHERE k='tierov'"))[0]; let o = null; try { o = r && JSON.parse(r.v); } catch {} if (o && o.until && o.until <= now) o = null; return send(res, 200, { tierov: o }); }
   if (req.method !== 'POST') return send(res, 404, { error: 'not found' });
   let b; try { b = JSON.parse(await body(req)); } catch { return send(res, 400, { error: 'bad json' }); }
+  if (p === '/api/admin/autoban') { const n = Math.max(0, Math.min(100, Math.floor(Number(b.n)) || 0)); await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['autoban', String(n)]); log('autoban_set', '', n ? '異常 ' + n + ' 次自動停權' : '(關閉)'); return send(res, 200, { ok: 1 }); }
+  if (p === '/api/admin/batch') {
+    const pids = (Array.isArray(b.pids) ? b.pids : []).map(String).slice(0, 300); if (!pids.length) return send(res, 400, { error: '沒有選任何玩家' });
+    const act = String(b.act || ''); let n = 0, tpl = null, g = 0;
+    if (act === 'gift') { g = Math.floor(Number(b.n)); if (!g || Math.abs(g) > 1e9) return send(res, 400, { error: 'bad n' }); }
+    else if (act === 'tier') { if (!['none', 'vip', 'prem', 'eter'].includes(b.v)) return send(res, 400, { error: 'bad' }); }
+    else if (act === 'cards') { tpl = cleanTpl(b.cards); if (!tpl.length) return send(res, 400, { error: '沒有有效的卡片' }); }
+    else if (!['msg', 'ban', 'unban', 'adm', 'trust', 'note'].includes(act)) return send(res, 400, { error: 'bad act' });
+    const reason = String(b.reason || '違規').slice(0, 100);
+    for (const pid of pids) {
+      const pl = (await q('SELECT pid,name,fp,ip FROM players WHERE pid=$1', [pid]))[0]; if (!pl) continue; n++;
+      if (act === 'gift') await pushCmd(pid, { t: 'em', n: g });
+      else if (act === 'tier') await pushCmd(pid, { t: 'tier', v: b.v });
+      else if (act === 'cards') await pushCmd(pid, { t: 'cards', tpl });
+      else if (act === 'msg') await pushCmd(pid, { t: 'msg', s: String(b.text || '').slice(0, 300) });
+      else if (act === 'note') await q('UPDATE players SET note=$1 WHERE pid=$2', [String(b.v || '').slice(0, 300), pid]);
+      else if (act === 'trust') await q('UPDATE players SET trust=$1 WHERE pid=$2', [b.on ? 1 : 0, pid]);
+      else if (act === 'adm') { await q('UPDATE players SET adm=$1 WHERE pid=$2', [b.on ? 1 : 0, pid]); if (b.on) await q('UPDATE players SET tier=$1 WHERE pid=$2', ['管理員', pid]); }
+      else if (act === 'ban') {
+        const ad = (kind, val) => val && q('INSERT INTO bans(kind,val,pid,reason,created) VALUES($1,$2,$3,$4,$5) ON CONFLICT(kind,val) DO UPDATE SET pid=EXCLUDED.pid,reason=EXCLUDED.reason', [kind, val, pid, reason, now]);
+        await ad('pid', pid); if (b.ip) await ad('ip', pl.ip); if (b.fp) await ad('fp', pl.fp);
+        await q('UPDATE players SET banned=1,ban_reason=$1,banned_at=$2 WHERE pid=$3', [reason, now, pid]);
+      } else if (act === 'unban') {
+        const v = await q("SELECT val FROM bans WHERE pid=$1 AND kind='pid'", [pid]); await q('DELETE FROM bans WHERE pid=$1', [pid]);
+        for (const x of [pid, ...v.map(r => r.val)]) await q('UPDATE players SET banned=0,ban_reason=NULL WHERE pid=$1', [x]);
+      }
+    }
+    log('batch', '', act + ' × ' + n + (act === 'gift' ? ' (' + g + ')' : '')); return send(res, 200, { ok: 1, n });
+  }
   if (p === '/api/admin/announce') {
     const t = String(b.text || '').slice(0, 500);
     if (t) await q('INSERT INTO kv(k,v) VALUES($1,$2) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', ['ann', JSON.stringify({ id: now, text: t })]); else await q("DELETE FROM kv WHERE k='ann'");
@@ -400,6 +466,16 @@ async function adminInner(req, res, u) {
     await q('INSERT INTO codes(code,em,tier,max_uses,used,expires,enabled,note,created,cards) VALUES($1,$2,$3,$4,0,$5,1,$6,$7,$8)', [code, em, tier, max, exp, String(b.note || '').slice(0, 100), now, JSON.stringify(tpl)]);
     log('newcode', '', code + ' 💚' + em + ' ' + tier + ' x' + max); return send(res, 200, { ok: 1, code });
   }
+  if (b.act === 'newcodes') { // 一次產生很多組隨機代碼（內容相同，每組預設只能兌換 1 次）
+    const cnt = Math.min(200, Math.max(1, Math.floor(Number(b.count)) || 1)), em = Math.floor(Number(b.em)) || 0, tier = ['vip', 'prem', 'eter'].includes(b.tier) ? b.tier : '', tpl = cleanTpl(b.cards);
+    if (em < 0 || em > 1e9 || (!em && !tier && !tpl.length)) return send(res, 400, { error: '至少要設定綠寶石、通行證或卡片' });
+    const max = Math.max(0, Math.floor(Number(b.max))); const mx = Number.isFinite(max) && b.max !== '' && b.max != null ? max : 1, exp = Number(b.hours) > 0 ? Math.floor(now + Number(b.hours) * 3600000) : 0, pre = String(b.prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8), al = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', out = [];
+    for (let i = 0; i < cnt; i++) {
+      let code = ''; for (const x of crypto.randomBytes(10)) code += al[x % al.length]; code = pre ? pre + '-' + code : code;
+      await q('INSERT INTO codes(code,em,tier,max_uses,used,expires,enabled,note,created,cards) VALUES($1,$2,$3,$4,0,$5,1,$6,$7,$8) ON CONFLICT(code) DO NOTHING', [code, em, tier, mx, exp, String(b.note || '').slice(0, 100), now, JSON.stringify(tpl)]); out.push(code);
+    }
+    log('newcodes', '', '×' + cnt + ' 💚' + em + ' ' + tier); return send(res, 200, { ok: 1, codes: out });
+  }
   if (b.act === 'codeon' || b.act === 'codeoff') { await q('UPDATE codes SET enabled=$1 WHERE code=$2', [b.act === 'codeon' ? 1 : 0, String(b.code || '')]); log(b.act, '', b.code); return send(res, 200, { ok: 1 }); }
   if (b.act === 'delcode') { const c = String(b.code || ''); await q('DELETE FROM codes WHERE code=$1', [c]); await q('DELETE FROM redeems WHERE code=$1', [c]); log('delcode', '', c); return send(res, 200, { ok: 1 }); }
   if (b.act === 'rmban') {
@@ -424,12 +500,21 @@ async function adminInner(req, res, u) {
     case 'rename': { const v = String(b.v || '').trim().slice(0, 20); if (!v) return send(res, 400, { error: 'bad' }); await pushCmd(pid, { t: 'name', v }); await q('UPDATE players SET name=$1 WHERE pid=$2', [v, pid]); log('rename', pid, pl.name + ' → ' + v); break; }
     case 'givecard': { const tpl = cleanTpl(b.cards); if (!tpl.length) return send(res, 400, { error: '沒有有效的卡片' }); await pushCmd(pid, { t: 'cards', tpl }); log('givecard', pid, '×' + cardCount(tpl)); break; }
     case 'acceptrej': { if (!pl.rej) return send(res, 400, { error: '沒有被拒絕的存檔' }); let st; try { st = JSON.parse(pl.rej); } catch { return send(res, 400, { error: '存檔損毀' }); } await q('UPDATE players SET rej=NULL WHERE pid=$1', [pid]); await storeState(pid, st); await q('UPDATE players SET tok=$1 WHERE pid=$2', [now, pid]); await pushCmd(pid, { t: 'state', s: JSON.stringify(st) }); log('acceptrej', pid, pl.name); break; }
+    case 'setstate': { let st; try { st = JSON.parse(String(b.json || '')); } catch { return send(res, 400, { error: 'JSON 格式錯誤' }); }
+      if (!st || typeof st !== 'object' || !Array.isArray(st.cards) || !Number.isFinite(st.em) || st.em < 0 || st.em > 1e13 || !(st.id >= 1)) return send(res, 400, { error: '存檔缺少必要欄位（em、cards、id）' });
+      if (pl.data) { try { await snap(pid, JSON.parse(pl.data), '編輯前'); } catch {} }
+      await storeState(pid, st); await q('UPDATE players SET tok=$1,rej=NULL WHERE pid=$2', [now, pid]); await pushCmd(pid, { t: 'state', s: JSON.stringify(st) }); log('setstate', pid, pl.name); break; }
+    case 'snapnow': { if (!pl.data) return send(res, 400, { error: '這位玩家目前沒有存檔' }); await snap(pid, JSON.parse(pl.data), '手動'); log('snapnow', pid, pl.name); break; }
+    case 'restore': { const r = (await q('SELECT data FROM snaps WHERE pid=$1 AND ts=$2', [pid, Number(b.ts) || 0]))[0]; if (!r) return send(res, 404, { error: '找不到這份快照' }); let st; try { st = JSON.parse(r.data); } catch { return send(res, 400, { error: '快照損毀' }); }
+      if (pl.data) { try { await snap(pid, JSON.parse(pl.data), '還原前'); } catch {} }
+      await storeState(pid, st); await q('UPDATE players SET tok=$1,rej=NULL WHERE pid=$2', [now, pid]); await pushCmd(pid, { t: 'state', s: JSON.stringify(st) }); log('restore', pid, pl.name + ' → ' + new Date(Number(b.ts)).toLocaleString()); break; }
+    case 'delsnap': await q('DELETE FROM snaps WHERE pid=$1 AND ts=$2', [pid, Number(b.ts) || 0]); break;
     case 'trust': await q('UPDATE players SET trust=$1 WHERE pid=$2', [b.on ? 1 : 0, pid]); log(b.on ? 'trust' : 'untrust', pid, pl.name); break;
     case 'clearstrikes': await q('UPDATE players SET strikes=0,rej=NULL WHERE pid=$1', [pid]); break;
     case 'adm': { const on = b.on ? 1 : 0; await q('UPDATE players SET adm=$1 WHERE pid=$2', [on, pid]); if (on) await q('UPDATE players SET tier=$1 WHERE pid=$2', ['管理員', pid]); log(on ? 'adm_grant' : 'adm_revoke', pid, pl.name); break; }
     case 'emset': { const n = Math.floor(Number(b.n)); if (!(n >= 0) || n > 1e12) return send(res, 400, { error: 'bad n' }); await pushCmd(pid, { t: 'emset', n }); log('emset', pid, n); break; }
     case 'note': await q('UPDATE players SET note=$1 WHERE pid=$2', [String(b.v || '').slice(0, 300), pid]); break;
-    case 'reset': await pushCmd(pid, { t: 'reset' }); log('reset', pid, pl.name); break;
+    case 'reset': if (pl.data) { try { await snap(pid, JSON.parse(pl.data), '重設前'); } catch {} } await pushCmd(pid, { t: 'reset' }); log('reset', pid, pl.name); break;
     case 'ban': {
       await add('pid', pid, pid); if (b.ip !== false) await add('ip', pl.ip, pid); if (b.fp !== false) await add('fp', pl.fp, pid);
       await q('UPDATE players SET banned=1,ban_reason=$1,banned_at=$2 WHERE pid=$3', [reason, now, pid]);
@@ -446,7 +531,7 @@ async function adminInner(req, res, u) {
     }
     case 'resetpass': { let pw = String(b.pass || ''), gen = ''; if (!pl.acct) return send(res, 400, { error: '這位玩家沒有註冊帳號' }); if (!pw) { for (const x of crypto.randomBytes(10)) gen += FCAL[x % 32]; pw = gen; } const pe = pwErr(pw, pl.acct); if (pe) return send(res, 400, { error: pe }); await q('UPDATE players SET pwh=$1 WHERE pid=$2', [await hashPw(pw), pid]); log('resetpass', pid, pl.acct); return send(res, 200, { ok: 1, pass: gen }); }
     case 'clearacct': await q('UPDATE players SET acct=NULL,pwh=NULL WHERE pid=$1', [pid]); log('clearacct', pid, pl.acct || ''); break;
-    case 'delete': await q('DELETE FROM friends WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
+    case 'delete': await q('DELETE FROM snaps WHERE pid=$1', [pid]); await q('DELETE FROM friends WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
     default: return send(res, 400, { error: 'bad act' });
   }
   send(res, 200, { ok: 1 });
