@@ -49,7 +49,7 @@ async function boot(){await stats();$('#lg').hidden=true;$('#app').hidden=false;
 function tab(n){TAB=n;document.querySelectorAll('.tb button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==n));$('#d').hidden=true;({p:vPlayers,b:vBans,c:vCodes,t:async()=>{await vTools();vMaint()},l:vLogs})[n]()}
 async function vPlayers(){const m=$('#main');
 const j=await api('/api/admin/list?q='+encodeURIComponent(Q)+'&s='+SO+'&f='+FI);m.replaceChildren();
-const qi=el('input',null,null,e=>{e.placeholder='搜尋名字 / ID / IP';e.value=Q;e.onchange=()=>{Q=e.value;vPlayers()}});
+const qi=el('input',null,null,e=>{e.placeholder='搜尋名字 / ID / IP / 帳號';e.value=Q;e.onchange=()=>{Q=e.value;vPlayers()}});
 m.append(qi,sel([['recent','最近上線'],['new','最新加入'],['em','💚最多'],['cards','卡最多'],['opened','拆包最多']],SO,v=>{SO=v;vPlayers()}),sel([['','全部'],['online','在線'],['banned','停權'],['adm','🛡️特別通行證']],FI,v=>{FI=v;vPlayers()}),btn('重新整理',()=>{stats();vPlayers()}),btn('⬇️ CSV',()=>csv(j.players)));
 const t=el('table'),h=el('tr');['玩家','💚','卡','通行證','最後上線'].forEach(x=>h.append(el('th',x)));t.append(h);
 j.players.forEach(p=>{const tr=el('tr',null,'p');tr.append(el('td',(p.banned?'🚫 ':'')+p.name),el('td',p.em),el('td',p.cards),el('td',p.tier),el('td',ago(p.updated)));tr.onclick=()=>detail(p.pid);t.append(tr)});
@@ -59,7 +59,7 @@ async function detail(pid){const j=await api('/api/admin/player?pid='+encodeURIC
 d.append(el('h3',p.name+(p.banned?' 🚫':'')));
 const info=[['ID',p.pid],['IP',p.ip||'-'],['裝置碼',p.fp||'-'],['裝置',p.ua||'-'],['💚',p.em],['卡',p.cards],['拆包',p.opened],['通行證',p.tier],['同步次數',p.hits||0],['加入',fmt(p.created)],['最後上線',fmt(p.updated)]];
 if(p.banned)info.push(['停權原因',p.ban_reason||'-'],['停權時間',fmt(p.banned_at)]);
-info.push(['備註',p.note||'（無）']);info.forEach(r=>d.append(el('div',r[0]+'：'+r[1],'kv')));
+info.push(['帳號',p.acct||'（未註冊）'],['好友碼',p.fc||'-']);info.push(['備註',p.note||'（無）']);info.forEach(r=>d.append(el('div',r[0]+'：'+r[1],'kv')));
 if(j.related.length){const r=el('div',null,'row');r.append(el('b','⚠️ 相同 IP / 裝置的其他帳號：'));j.related.forEach(x=>r.append(el('a',(x.banned?'🚫':'')+x.name,'rel',e=>e.onclick=()=>detail(x.pid))));d.append(r)}
 const n=el('input');n.type='number';n.placeholder='數量（負數=扣）';
 d.append(el('div',null,'row',e=>e.append(n,btn('💚 送/扣',()=>{if(+n.value)act(pid,'gift',{n:+n.value})}))));
@@ -68,6 +68,7 @@ d.append(el('div',null,'row',e=>e.append(sn,btn('設定💚',()=>{if(sn.value!==
 const cp=await picker();d.append(el('div',null,'row',e=>e.append(el('b','🃏 發卡片給玩家（可選閃卡、序號、鑑定分、附魔）'))),cp.el,el('div',null,'row',e=>e.append(btn('發送卡片',()=>{const c=cp.get();if(c.length)act(pid,'givecard',{cards:c});else alert('請先加卡片')}))));
 if(p.rej||p.strikes)d.append(el('div',null,'row',e=>e.append(el('b','⚠️ 數值異常被擋下 '+(p.strikes||0)+' 次　'),p.rej?btn('✅ 接受被擋下的存檔',()=>{if(confirm('把玩家送來被擋下的存檔當成正式存檔？'))act(pid,'acceptrej')}):'',btn('清除警告',()=>act(pid,'clearstrikes')))));
 d.append(el('div',null,'row',e=>e.append(el('b',p.adm?'🛡️ 持有管理員特別通行證　':'管理員特別通行證（只有後台能發）　'),p.adm?btn('收回特別通行證',()=>act(pid,'adm',{on:0}),'bad'):btn('🛡️ 授予特別通行證',()=>{if(confirm('授予 '+p.name+' 管理員特別通行證？'))act(pid,'adm',{on:1})}))));
+if(p.acct)d.append(el('div',null,'row',e=>e.append(el('b','👤 帳號 '+p.acct+'　'),btn('重設密碼',()=>{const x=prompt('新密碼（6～64 個字）');if(x)act(pid,'resetpass',{pass:x}).then(()=>alert('已重設'))}),btn('解除帳號綁定',()=>{if(confirm('解除後這個帳號名稱可被重新註冊，玩家要重新綁定才能跨裝置登入。確定？'))act(pid,'clearacct')},'bad'))));
 if(j.redeems&&j.redeems.length)d.append(el('div','🎁 兌換過：'+j.redeems.map(x=>x.code).join('、'),'kv'));
 const t=sel([['none','無通行證'],['vip','VIP'],['prem','至尊'],['eter','永恆']],'none',()=>{});
 d.append(el('div',null,'row',e=>e.append(t,btn('設定通行證',()=>act(pid,'tier',{v:t.value})))));

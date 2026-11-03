@@ -60,7 +60,7 @@ details{margin-top:14px;padding:8px 10px}summary{cursor:pointer;font-weight:700}
 </style>
 </head>
 <body>
-<header><h1><span id="ht">⛏️ 方塊卡牌店</span><small id="pn" style="display:block;font-size:11px;font-weight:400;opacity:.8"></small></h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="redeem()" aria-label="兌換碼">🎁</button><button class="b" onclick="go('sv')" aria-label="存檔與跨裝置">💾</button></header>
+<header><h1><span id="ht">⛏️ 方塊卡牌店</span><small id="pn" style="display:block;font-size:11px;font-weight:400;opacity:.8"></small></h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="redeem()" aria-label="兌換碼">🎁</button><button class="b" onclick="go('fr')" aria-label="好友">👥</button><button class="b" onclick="go('sv')" aria-label="帳號與存檔">💾</button></header>
 <main id="v"></main>
 <div id="actbar"><div class="in" id="act"></div></div>
 <nav role="tablist"><button role="tab" onclick="go('pack')" id="t-pack">📦<br>開包</button><button role="tab" onclick="go('col')" id="t-col">🎒<br>收藏</button><button role="tab" onclick="go('gr')" id="t-gr">🔍<br>鑑定</button><button role="tab" onclick="go('mkt')" id="t-mkt">📈<br>市場</button><button role="tab" onclick="go('tr')" id="t-tr">🤝<br>交易</button><button role="tab" onclick="go('pass')" id="t-pass">🎫<br>通行證</button></nav>
@@ -149,10 +149,46 @@ try{if(cloudAdm(!!j.adm))ch=true}catch(e){}
 try{if(applyTov(j.tov||null))ch=true}catch(e){}
 if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);ch=true}
 if(RST){try{localStorage.removeItem('mcg1')}catch(e){}location.reload();return}
+if(typeof j.frq=='number'){if(j.frq>0&&j.frq>frqSeen)pop('👥 你有 '+j.frq+' 個好友邀請，點右上角 👥 查看');frqSeen=j.frq}
 if(ch){try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
 if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));pop('📢 公告\n'+j.ann.text)}}catch(e){}}
 async function cloudRedeem(code){try{const r=await fetch('/api/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,code})});const j=await r.json();if(j.error){alert('❌ '+j.error);return}pop('🎁 兌換成功：'+j.desc);await cloudSend()}catch(e){alert('連線失敗，請稍後再試')}}
 function redeem(){const c=(prompt('請輸入兌換碼')||'').trim();if(c)cloudRedeem(c)}
+
+// ===== 帳號登入 / 好友 =====
+const eh=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+let FR=null,FRerr='',frqSeen=-1;const V={u:'',p:'',lu:'',lp:'',op:'',np:'',fc:''};
+async function post2(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({pid:CL.pid},body||{}))});return r.json()}
+async function frLoad(){try{const j=await post2('/api/friends');if(j.ok){FR=j;FRerr=''}else{FRerr=j.error||'載入失敗'}}catch(e){FRerr='連線失敗，請稍後再試'}
+if((tab=='fr'||tab=='sv')&&!(document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)))render()}
+setInterval(()=>{if(tab=='fr'&&!document.hidden)frLoad()},20000);
+function inp(k,ph,type){return`<input ${type?'type="'+type+'" ':''}value="${eh(V[k])}" placeholder="${ph}" autocomplete="off" maxlength="64" oninput="V.${k}=this.value" style="padding:8px;margin:2px 0;max-width:100%;width:200px">`}
+async function accReg(){if(!V.u||!V.p)return toast('請輸入帳號和密碼');await cloudSend();try{const j=await post2('/api/register',{user:V.u,pass:V.p});if(j.error)return toast('❌ '+j.error);V.p='';pop('✅ 帳號已建立：'+j.user+'\n之後在別的裝置用這個帳號登入，就能接著玩');frLoad()}catch(e){toast('連線失敗，請稍後再試')}}
+async function accLogin(){if(!V.lu||!V.lp)return toast('請輸入帳號和密碼');
+if(!confirm('登入會用這個帳號的雲端存檔，取代這個裝置目前的進度（目前 💚'+S.em+'、卡片 '+S.cards.length+' 張）。\n如果目前的進度還想保留，請先用它註冊帳號。\n確定登入？'))return;
+try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:V.lu,pass:V.lp})});const j=await r.json();if(j.error)return toast('❌ '+j.error);
+RST=1;clearTimeout(CL.t);try{localStorage.setItem('mcg1bak',JSON.stringify(S))}catch(e){}
+try{localStorage.setItem('mcg1pid',j.pid);localStorage.setItem('mcg1name',j.name||'');if(j.data)localStorage.setItem('mcg1',JSON.stringify(j.data));else localStorage.removeItem('mcg1')}catch(e){RST=0;return toast('❌ 無法寫入存檔')}
+location.reload()}catch(e){toast('連線失敗，請稍後再試')}}
+async function accOut(){if(!confirm('登出後這個裝置會變成全新的存檔。你的進度會留在帳號裡，之後用帳號登入就能拿回來。確定登出？'))return;await cloudSend();RST=1;clearTimeout(CL.t);try{localStorage.setItem('mcg1bak',JSON.stringify(S));['mcg1','mcg1pid','mcg1name'].forEach(k=>localStorage.removeItem(k))}catch(e){}location.reload()}
+async function accPass(){if(!V.op||!V.np)return toast('請輸入目前密碼和新密碼');try{const j=await post2('/api/passwd',{old:V.op,pass:V.np});if(j.error)return toast('❌ '+j.error);V.op=V.np='';pop('🔑 密碼已更改');render()}catch(e){toast('連線失敗，請稍後再試')}}
+function accBlock(){const box='<div class="blk" style="padding:10px;margin-bottom:10px">';
+if(!FR)return box+'<b>👤 帳號</b><p><small>'+eh(FRerr||'載入中…')+'</small></p></div>';
+if(FR.user)return box+'<b>👤 帳號</b><p>已綁定帳號：<b>'+eh(FR.user)+'</b></p><small>在別的裝置用這個帳號登入，就能拿到同一份進度和好友。</small><p>'+inp('op','目前密碼','password')+' '+inp('np','新密碼（6 個字以上）','password')+' <button class="b" onclick="accPass()">改密碼</button></p><p><button class="b" onclick="accOut()">登出這個裝置</button></p></div>';
+return box+'<b>👤 帳號</b><br><small>還沒有帳號。註冊後可以在別的裝置登入、清除瀏覽器資料也不會弄丟進度和好友。</small><p><b>註冊（綁定目前進度）</b></p><p>'+inp('u','帳號（英數字或底線 3～16 字）')+' '+inp('p','密碼（6 個字以上）','password')+' <button class="b" onclick="accReg()">註冊</button></p><p><b>已有帳號？登入</b></p><p>'+inp('lu','帳號')+' '+inp('lp','密碼','password')+' <button class="b" onclick="accLogin()">登入</button></p><small>登入會用帳號的雲端存檔取代這個裝置目前的進度。</small></div>'}
+function agoT(t){const s=(Date.now()-t)/1000;return s<150?'🟢 在線':s<5400?Math.max(1,Math.round(s/60))+' 分鐘前上線':s<172800?Math.round(s/3600)+' 小時前上線':Math.round(s/86400)+' 天前上線'}
+async function frDo(act,code){try{const j=await post2('/api/friend',{act,code});if(j.error)return toast('❌ '+j.error);if(act=='add')V.fc='';pop(j.msg||'完成');frLoad()}catch(e){toast('連線失敗，請稍後再試')}}
+function frCopy(){const c=FR&&FR.fc;if(!c)return;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(c).then(()=>toast('已複製好友碼 '+c),()=>prompt('你的好友碼',c));else prompt('你的好友碼',c)}
+function vFr(){const box='<div class="blk" style="padding:10px;margin-bottom:10px">';
+if(!FR)return box+eh(FRerr||'載入中…')+'</div>';
+const row=(f,extra,btns)=>`<div class="blk row" style="flex-wrap:wrap"><div style="flex:1;min-width:150px"><b>${eh(f.name)}</b><br><small>${extra}</small></div><div>${btns}</div></div>`;
+const b=(t,a,c)=>`<button class="b" onclick="frDo('${a}','${c}')">${t}</button>`;
+let h=box+`<b>🆔 我的好友碼</b><p style="font-size:22px;letter-spacing:3px"><b>${eh(FR.fc)}</b> <button class="b" onclick="frCopy()">複製</button></p><small>把好友碼傳給朋友，對方輸入後你就會收到邀請。</small>${FR.user?'':'<p><small>⚠️ 你還沒有註冊帳號：換裝置或清除瀏覽器資料後，好友會跟著不見。<a href="#" onclick="go(\'sv\');return false" style="color:inherit"><u>去註冊</u></a></small></p>'}</div>`;
+h+=box+`<b>➕ 加好友</b><p><input value="${eh(V.fc)}" placeholder="輸入對方的好友碼" maxlength="16" autocomplete="off" oninput="V.fc=this.value.toUpperCase()" style="padding:8px;width:180px;max-width:100%;text-transform:uppercase"> <button class="b" onclick="frDo('add',V.fc)">送出邀請</button></p></div>`;
+if(FR.incoming.length)h+=`<b>📨 收到的邀請（${FR.incoming.length}）</b><div style="margin:6px 0">`+FR.incoming.map(f=>row(f,'想加你為好友',b('接受','accept',f.fc)+' '+b('拒絕','remove',f.fc))).join('')+'</div>';
+h+=`<b>👥 我的好友（${FR.friends.length}）</b><div style="margin:6px 0">`+(FR.friends.length?FR.friends.map(f=>row(f,`${agoT(f.updated)}　💚${Math.floor(f.em).toLocaleString()}　🃏${f.cards}　${eh(f.tier||'普通')}`,`<button class="b" onclick="if(confirm('移除好友 ${eh(f.name).replace(/'/g,'')}？'))frDo('remove','${f.fc}')">移除</button>`)).join(''):'<div class="blk" style="padding:10px"><small>還沒有好友，把你的好友碼傳給朋友吧！</small></div>')+'</div>';
+if(FR.outgoing.length)h+=`<b>⏳ 等待對方接受（${FR.outgoing.length}）</b><div style="margin:6px 0">`+FR.outgoing.map(f=>row(f,'已送出邀請',b('取消','remove',f.fc))).join('')+'</div>';
+return h}
 function adminCard(){return`<div class="blk" style="padding:10px;margin-top:10px;border-color:#ff3b6b"><b>🛡️ 管理員特別通行證${S.adm?'（已授予）':''}</b><ul><li>只能由管理員發放，無法購買，也無法用兌換碼取得</li><li>包含永恆通行證所有功能</li><li>買任何卡包 1 折（含篩界包）</li><li>賣卡價格 +50%</li><li>挖礦收益 ×100</li></ul><p>${S.adm?'你持有這張特別通行證 🛡️':'尚未持有'}</p></div>`}
 addEventListener('visibilitychange',()=>{if(document.hidden){if(CL.d)cloudSend()}else cloudSend()});
 addEventListener('load',()=>setTimeout(cloudSend,300));setInterval(()=>{if(!document.hidden)cloudSend()},30000);
@@ -403,14 +439,14 @@ async function exCopy(){try{exCode=await saveCode();render();cp('exa')}catch(e){
 async function impRead(){try{impS=await loadCode(impTxt)}catch(e){impS=null;toast('存檔無效或不完整，請重新複製或選檔')}render()}
 function impFile(el){const f=el.files[0];if(!f)return;f.text().then(t=>{impTxt=t.trim();return impRead()}).catch(()=>toast('讀取檔案失敗'))}
 function impGo(){if(!impS)return;try{S=impS;save();localStorage.getItem('mcg1')}catch(e){return toast('無法寫入存檔')}location.reload()}
-function vSv(){return `<div class="blk" style="padding:10px;margin-bottom:10px"><b>🎨 外觀</b><br><small>「自動」會跟著裝置的淺色／深色模式；設定只記在這台裝置。</small><p>${[['auto','自動'],['light','淺色'],['dark','深色']].map(([k,n])=>`<button class="b" ${THM==k?'disabled':''} onclick="setTheme('${k}')">${n}</button>`).join(' ')}</p></div>
+function vSv(){return accBlock()+`<div class="blk" style="padding:10px;margin-bottom:10px"><b>🎨 外觀</b><br><small>「自動」會跟著裝置的淺色／深色模式；設定只記在這台裝置。</small><p>${[['auto','自動'],['light','淺色'],['dark','深色']].map(([k,n])=>`<button class="b" ${THM==k?'disabled':''} onclick="setTheme('${k}')">${n}</button>`).join(' ')}</p></div>
 <div class="blk" style="padding:10px;margin-bottom:10px"><b>🔊 音效</b><p><button class="b" onclick="snd.on=!snd.on;sndSave();sfx('buy');render()">${snd.on?'音效：開':'音效：關'}</button></p><label>音量 <input type="range" min="0" max="100" value="${Math.round(snd.vol*100)}" oninput="snd.vol=this.value/100" onchange="sndSave();sfx('buy')"></label></div>
 <div class="blk" style="padding:10px"><b>💾 匯出存檔</b><br><small>把整份進度（綠寶石、卡片、通行證、交易暫存等）存起來，在另一個裝置匯入就能接著玩。</small><p><button class="b" onclick="exFile()">下載存檔檔案</button> <button class="b" onclick="exCopy()">複製存檔代碼</button></p><small>卡片多的話代碼會很長，建議下載檔案，再用 LINE、雲端或 Email 傳到另一個裝置。</small>${exCode?`<textarea id="exa" readonly rows="4" style="${TA}">${exCode}</textarea>`:''}</div>
 <div class="blk" style="padding:10px;margin-top:10px"><b>📥 匯入存檔</b><br><small>選擇存檔檔案，或貼上存檔代碼。</small><p><input type="file" accept=".txt,.mcsave,text/plain" onchange="impFile(this)"></p><textarea rows="4" style="${TA}" oninput="impTxt=this.value" placeholder="MCS1.…">${esc(impTxt.slice(0,3000))}</textarea><p><button class="b" onclick="impRead()">讀取存檔</button></p>`+
 (impS?`<p>存檔內容：💚${impS.em}　卡片 ${impS.cards.length} 張　已開 ${impS.opened||0} 包${impS.prem?'　💎至尊':impS.vip?'　👑VIP':''}</p><p><small>載入後會覆蓋這個裝置目前的進度（目前 💚${S.em}、卡片 ${S.cards.length} 張），無法復原。</small></p><p><button class="b" onclick="impGo()">覆蓋並載入</button></p>`:'')+`</div>`}
-function go(t){sfx('click');tab=t;rst=false;render()}
+function go(t){sfx('click');tab=t;rst=false;render();if(t=='fr'||t=='sv')frLoad()}
 function render(){head();['pack','col','gr','mkt','tr','pass'].forEach(t=>$('#t-'+t).setAttribute('aria-selected',t==tab));
-$('#v').innerHTML=tab=='pack'?vPack():tab=='col'?vCol():tab=='gr'?vGr():tab=='tr'?vTr():tab=='sv'?vSv():tab=='pass'?vPass():vMkt();bar()}
+$('#v').innerHTML=tab=='pack'?vPack():tab=='col'?vCol():tab=='gr'?vGr():tab=='tr'?vTr():tab=='sv'?vSv():tab=='fr'?vFr():tab=='pass'?vPass():vMkt();bar()}
 setInterval(()=>{gtick();if(tab=='gr'||(tab=='tr'&&trm=='n'&&S.tr&&Date.now()>S.tr.exp))render()},1000);(function ml(){setTimeout(()=>{mtick();ml()},S.eter?2000:S.prem?5000:S.vip?7000:10000)})();
 gtick();render();
 </script>

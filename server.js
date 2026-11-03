@@ -76,7 +76,11 @@ const log = (act, pid, detail) => q('INSERT INTO logs(ts,act,pid,detail) VALUES(
 let ready;
 const init = () => ready || (ready = (async () => {
   await q('CREATE TABLE IF NOT EXISTS players(pid TEXT PRIMARY KEY,name TEXT,data TEXT,em BIGINT,cards BIGINT,opened BIGINT,tier TEXT,banned INTEGER DEFAULT 0,gift BIGINT DEFAULT 0,created BIGINT,updated BIGINT)');
-  for (const c of ['ip TEXT', 'fp TEXT', 'ua TEXT', 'note TEXT', 'ban_reason TEXT', 'banned_at BIGINT', "cmds TEXT DEFAULT '[]'", 'hits BIGINT DEFAULT 0', 'adm INTEGER DEFAULT 0', 'tok BIGINT', 'ub BIGINT', 'strikes INTEGER DEFAULT 0', 'rej TEXT', 'trust INTEGER DEFAULT 0']) await q('ALTER TABLE players ADD COLUMN IF NOT EXISTS ' + c).catch(() => {});
+  for (const c of ['ip TEXT', 'fp TEXT', 'ua TEXT', 'note TEXT', 'ban_reason TEXT', 'banned_at BIGINT', "cmds TEXT DEFAULT '[]'", 'hits BIGINT DEFAULT 0', 'adm INTEGER DEFAULT 0', 'tok BIGINT', 'ub BIGINT', 'strikes INTEGER DEFAULT 0', 'rej TEXT', 'trust INTEGER DEFAULT 0', 'acct TEXT', 'pwh TEXT', 'fc TEXT']) await q('ALTER TABLE players ADD COLUMN IF NOT EXISTS ' + c).catch(() => {});
+  await q('CREATE UNIQUE INDEX IF NOT EXISTS players_acct ON players(acct)').catch(() => {});
+  await q('CREATE UNIQUE INDEX IF NOT EXISTS players_fc ON players(fc)').catch(() => {});
+  await q('CREATE TABLE IF NOT EXISTS friends(a TEXT,b TEXT,st INTEGER DEFAULT 0,ts BIGINT,PRIMARY KEY(a,b))');
+  await q('CREATE INDEX IF NOT EXISTS friends_b ON friends(b)').catch(() => {});
   await q('CREATE TABLE IF NOT EXISTS bans(kind TEXT,val TEXT,pid TEXT,reason TEXT,created BIGINT,PRIMARY KEY(kind,val))');
   await q('CREATE TABLE IF NOT EXISTS logs(ts BIGINT,act TEXT,pid TEXT,detail TEXT)');
   await q('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY,v TEXT)');
@@ -172,8 +176,9 @@ async function save(req, res) {
     }
   }
   const kvs = {}; for (const x of await q("SELECT k,v FROM kv WHERE k IN ('ann','maint','tierov')")) kvs[x.k] = x.v;
+  const frq = (await q('SELECT COUNT(*) AS n FROM friends WHERE b=$1 AND st=0', [pid]))[0].n;
   let tov = null; if (kvs.tierov) { try { const o = JSON.parse(kvs.tierov); if (!o.until || o.until > now) tov = { id: o.id, v: o.v, adm: o.adm ? 1 : 0 }; } catch {} }
-  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '', tov }, h);
+  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '', tov, frq }, h);
 }
 const rfail = new Map(), TN = { vip: 'VIP', prem: '至尊', eter: '永恆' };
 async function redeem(req, res) {
@@ -202,6 +207,114 @@ async function redeem(req, res) {
   log('redeem', pid, code + ' ' + parts.join(' + '));
   send(res, 200, { ok: 1, desc: parts.join(' + ') });
 }
+
+// ===== 帳號登入 / 好友 =====
+const scrypt = (p, s) => new Promise((ok, no) => crypto.scrypt(p, s, 32, (e, k) => e ? no(e) : ok(k)));
+const hashPw = async p => { const s = crypto.randomBytes(16); return s.toString('hex') + ':' + (await scrypt(p, s)).toString('hex'); };
+const DUMMYPW = '00000000000000000000000000000000:' + '0'.repeat(64);
+const checkPw = async (p, h) => { const [s, k] = String(h || DUMMYPW).split(':'); if (!s || !k) return false; const d = await scrypt(p, Buffer.from(s, 'hex')), kb = Buffer.from(k, 'hex'); return kb.length === d.length && crypto.timingSafeEqual(kb, d) && h !== DUMMYPW; };
+const lim = new Map(); // 通用限流：key -> {n,t}
+const limHit = (k, max, win) => { const now = Date.now(), x = lim.get(k); return !!(x && x.n >= max && now - x.t < win); };
+const limBump = (k, win) => { const now = Date.now(); let x = lim.get(k); if (!x || now - x.t >= win) x = { n: 0, t: now }; x.n++; lim.set(k, x); };
+setInterval(() => { const now = Date.now(); for (const [k, x] of lim) if (now - x.t > 3600000) lim.delete(k); }, 1800000).unref();
+const FCAL = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+async function ensureFc(pid) {
+  const r = (await q('SELECT fc FROM players WHERE pid=$1', [pid]))[0]; if (!r) return null; if (r.fc) return r.fc;
+  for (let i = 0; i < 8; i++) {
+    let c = ''; for (const x of crypto.randomBytes(8)) c += FCAL[x % 32];
+    try { const u = await q('UPDATE players SET fc=$1 WHERE pid=$2 AND fc IS NULL RETURNING fc', [c, pid]); if (u.length) return c; return (await q('SELECT fc FROM players WHERE pid=$1', [pid]))[0].fc; } catch {}
+  }
+  return null;
+}
+const TMS = 600000, RESERVED = ['admin', 'administrator', 'root', 'system', 'mod', 'support'];
+const pwErr = (p, u) => p.length < 6 || p.length > 64 ? '密碼要 6～64 個字' : (u && p.toLowerCase() === u.toLowerCase()) ? '密碼不能和帳號一樣' : '';
+async function jbody(req, res, max) { try { return JSON.parse(await body(req, max || 5000)); } catch { send(res, 400, { error: '格式錯誤' }); return null; } }
+async function register(req, res) {
+  const b = await jbody(req, res); if (!b) return;
+  const pid = String(b.pid || ''), user = String(b.user || '').trim(), pass = String(b.pass || ''), ip = ipOf(req);
+  if (limHit('reg:' + ip, 6, 3600000)) return send(res, 200, { error: '註冊太頻繁，請稍後再試' });
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(user)) return send(res, 200, { error: '帳號要 3～16 個英文、數字或底線' });
+  if (RESERVED.includes(user.toLowerCase())) return send(res, 200, { error: '這個帳號名稱不能用' });
+  const pe = pwErr(pass, user); if (pe) return send(res, 200, { error: pe });
+  const pl = (await q('SELECT banned,acct FROM players WHERE pid=$1', [pid]))[0];
+  if (!pl) return send(res, 200, { error: '請先等遊戲同步完成（約 15 秒）再註冊' });
+  if (pl.banned) return send(res, 200, { error: '帳號已被停權' });
+  if (pl.acct) return send(res, 200, { error: '這份存檔已經綁定帳號了' });
+  limBump('reg:' + ip, 3600000);
+  const pwh = await hashPw(pass);
+  try { const u = await q('UPDATE players SET acct=$1,pwh=$2 WHERE pid=$3 AND acct IS NULL RETURNING acct', [user.toLowerCase(), pwh, pid]); if (!u.length) return send(res, 200, { error: '這份存檔已經綁定帳號了' }); }
+  catch (e) { if (e.code === '23505') return send(res, 200, { error: '這個帳號名稱已經有人用了' }); throw e; }
+  log('register', pid, user); send(res, 200, { ok: 1, user: user.toLowerCase() }); // 帳號不分大小寫，一律以小寫顯示
+}
+async function login(req, res) {
+  const b = await jbody(req, res); if (!b) return;
+  const user = String(b.user || '').trim().toLowerCase().slice(0, 20), pass = String(b.pass || '').slice(0, 100), ip = ipOf(req);
+  if (limHit('lip:' + ip, 60, TMS) || limHit('lu:' + user, 10, TMS)) return send(res, 429, { error: '嘗試次數太多，請 10 分鐘後再試' });
+  const row = user ? (await q('SELECT pid,name,data,banned,pwh FROM players WHERE acct=$1', [user]))[0] : null;
+  const ok = (await checkPw(pass, row && row.pwh)) && row;
+  if (!ok) { limBump('lip:' + ip, TMS); limBump('lu:' + user, TMS); return send(res, 200, { error: '帳號或密碼錯誤' }); }
+  if (row.banned) return send(res, 200, { error: '這個帳號已被停權' });
+  lim.delete('lu:' + user);
+  let data = null; try { data = row.data ? JSON.parse(row.data) : null; } catch {}
+  log('login', row.pid, user + ' ' + ip); send(res, 200, { ok: 1, pid: row.pid, name: row.name || '', data });
+}
+async function passwd(req, res) {
+  const b = await jbody(req, res); if (!b) return;
+  const pid = String(b.pid || ''), old = String(b.old || '').slice(0, 100), pass = String(b.pass || '');
+  if (limHit('pw:' + pid, 8, TMS)) return send(res, 429, { error: '嘗試次數太多，請 10 分鐘後再試' });
+  const row = (await q('SELECT acct,pwh,banned FROM players WHERE pid=$1', [pid]))[0];
+  if (!row || !row.acct) return send(res, 200, { error: '還沒有註冊帳號' });
+  if (!(await checkPw(old, row.pwh))) { limBump('pw:' + pid, TMS); return send(res, 200, { error: '目前的密碼不對' }); }
+  const pe = pwErr(pass, row.acct); if (pe) return send(res, 200, { error: pe });
+  await q('UPDATE players SET pwh=$1 WHERE pid=$2', [await hashPw(pass), pid]); log('passwd', pid, row.acct); send(res, 200, { ok: 1 });
+}
+async function friendList(req, res) {
+  const b = await jbody(req, res); if (!b) return;
+  const pid = String(b.pid || ''), me = (await q('SELECT acct,banned FROM players WHERE pid=$1', [pid]))[0];
+  if (!me) return send(res, 200, { error: '請先等遊戲同步完成（約 15 秒）' });
+  if (me.banned) return send(res, 200, { error: '帳號已被停權' });
+  const fc = await ensureFc(pid), now = Date.now();
+  const rows = await q('SELECT f.a,f.st,f.ts,p.fc,p.name,p.em,p.cards,p.opened,p.tier,p.updated FROM friends f JOIN players p ON p.pid=(CASE WHEN f.a=$1 THEN f.b ELSE f.a END) WHERE (f.a=$1 OR f.b=$1) AND COALESCE(p.banned,0)=0 ORDER BY f.ts DESC LIMIT 400', [pid]);
+  const out = { ok: 1, fc, user: me.acct || '', friends: [], incoming: [], outgoing: [] };
+  for (const r of rows) {
+    if (r.st === 1) out.friends.push({ fc: r.fc, name: r.name, em: r.em, cards: r.cards, opened: r.opened, tier: r.tier, updated: r.updated, online: now - r.updated < 150000 });
+    else if (r.a === pid) out.outgoing.push({ fc: r.fc, name: r.name, ts: r.ts }); else out.incoming.push({ fc: r.fc, name: r.name, ts: r.ts });
+  }
+  out.friends.sort((x, y) => (y.online - x.online) || (y.updated - x.updated));
+  send(res, 200, out);
+}
+async function friendAct(req, res) {
+  const b = await jbody(req, res); if (!b) return;
+  const pid = String(b.pid || ''), act = String(b.act || ''), code = String(b.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16), now = Date.now();
+  const me = (await q('SELECT banned FROM players WHERE pid=$1', [pid]))[0];
+  if (!me) return send(res, 200, { error: '請先等遊戲同步完成（約 15 秒）' });
+  if (me.banned) return send(res, 200, { error: '帳號已被停權' });
+  if (limHit('fr:' + pid, 30, TMS)) return send(res, 429, { error: '操作太頻繁，請稍後再試' }); limBump('fr:' + pid, TMS);
+  if (!code) return send(res, 200, { error: '請輸入好友碼' });
+  const t = (await q('SELECT pid,name,banned FROM players WHERE fc=$1', [code]))[0];
+  if (!t || (t.banned && act === 'add')) return send(res, 200, { error: '找不到這個好友碼' });
+  if (t.pid === pid) return send(res, 200, { error: '不能加自己為好友' });
+  const rel = (await q('SELECT a,b,st FROM friends WHERE (a=$1 AND b=$2) OR (a=$2 AND b=$1)', [pid, t.pid]))[0];
+  if (act === 'add') {
+    await ensureFc(pid);
+    if (rel && rel.st === 1) return send(res, 200, { error: '你們已經是好友了' });
+    if (rel && rel.a === pid) return send(res, 200, { error: '已經送出邀請了，等對方接受' });
+    if (rel) { await q('UPDATE friends SET st=1,ts=$3 WHERE a=$1 AND b=$2', [t.pid, pid, now]); return send(res, 200, { ok: 1, msg: '🤝 你和 ' + t.name + ' 成為好友了！' }); } // 對方也剛好邀請你 → 直接成為好友
+    const n = (await q('SELECT COUNT(*) AS n FROM friends WHERE a=$1 AND st=0', [pid]))[0].n, f = (await q('SELECT COUNT(*) AS n FROM friends WHERE (a=$1 OR b=$1) AND st=1', [pid]))[0].n, tf = (await q('SELECT COUNT(*) AS n FROM friends WHERE (a=$1 OR b=$1) AND st=1', [t.pid]))[0].n;
+    if (n >= 30) return send(res, 200, { error: '送出的邀請太多了，先等對方回覆或取消幾個' });
+    if (f >= 100) return send(res, 200, { error: '你的好友已達上限 100 人' });
+    if (tf >= 100) return send(res, 200, { error: '對方的好友已達上限' });
+    await q('INSERT INTO friends(a,b,st,ts) VALUES($1,$2,0,$3) ON CONFLICT DO NOTHING', [pid, t.pid, now]);
+    return send(res, 200, { ok: 1, msg: '📨 已送出好友邀請給 ' + t.name });
+  }
+  if (act === 'accept') {
+    if (!rel || rel.st !== 0 || rel.b !== pid) return send(res, 200, { error: '這個邀請已經不存在了' });
+    const f = (await q('SELECT COUNT(*) AS n FROM friends WHERE (a=$1 OR b=$1) AND st=1', [pid]))[0].n; if (f >= 100) return send(res, 200, { error: '你的好友已達上限 100 人' });
+    await q('UPDATE friends SET st=1,ts=$3 WHERE a=$1 AND b=$2', [t.pid, pid, now]); return send(res, 200, { ok: 1, msg: '🤝 你和 ' + t.name + ' 成為好友了！' });
+  }
+  if (act === 'remove') { if (rel) await q('DELETE FROM friends WHERE (a=$1 AND b=$2) OR (a=$2 AND b=$1)', [pid, t.pid]); return send(res, 200, { ok: 1, msg: rel && rel.st === 1 ? '已移除好友 ' + t.name : '已處理' }); }
+  send(res, 400, { error: 'bad act' });
+}
 const fails = new Map();
 async function isAdmin(req) {
   const w = process.env.ADMIN_PASSWORD; if (!w) return false;
@@ -223,7 +336,7 @@ async function adminInner(req, res, u) {
   }
   if (p === '/api/admin/list') {
     const where = [], a = [], qs = (u.searchParams.get('q') || '').toLowerCase(), fl = u.searchParams.get('f');
-    if (qs) { a.push('%' + qs + '%'); const n = '$' + a.length; where.push(`(LOWER(name) LIKE ${n} OR LOWER(pid) LIKE ${n} OR LOWER(COALESCE(ip,'')) LIKE ${n})`); }
+    if (qs) { a.push('%' + qs + '%'); const n = '$' + a.length; where.push(`(LOWER(name) LIKE ${n} OR LOWER(pid) LIKE ${n} OR LOWER(COALESCE(ip,'')) LIKE ${n} OR LOWER(COALESCE(acct,'')) LIKE ${n})`); }
     if (fl === 'banned') where.push('banned=1'); else if (fl === 'adm') where.push('adm=1'); else if (fl === 'online') { a.push(now - 120000); where.push('updated>$' + a.length); }
     const rows = await q('SELECT pid,name,em,cards,opened,tier,banned,ip,created,updated,strikes FROM players' + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ORDER BY ' + (SORT[u.searchParams.get('s')] || SORT.recent) + ' LIMIT 300', a);
     return send(res, 200, { players: rows });
@@ -231,6 +344,7 @@ async function adminInner(req, res, u) {
   if (p === '/api/admin/player') {
     const pl = (await q('SELECT * FROM players WHERE pid=$1', [u.searchParams.get('pid') || '']))[0];
     if (!pl) return send(res, 404, { error: 'not found' });
+    delete pl.pwh;
     const c = [], a = [pl.pid];
     if (pl.fp) c.push('fp=$' + a.push(pl.fp)); if (pl.ip) c.push('ip=$' + a.push(pl.ip));
     const related = c.length ? await q('SELECT pid,name,banned FROM players WHERE pid<>$1 AND (' + c.join(' OR ') + ') LIMIT 20', a) : [];
@@ -330,7 +444,9 @@ async function adminInner(req, res, u) {
       for (const x of [pid, ...v.map(r => r.val)]) await q('UPDATE players SET banned=0,ban_reason=NULL WHERE pid=$1', [x]);
       log('unban', pid, pl.name); break;
     }
-    case 'delete': await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
+    case 'resetpass': { const pw = String(b.pass || ''); if (!pl.acct) return send(res, 400, { error: '這位玩家沒有註冊帳號' }); const pe = pwErr(pw, pl.acct); if (pe) return send(res, 400, { error: pe }); await q('UPDATE players SET pwh=$1 WHERE pid=$2', [await hashPw(pw), pid]); log('resetpass', pid, pl.acct); break; }
+    case 'clearacct': await q('UPDATE players SET acct=NULL,pwh=NULL WHERE pid=$1', [pid]); log('clearacct', pid, pl.acct || ''); break;
+    case 'delete': await q('DELETE FROM friends WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
     default: return send(res, 400, { error: 'bad act' });
   }
   send(res, 200, { ok: 1 });
@@ -350,6 +466,13 @@ http.createServer(async (req, res) => {
     await init();
     if (p === '/api/save' && req.method === 'POST') return await save(req, res);
     if (p === '/api/redeem' && req.method === 'POST') return await redeem(req, res);
+    if (req.method === 'POST') {
+      if (p === '/api/register') return await register(req, res);
+      if (p === '/api/login') return await login(req, res);
+      if (p === '/api/passwd') return await passwd(req, res);
+      if (p === '/api/friends') return await friendList(req, res);
+      if (p === '/api/friend') return await friendAct(req, res);
+    }
     if (p.startsWith('/api/admin/')) return await admin(req, res, u);
     send(res, 404, { error: 'not found' });
   } catch (e) { console.error(e); if (!res.headersSent) send(res, 500, { error: 'server error' }); }
