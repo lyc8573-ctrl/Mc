@@ -27,7 +27,7 @@ function guard(P, N, x) { // 回傳 {bad:原因} 或 {ok:1, ub:新的未見額�
   const mine = dt * 10 * 8 * mult, base = mine + sales; // 挖礦上限：每秒 10 下、每下最多 8
   // 新卡檢查
   const seen = new Set(); let newCards = [], bad = null;
-  N.cards.forEach(c => { if (seen.has(c.id)) bad = '卡片編號重複'; seen.add(c.id); if (!known.has(c.id)) { newCards.push(c); if (!(c.id >= P.id && c.id < N.id)) bad = '憑空出現的卡片'; if (!ECON.D[c.k]) bad = '不存在的卡片'; } });
+  N.cards.forEach(c => { if (seen.has(c.id)) bad = '卡片編號重複'; seen.add(c.id); if (!known.has(c.id)) { newCards.push(c); if (!(c.id >= P.id && c.id < N.id)) bad = '憑空出現的卡片'; if (!ECON.D[c.k]) bad = '不存在的卡片'; else if (ECON.D[c.k][4]) bad = '管理員專屬卡片不能憑空出現'; } });
   if (bad) return { bad };
   // 已存在的卡片：稀有度、序號、閃卡不可改；鑑定分只能從 0 變成 1~10；附魔只能從無變有
   const enOk = en => Array.isArray(en) && en.length <= 3 && en.every((e, i) => Array.isArray(e) && Number.isInteger(e[0]) && e[0] >= 0 && e[0] < ECON.EN.length && Number.isInteger(e[1]) && e[1] >= 1 && e[1] <= 5 && en.findIndex(y => y[0] === e[0]) === i);
@@ -87,6 +87,11 @@ const init = () => ready || (ready = (async () => {
   await q('CREATE TABLE IF NOT EXISTS codes(code TEXT PRIMARY KEY,em BIGINT DEFAULT 0,tier TEXT DEFAULT \'\',max_uses INTEGER DEFAULT 0,used INTEGER DEFAULT 0,expires BIGINT DEFAULT 0,enabled INTEGER DEFAULT 1,note TEXT,created BIGINT)');
   await q('ALTER TABLE codes ADD COLUMN IF NOT EXISTS cards TEXT').catch(() => {});
   await q('CREATE TABLE IF NOT EXISTS redeems(code TEXT,pid TEXT,ts BIGINT,PRIMARY KEY(code,pid))');
+  await q("CREATE TABLE IF NOT EXISTS chat(id BIGSERIAL PRIMARY KEY,a TEXT,b TEXT,ts BIGINT,kind TEXT DEFAULT 'msg',body TEXT,x BIGINT,rd INTEGER DEFAULT 0)");
+  await q('CREATE INDEX IF NOT EXISTS chat_ab ON chat(a,b)').catch(() => {});
+  await q('CREATE INDEX IF NOT EXISTS chat_b ON chat(b,rd)').catch(() => {});
+  await q('CREATE TABLE IF NOT EXISTS xfers(id BIGSERIAL PRIMARY KEY,a TEXT,b TEXT,ts BIGINT,st INTEGER DEFAULT 0,give TEXT,back TEXT,done BIGINT)');
+  await q('CREATE INDEX IF NOT EXISTS xfers_ab ON xfers(a,b)').catch(() => {});
   await q('CREATE TABLE IF NOT EXISTS snaps(pid TEXT,ts BIGINT,em BIGINT,cards BIGINT,why TEXT,data TEXT,PRIMARY KEY(pid,ts))');
 })().catch(e => { ready = null; throw e; }));
 const banHit = async (pid, gid, ip, fp) => (await q("SELECT kind,pid FROM bans WHERE (kind='pid' AND val IN ($1,$2)) OR (kind='ip' AND val=$3) OR (kind='fp' AND val=$4) LIMIT 1", [pid || '-', gid || '-', ip || '-', fp || '-']))[0] || null;
@@ -120,6 +125,7 @@ function applyServer(P, c) {
   else if (c.t === 'emset') P.em = Math.max(0, Math.floor(c.n));
   else if (c.t === 'tier') { const f = FLAGS[c.v]; if (!f) return false; const cur = P.adm ? (P.admBase || {}) : P; if (c.up && RANK(cur) >= RANK(f)) return false; if (P.adm) P.admBase = f; else { P.vip = f.vip; P.prem = f.prem; P.eter = f.eter; } if (f.vip) { P.pp = P.pp || {}; P.pc = P.pc || 0; } }
   else if (c.t === 'cards') { c.cs = []; for (const t of c.tpl || []) for (let i = 0; i < t.n; i++) { const card = mkGrantCard(t, P); P.cards.push(card); c.cs.push(card); P.dex = P.dex || []; P.dex[t.k] = 1; } c.gid = P.gid; delete c.tpl; }
+  else if (c.t === 'give') { const out = []; for (const x of Array.isArray(c.cs) ? c.cs : []) { if (!x || !ECON.D[x.k]) continue; const card = Object.assign({}, x, { id: (P.gid = (P.gid || 1e9) + 1), lk: 0, pend: 0, pd: 0, t: Date.now() }); P.cards.push(card); out.push(card); P.dex = P.dex || []; P.dex[x.k] = 1; } c.t = 'cards'; c.cs = out; c.gid = P.gid; }
   else if (c.t === 'state') { return 'state'; }
   else return false;
   return true;
@@ -193,8 +199,9 @@ async function save(req, res) {
   }
   const kvs = {}; for (const x of await q("SELECT k,v FROM kv WHERE k IN ('ann','maint','tierov')")) kvs[x.k] = x.v;
   const frq = (await q('SELECT COUNT(*) AS n FROM friends WHERE b=$1 AND st=0', [pid]))[0].n;
+  const unr = (await q('SELECT COUNT(*) AS n FROM chat WHERE b=$1 AND rd=0', [pid]))[0].n + (await q('SELECT COUNT(*) AS n FROM xfers WHERE b=$1 AND st=0', [pid]))[0].n;
   let tov = null; if (kvs.tierov) { try { const o = JSON.parse(kvs.tierov); if (!o.until || o.until > now) tov = { id: o.id, v: o.v, adm: o.adm ? 1 : 0 }; } catch {} }
-  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '', tov, frq }, h);
+  send(res, 200, { ok: 1, banned: false, adm: r.adm ? 1 : 0, fix: fixState, why: fixState ? verdict.bad : '', cmds, ann: kvs.ann ? JSON.parse(kvs.ann) : null, maint: kvs.maint || '', tov, frq, unr }, h);
 }
 const rfail = new Map(), TN = { vip: 'VIP', prem: '至尊', eter: '永恆' };
 async function redeem(req, res) {
@@ -290,10 +297,10 @@ async function friendList(req, res) {
   if (!me) return send(res, 200, { error: '請先等遊戲同步完成（約 15 秒）' });
   if (me.banned) return send(res, 200, { error: '帳號已被停權' });
   const fc = await ensureFc(pid), now = Date.now();
-  const rows = await q('SELECT f.a,f.st,f.ts,p.fc,p.name,p.em,p.cards,p.opened,p.tier,p.updated FROM friends f JOIN players p ON p.pid=(CASE WHEN f.a=$1 THEN f.b ELSE f.a END) WHERE (f.a=$1 OR f.b=$1) AND COALESCE(p.banned,0)=0 ORDER BY f.ts DESC LIMIT 400', [pid]);
+  const rows = await q('SELECT f.a,f.st,f.ts,p.fc,p.name,p.em,p.cards,p.opened,p.tier,p.updated,(SELECT COUNT(*) FROM chat c WHERE c.a=p.pid AND c.b=$1 AND c.rd=0) AS unr,(SELECT COUNT(*) FROM xfers x WHERE x.a=p.pid AND x.b=$1 AND x.st=0) AS xin FROM friends f JOIN players p ON p.pid=(CASE WHEN f.a=$1 THEN f.b ELSE f.a END) WHERE (f.a=$1 OR f.b=$1) AND COALESCE(p.banned,0)=0 ORDER BY f.ts DESC LIMIT 400', [pid]);
   const out = { ok: 1, fc, user: me.acct || '', friends: [], incoming: [], outgoing: [] };
   for (const r of rows) {
-    if (r.st === 1) out.friends.push({ fc: r.fc, name: r.name, em: r.em, cards: r.cards, opened: r.opened, tier: r.tier, updated: r.updated, online: now - r.updated < 150000 });
+    if (r.st === 1) out.friends.push({ fc: r.fc, name: r.name, em: r.em, cards: r.cards, opened: r.opened, tier: r.tier, updated: r.updated, unr: r.unr, xin: r.xin, online: now - r.updated < 150000 });
     else if (r.a === pid) out.outgoing.push({ fc: r.fc, name: r.name, ts: r.ts }); else out.incoming.push({ fc: r.fc, name: r.name, ts: r.ts });
   }
   out.friends.sort((x, y) => (y.online - x.online) || (y.updated - x.updated));
@@ -330,6 +337,106 @@ async function friendAct(req, res) {
   }
   if (act === 'remove') { if (rel) await q('DELETE FROM friends WHERE (a=$1 AND b=$2) OR (a=$2 AND b=$1)', [pid, t.pid]); return send(res, 200, { ok: 1, msg: rel && rel.st === 1 ? '已移除好友 ' + t.name : '已處理' }); }
   send(res, 400, { error: 'bad act' });
+}
+
+// ===== 好友聊天 / 交換卡片 =====
+// 聊天內容全部存在 chat 表，管理員後台看得到。交換卡片時卡片會先從出卡人的存檔移到 xfers 表暫存，
+// 對方接受才互相發出、拒絕 / 取消 / 逾期則退回，所以卡片不會憑空出現、消失或被複製。
+const XMAX = 10, XTTL = 48 * 3600000;
+const xOk = c => !!(c && !c.pend && !c.lk && ECON.D[c.k] && ECON.D[c.k][2] < 5 && !ECON.D[c.k][4]);
+const cleanIds = a => [...new Set((Array.isArray(a) ? a : []).map(Number).filter(n => Number.isInteger(n) && n > 0))].slice(0, XMAX);
+async function mutate(pid, fn) { // 用比對舊資料的方式安全修改存檔（不和玩家自己的同步互相覆蓋）
+  for (let i = 0; i < 5; i++) {
+    const r = (await q('SELECT data FROM players WHERE pid=$1', [pid]))[0]; if (!r || !r.data) throw new Error('找不到存檔，請先等遊戲同步');
+    let P; try { P = JSON.parse(r.data); } catch { throw new Error('存檔損毀'); }
+    if (!Array.isArray(P.cards)) throw new Error('存檔格式錯誤');
+    const out = fn(P);
+    const u = await q('UPDATE players SET data=$1,cards=$2 WHERE pid=$3 AND data=$4 RETURNING pid', [JSON.stringify(P), P.cards.length, pid, r.data]);
+    if (u.length) return out;
+  }
+  throw new Error('系統忙碌，請再試一次');
+}
+const takeCards = ids => P => { const out = []; for (const id of ids) { const c = P.cards.find(x => x.id === id); if (!c) throw new Error('有卡片已經不在收藏裡了，請重新整理再試'); if (!xOk(c)) throw new Error('有卡片不能交換（已上鎖、鑑定中、創世卡或管理員專屬卡）'); out.push(c); } const set = new Set(ids); P.cards = P.cards.filter(c => !set.has(c.id)); return out; };
+const slim = c => ({ id: c.id, k: c.k, foil: c.foil ? 1 : 0, ser: c.ser, max: c.max, grade: c.grade || 0, en: c.en || [] });
+async function peerOf(pid, fc) { // 回傳好友資料（必須互為好友、沒被停權）
+  const code = String(fc || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  const t = code && (await q('SELECT pid,name,banned,updated FROM players WHERE fc=$1', [code]))[0];
+  if (!t || t.pid === pid) return null;
+  const r = (await q('SELECT st FROM friends WHERE (a=$1 AND b=$2) OR (a=$2 AND b=$1)', [pid, t.pid]))[0];
+  return r && r.st === 1 ? t : null;
+}
+async function chatGate(req, res, bodyMax) {
+  const b = await jbody(req, res, bodyMax); if (!b) return null;
+  const pid = String(b.pid || ''), me = (await q('SELECT banned,name FROM players WHERE pid=$1', [pid]))[0];
+  if (!me) { send(res, 200, { error: '請先等遊戲同步完成（約 15 秒）' }); return null; }
+  if (me.banned) { send(res, 200, { error: '帳號已被停權' }); return null; }
+  return { b, pid, me };
+}
+async function xferSweep() { // 逾期沒人回應的交換：卡片退回給出卡的人
+  const now = Date.now(), rows = await q('UPDATE xfers SET st=4,done=$1 WHERE st=0 AND ts<$2 RETURNING id,a,b,give', [now, now - XTTL]);
+  for (const x of rows) { try { await pushCmd(x.a, { t: 'give', cs: JSON.parse(x.give || '[]') }); await q("INSERT INTO chat(a,b,ts,kind,body,x,rd) VALUES($1,$2,$3,'xres','逾期',$4,1)", [x.a, x.b, now, x.id]); } catch (e) { console.error(e); } }
+}
+setInterval(() => xferSweep().catch(() => {}), 600000).unref();
+async function chatList(req, res) {
+  const g = await chatGate(req, res); if (!g) return; const { b, pid } = g;
+  const peer = await peerOf(pid, b.fc); if (!peer) return send(res, 200, { error: '你們還不是好友' });
+  await xferSweep();
+  const after = Math.max(0, Math.floor(Number(b.after)) || 0), now = Date.now();
+  const rows = (await q('SELECT id,a,ts,kind,body,x FROM chat WHERE ((a=$1 AND b=$2) OR (a=$2 AND b=$1)) AND id>$3 ORDER BY id DESC LIMIT 80', [pid, peer.pid, after])).reverse();
+  await q('UPDATE chat SET rd=1 WHERE b=$1 AND a=$2 AND rd=0', [pid, peer.pid]);
+  const xf = (await q('SELECT id,a,ts,st,give,back,done FROM xfers WHERE (a=$1 AND b=$2) OR (a=$2 AND b=$1) ORDER BY id DESC LIMIT 12', [pid, peer.pid])).map(x => { let give = [], back = []; try { give = JSON.parse(x.give || '[]'); } catch {} try { back = JSON.parse(x.back || '[]'); } catch {} return { id: x.id, me: x.a === pid ? 1 : 0, ts: x.ts, st: x.st, done: x.done, give, back }; });
+  send(res, 200, { ok: 1, peer: { name: peer.name, online: now - peer.updated < 150000 }, msgs: rows.map(m => ({ id: m.id, me: m.a === pid ? 1 : 0, ts: m.ts, k: m.kind, t: m.body, x: m.x })), xf });
+}
+async function chatSend(req, res) {
+  const g = await chatGate(req, res); if (!g) return; const { b, pid } = g;
+  const text = String(b.text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200);
+  if (!text) return send(res, 200, { error: '請輸入訊息' });
+  const peer = await peerOf(pid, b.fc); if (!peer) return send(res, 200, { error: '你們還不是好友' });
+  if (peer.banned) return send(res, 200, { error: '對方帳號目前無法收訊息' });
+  if (limHit('cs:' + pid, 20, 60000)) return send(res, 429, { error: '說話太快了，請稍等一下' }); limBump('cs:' + pid, 60000);
+  const r = await q("INSERT INTO chat(a,b,ts,kind,body) VALUES($1,$2,$3,'msg',$4) RETURNING id", [pid, peer.pid, Date.now(), text]);
+  send(res, 200, { ok: 1, id: r[0].id });
+}
+async function xferOffer(req, res) {
+  const g = await chatGate(req, res); if (!g) return; const { b, pid, me } = g;
+  const ids = cleanIds(b.ids); if (!ids.length) return send(res, 200, { error: '請先選擇要交換的卡片（最多 ' + XMAX + ' 張）' });
+  const peer = await peerOf(pid, b.fc); if (!peer) return send(res, 200, { error: '你們還不是好友' });
+  if (peer.banned) return send(res, 200, { error: '對方帳號目前無法收卡片' });
+  if (limHit('xo:' + pid, 10, 600000)) return send(res, 429, { error: '操作太頻繁，請稍後再試' }); limBump('xo:' + pid, 600000);
+  if ((await q('SELECT COUNT(*) AS n FROM xfers WHERE a=$1 AND st=0', [pid]))[0].n >= 8) return send(res, 200, { error: '你送出的交換邀請太多了，先等對方回覆或取消幾個' });
+  let taken; try { taken = (await mutate(pid, takeCards(ids))).map(slim); } catch (e) { return send(res, 200, { error: e.message }); }
+  const now = Date.now(), note = String(b.note || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 60);
+  try {
+    const x = await q('INSERT INTO xfers(a,b,ts,st,give) VALUES($1,$2,$3,0,$4) RETURNING id', [pid, peer.pid, now, JSON.stringify(taken)]);
+    await q("INSERT INTO chat(a,b,ts,kind,body,x) VALUES($1,$2,$3,'xfer',$4,$5)", [pid, peer.pid, now, note, x[0].id]);
+    log('xfer_offer', pid, me.name + ' → ' + peer.name + ' ×' + taken.length + (note ? '：' + note : ''));
+    send(res, 200, { ok: 1, id: x[0].id });
+  } catch (e) { console.error(e); try { await pushCmd(pid, { t: 'give', cs: taken }); } catch {} send(res, 200, { error: '送出失敗，卡片會退回到你的收藏' }); }
+}
+async function xferAnswer(req, res, mode) { // mode: accept / reject（收件人）、cancel（出卡人）
+  const g = await chatGate(req, res); if (!g) return; const { b, pid, me } = g;
+  const id = Math.floor(Number(b.id)) || 0, now = Date.now();
+  const x = id && (await q('SELECT id,a,b,ts,st,give FROM xfers WHERE id=$1', [id]))[0];
+  if (!x || x.st !== 0 || (mode === 'cancel' ? x.a : x.b) !== pid) return send(res, 200, { error: '這個交換已經結束或不存在了' });
+  const other = (await q('SELECT pid,name,banned FROM players WHERE pid=$1', [mode === 'cancel' ? x.b : x.a]))[0];
+  const give = JSON.parse(x.give || '[]'), msg = t => q("INSERT INTO chat(a,b,ts,kind,body,x,rd) VALUES($1,$2,$3,'xres',$4,$5,0)", [pid, mode === 'cancel' ? x.b : x.a, now, t, x.id]);
+  if (mode === 'reject' || mode === 'cancel') {
+    const c = await q('UPDATE xfers SET st=$1,done=$2 WHERE id=$3 AND st=0 RETURNING id', [mode === 'reject' ? 2 : 3, now, x.id]); if (!c.length) return send(res, 200, { error: '這個交換已經結束了' });
+    await pushCmd(x.a, { t: 'give', cs: give }); await msg(mode === 'reject' ? '拒絕' : '取消'); log('xfer_' + mode, pid, me.name + ' #' + x.id);
+    return send(res, 200, { ok: 1 });
+  }
+  const back = cleanIds(b.ids);
+  if (now - x.ts > XTTL) return send(res, 200, { error: '這個交換已經逾期了' });
+  if (!other || other.banned) return send(res, 200, { error: '對方帳號目前無法收卡片' });
+  const fr = (await q('SELECT st FROM friends WHERE (a=$1 AND b=$2) OR (a=$2 AND b=$1)', [pid, x.a]))[0]; if (!fr || fr.st !== 1) return send(res, 200, { error: '你們已經不是好友了' });
+  const c = await q('UPDATE xfers SET st=1,done=$1 WHERE id=$2 AND st=0 RETURNING id', [now, x.id]); if (!c.length) return send(res, 200, { error: '這個交換已經結束了' });
+  let backCards = [];
+  if (back.length) { try { backCards = (await mutate(pid, takeCards(back))).map(slim); } catch (e) { await q('UPDATE xfers SET st=0,done=NULL WHERE id=$1', [x.id]); return send(res, 200, { error: e.message }); } }
+  await q('UPDATE xfers SET back=$1 WHERE id=$2', [JSON.stringify(backCards), x.id]);
+  await pushCmd(pid, { t: 'give', cs: give }); if (backCards.length) await pushCmd(x.a, { t: 'give', cs: backCards });
+  await msg(backCards.length ? '接受並回送 ' + backCards.length + ' 張' : '接受');
+  log('xfer_accept', pid, me.name + ' ← ' + other.name + ' 收 ' + give.length + ' 張、回送 ' + backCards.length + ' 張');
+  send(res, 200, { ok: 1 });
 }
 const fails = new Map();
 async function isAdmin(req) {
@@ -370,7 +477,7 @@ async function adminInner(req, res, u) {
     return send(res, 200, { player: pl, related, redeems, friends, snaps });
   }
   if (p === '/api/admin/bans') return send(res, 200, { bans: await q('SELECT b.kind,b.val,b.pid,b.reason,b.created,p.name FROM bans b LEFT JOIN players p ON p.pid=b.pid ORDER BY b.created DESC LIMIT 300') });
-  if (p === '/api/admin/cardlist') return send(res, 200, { cards: ECON.D.map((d, k) => ({ k, n: d[0], e: d[1], r: d[2], max: ECON.RUN[d[2]] })), en: ECON.EN.map(e => e[0]) });
+  if (p === '/api/admin/cardlist') return send(res, 200, { cards: ECON.D.map((d, k) => ({ k, n: d[0], e: d[1], r: d[2], p: d[3], ao: d[4] ? 1 : 0, mod: d[5] || '', max: ECON.RUN[d[2]] })), en: ECON.EN.map(e => e[0]) });
   if (p === '/api/admin/codes') return send(res, 200, { codes: await q('SELECT * FROM codes ORDER BY created DESC LIMIT 300') });
   if (p === '/api/admin/codeusers') return send(res, 200, { users: await q('SELECT r.pid,r.ts,p.name FROM redeems r LEFT JOIN players p ON p.pid=r.pid WHERE r.code=$1 ORDER BY r.ts DESC LIMIT 200', [u.searchParams.get('code') || '']) });
   if (p === '/api/admin/logs') {
@@ -378,6 +485,16 @@ async function adminInner(req, res, u) {
     if (gp) { a.push(gp); w.push('pid=$' + a.length); } if (ga) { a.push(ga); w.push('act=$' + a.length); } if (gq) { a.push('%' + gq + '%'); w.push("LOWER(COALESCE(detail,'')) LIKE $" + a.length); }
     const lim = Math.min(500, Math.floor(Number(u.searchParams.get('n'))) || 100);
     return send(res, 200, { logs: await q('SELECT ts,act,pid,detail FROM logs' + (w.length ? ' WHERE ' + w.join(' AND ') : '') + ' ORDER BY ts DESC LIMIT ' + lim, a), acts: (await q('SELECT DISTINCT act FROM logs ORDER BY act')).map(r => r.act) });
+  }
+  if (p === '/api/admin/chat') { // 看玩家聊天：pid=某位玩家的全部對話；with=和某位玩家的對話；q=搜尋文字
+    const w = [], a = [], gp = u.searchParams.get('pid'), gw = u.searchParams.get('with'), gq = (u.searchParams.get('q') || '').toLowerCase();
+    if (gp && gw) { a.push(gp, gw); w.push('((c.a=$1 AND c.b=$2) OR (c.a=$2 AND c.b=$1))'); } else if (gp) { a.push(gp); w.push('(c.a=$1 OR c.b=$1)'); }
+    if (gq) { a.push('%' + gq + '%'); w.push("LOWER(COALESCE(c.body,'')) LIKE $" + a.length); }
+    const lim = Math.min(500, Math.floor(Number(u.searchParams.get('n'))) || 200);
+    const rows = await q('SELECT c.id,c.ts,c.a,c.b,c.kind,c.body,c.x,pa.name AS an,pb.name AS bn FROM chat c LEFT JOIN players pa ON pa.pid=c.a LEFT JOIN players pb ON pb.pid=c.b' + (w.length ? ' WHERE ' + w.join(' AND ') : '') + ' ORDER BY c.id DESC LIMIT ' + lim, a);
+    const xids = [...new Set(rows.filter(r => r.x).map(r => Number(r.x)))].filter(n => Number.isInteger(n)), xf = {};
+    if (xids.length) for (const x of await q('SELECT id,st,give,back FROM xfers WHERE id IN (' + xids.join(',') + ')')) { let give = [], back = []; try { give = JSON.parse(x.give || '[]'); } catch {} try { back = JSON.parse(x.back || '[]'); } catch {} xf[x.id] = { st: x.st, give, back }; }
+    return send(res, 200, { msgs: rows, xf, total: (await q('SELECT COUNT(*) AS n FROM chat'))[0].n });
   }
   if (p === '/api/admin/dash') {
     const top = col => q('SELECT pid,name,' + col + ' AS v FROM players WHERE banned=0 ORDER BY ' + col + ' DESC LIMIT 10');
@@ -531,7 +648,7 @@ async function adminInner(req, res, u) {
     }
     case 'resetpass': { let pw = String(b.pass || ''), gen = ''; if (!pl.acct) return send(res, 400, { error: '這位玩家沒有註冊帳號' }); if (!pw) { for (const x of crypto.randomBytes(10)) gen += FCAL[x % 32]; pw = gen; } const pe = pwErr(pw, pl.acct); if (pe) return send(res, 400, { error: pe }); await q('UPDATE players SET pwh=$1 WHERE pid=$2', [await hashPw(pw), pid]); log('resetpass', pid, pl.acct); return send(res, 200, { ok: 1, pass: gen }); }
     case 'clearacct': await q('UPDATE players SET acct=NULL,pwh=NULL WHERE pid=$1', [pid]); log('clearacct', pid, pl.acct || ''); break;
-    case 'delete': await q('DELETE FROM snaps WHERE pid=$1', [pid]); await q('DELETE FROM friends WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
+    case 'delete': await q('DELETE FROM chat WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM snaps WHERE pid=$1', [pid]); await q('DELETE FROM friends WHERE a=$1 OR b=$1', [pid]); await q('DELETE FROM players WHERE pid=$1', [pid]); log('delete', pid, pl.name); break;
     default: return send(res, 400, { error: 'bad act' });
   }
   send(res, 200, { ok: 1 });
@@ -557,6 +674,12 @@ http.createServer(async (req, res) => {
       if (p === '/api/passwd') return await passwd(req, res);
       if (p === '/api/friends') return await friendList(req, res);
       if (p === '/api/friend') return await friendAct(req, res);
+      if (p === '/api/chat/list') return await chatList(req, res);
+      if (p === '/api/chat/send') return await chatSend(req, res);
+      if (p === '/api/xfer/offer') return await xferOffer(req, res);
+      if (p === '/api/xfer/accept') return await xferAnswer(req, res, 'accept');
+      if (p === '/api/xfer/reject') return await xferAnswer(req, res, 'reject');
+      if (p === '/api/xfer/cancel') return await xferAnswer(req, res, 'cancel');
     }
     if (p.startsWith('/api/admin/')) return await admin(req, res, u);
     send(res, 404, { error: 'not found' });

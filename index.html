@@ -57,10 +57,14 @@ nav button[aria-selected=true]{background:var(--btn);color:var(--btnink);font-we
 details{margin-top:14px;padding:8px 10px}summary{cursor:pointer;font-weight:700}
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;font:inherit;color:var(--ink);cursor:pointer}.pt b{font-size:13px}.pt .big{font-size:30px}.pt:active{transform:translateY(2px)}.pt:focus-visible{outline:3px solid var(--em)}
 .spk{display:flex;flex-direction:column;align-items:center;width:70px;font-size:12px;background:linear-gradient(135deg,var(--soft),var(--btn));border:3px solid var(--line);padding:6px 2px}.edge{display:flex;flex-direction:column;gap:2px}.edge i{display:block;height:9px;border:2px solid var(--line)}.edge i.ef{box-shadow:0 0 6px #fff,inset 0 0 0 2px rgba(255,255,255,.8)}.edge i.ee{border-right:10px solid #b160ff}.ab{display:flex;flex-direction:column;gap:4px}.ab .b{padding:4px 8px;min-height:34px;font-size:13px}.hrt{position:absolute;top:0;right:0;font-style:normal;font-size:14px;line-height:1;z-index:2;padding:3px;cursor:pointer}ul{margin:6px 0;padding-left:20px}
+.chlog{height:46vh;overflow-y:auto;background:var(--soft);border:3px solid var(--line);padding:8px;margin-bottom:8px}
+.chm{display:flex;flex-direction:column;align-items:flex-start;margin:6px 0}.chm.me{align-items:flex-end}
+.chb{max-width:80%;padding:6px 10px;background:var(--panel);border:2px solid var(--line);word-break:break-word;white-space:pre-wrap}.chm.me .chb{background:var(--btn);color:var(--btnink)}
+.chs{text-align:center;font-size:12px;opacity:.8;margin:6px 0}
 </style>
 </head>
 <body>
-<header><h1><span id="ht">⛏️ 方塊卡牌店</span><small id="pn" style="display:block;font-size:11px;font-weight:400;opacity:.8"></small></h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="redeem()" aria-label="兌換碼">🎁</button><button class="b" onclick="go('fr')" aria-label="好友">👥</button><button class="b" onclick="go('sv')" aria-label="帳號與存檔">💾</button></header>
+<header><h1><span id="ht">⛏️ 方塊卡牌店</span><small id="pn" style="display:block;font-size:11px;font-weight:400;opacity:.8"></small></h1><span id="emw">💚 <span id="em">0</span></span><button class="b" onclick="mine()">挖礦</button><button class="b" onclick="redeem()" aria-label="兌換碼">🎁</button><button class="b" id="frbtn" onclick="go('fr')" aria-label="好友與聊天">👥</button><button class="b" onclick="go('sv')" aria-label="帳號與存檔">💾</button></header>
 <main id="v"></main>
 <div id="actbar"><div class="in" id="act"></div></div>
 <nav role="tablist"><button role="tab" onclick="go('pack')" id="t-pack">📦<br>開包</button><button role="tab" onclick="go('col')" id="t-col">🎒<br>收藏</button><button role="tab" onclick="go('gr')" id="t-gr">🔍<br>鑑定</button><button role="tab" onclick="go('mkt')" id="t-mkt">📈<br>市場</button><button role="tab" onclick="go('tr')" id="t-tr">🤝<br>交易</button><button role="tab" onclick="go('pass')" id="t-pass">🎫<br>通行證</button></nav>
@@ -80,6 +84,20 @@ const D=[['泥土','🟫',0,3],['圓石','🪨',0,3],['橡木','🪵',0,3],['小
 ['獄髓錠','🔶',3,260],['獄髓劍','🔪',3,290],['獄髓鎬','🪓',3,280],['獄髓胸甲','🧥',3,300],['海洋之心','🌊',3,250],['潛影盒','🎁',3,270],['終界箱','🧿',3,260],['重錘','🔨',3,300],['風彈','🌀',3,280],['試煉鑰匙','🗝️',3,240],['凋零骷髏頭','☣️',3,300],['遠古守衛者','🦑',3,290],['劫毀獸','🦏',3,300],['衛道士','🧔',3,270],
 ['監守者','👹',4,1700],['龍首','🐲',4,1600],['命令方塊','🟧',4,1900],['基岩','🧊',4,1500],['Steve','🧑',4,1800],['Alex','👩',4,1700],['龍蛋','🥥',4,2000],
 ['終界傳送門','🌌',5,9000],['附魔金蘋果','🍏',5,8000],['終界城','🏰',5,10000],['遠古城市','🏛️',5,8500],['森林府邸','🏚️',5,12000],['海底神殿','🐚',5,9500],['地獄要塞','🏯',5,11000],['彩虹羊','🌈',5,8800]];
+;[
+['暮光森林',[['鐵木錠','⛓️',3,10000],['鋼葉錠','🍃',3,10200],['騎士金屬','🔩',3,10800],['胭脂紅石','🔴',3,11200],['那伽鱗片','🐍',3,11800],['烈焰鎬','🔥',4,17000],['那伽','🐍',4,19000],['巫妖','💀',4,21000],['米諾蘑菇','🍄',4,22500],['幽靈騎士','👻',4,24000],['雪怪首領','🦣',4,26000],['九頭蛇','🐲',5,38000],['厄爾惡魂','👿',5,42000],['冰雪女王','👸',5,46000],['暮光傳送門','🌌',5,52000]]],
+['機械動力',[['齒輪','⚙️',3,10000],['安山合金','🔘',3,10400],['黃銅錠','🟨',3,10800],['水車','🎡',3,11200],['護目鏡','🥽',3,12400],['攪拌器','🥣',4,17000],['合成器','🧰',4,18000],['機械手','🦾',4,19000],['馬鈴薯砲','🥔',4,20000],['蒸汽引擎','🚂',4,22000],['燃燒室','🌋',4,23000],['藍圖大砲','💥',5,36000],['創造馬達','⚡',5,40000],['蒸汽火車','🚄',5,44000],['精密構件','✨',5,50000]]],
+['植物魔法',[['魔力池','🔵',3,11000],['活木','🌳',3,10500],['純淨雛菊','🌼',3,10800],['泰拉鋼','🟩',4,18500],['元素鋼','🔷',4,19500],['火花','💫',4,17500],['蓋亞守護者','🧚',5,48000],['精靈之門','🚪',5,44000]]],
+['通用機械',[['鋨錠','⚪',3,10300],['噴射背包','🎒',3,11500],['機器人','🤖',3,12000],['粉碎機','🔨',3,11000],['採礦機','⛏️',4,17500],['原子分解者','🔱',4,21000],['量子傳送器','🌀',4,23500],['聚變爐','☢️',5,39000],['反物質','🕳️',5,47000]]],
+['應用能源2',[['賽特斯石英','💠',3,10600],['ME驅動器','🗄️',3,12200],['隕石','☄️',3,10900],['ME控制器','🎛️',4,18000],['分子組裝器','🧪',4,20500],['空間儲存','🌐',4,24500],['量子連結','🔗',5,41000],['奇點','⚫',5,55000]]],
+['熱力膨脹',[['紅石通量','🔋',3,11300],['通量電容','⚡',3,11800],['感應熔爐','🔥',3,12600],['信素錠','🔴',4,17800],['流明錠','🟡',4,18800],['末影錠','🟣',4,19800]]],
+['匠魂',[['冶煉爐','🏭',3,10900],['鑄造台','🍯',3,10400],['鈷錠','🔵',4,17200],['曼尤錠','🟪',4,19200],['匠魂錘','🔨',4,21800],['史萊姆島','🏝️',5,34000]]],
+['沉浸工程',[['挖掘機','🚜',3,12800],['高爐','🧱',3,10700],['左輪手槍','🔫',4,18600],['特斯拉線圈','⚡',4,20200],['柴油發電機','🛢️',4,22000],['磁軌砲','🚀',5,37000]]],
+['龍之進化',[['龍錠','🟪',3,11400],['龍之粉塵','✨',3,10100],['龍之核心','🐲',4,23000],['覺醒龍錠','🔮',4,28000],['混沌碎片','🧩',5,38000],['龍之反應爐','⚛️',5,46000],['混沌守護者','👹',5,55000]]],
+['冰與火之歌',[['龍骨','🦴',3,10600],['龍鱗','🐉',3,11900],['鷹身女妖','🦅',3,11100],['獨眼巨人','👁️',4,20800],['海蛇','🐍',4,19600],['蛇髮女妖','🐍',4,22600],['龍骨劍','🗡️',4,18400],['火龍','🔥',5,43000],['冰龍','❄️',5,43000],['雷龍','⚡',5,45000]]],
+['天境',[['贊那石','💎',3,11000],['重力石','🟩',3,11700],['天境傳送門','🌠',4,25000],['滑行者','🗿',4,19000],['女武神女王','👸',5,41000],['太陽精靈','☀️',5,49000]]],
+['神秘時代',[['靈氣水晶','🔮',3,10900],['奧術工作台','🧙',4,19800],['虛空金屬','⬛',4,21200],['魔像','🗿',5,36500]]]
+].forEach(([m,a])=>a.forEach(([n,e,r,p])=>D.push([n,e,r,p,1,m]))); // 管理員專屬模組卡：編號 140～239（順序不能改）。不會出現在任何卡包、不能交易，只有後台能發；基準價 10000 起跳
 const TW=[[63.5,26,9.3,1.1,.015,0],[41,35,19,4.7,.04,0],[22,37,29,11,.25,.015],[10,33,37,16.5,.45,.015],[0,18,42,31,1.2,.04]],PR=[100,200,400,600,1100];
 const PK=[['農場包','🌾',0,[3,4,6,35,36,37,40,41,43,44,45,46,47,66,67,76]],['礦工包','⛏️',0,[0,1,5,8,9,10,11,16,50,57,102,103]],['工匠包','🛠️',0,[2,32,33,34,39,49,58,62,63,79,80,81]],['森林包','🌲',0,[2,3,47,48,69,71,77,78,12,14,15]],['沙漠包','🏜️',0,[30,31,37,96,101,38,72,35]],['雪原包','🥶',0,[7,74,98,15,42,1]],
 ['海洋包','🌊',1,[42,57,72,75,83,87,100,107,115,122]],['洞穴包','🕳️',1,[0,1,8,10,11,16,64,82,94,106,38,70,5,12,13]],['村莊包','🏘️',1,[20,97,95,96,62,63,54,66,34,40,124,60,61]],['紅石包','🔴',1,[10,64,79,80,81,82,60,59,106,108]],['動物園包','🐾',1,[15,66,67,68,69,70,71,72,73,74,75,76,77,78,99,110]],['怪物包','👹',1,[12,13,14,22,91,92,93,94,95,96,101,124,121]],
@@ -87,7 +105,7 @@ const PK=[['農場包','🌾',0,[3,4,6,35,36,37,40,41,43,44,45,46,47,66,67,76]],
 ['傳說包','👑',3,[22,23,24,25,26,111,112,113,114,115,116,117,118,119,120,121,122,123,124]],['Boss包','🐉',4,[27,28,29,125,126,127,128,129,130,131]]].map(([n,e,t,pool,x])=>({n,e,t,p:PR[t],w:TW[t],c:5,pool,en:x?x.en:0}));
 const G=[0,.3,.4,.5,.6,.7,.8,1,1.4,2.2,5],W=[2,3,4,6,8,12,20,22,15,8];
 const T=[['標準',90,1],['快速',30,2.5],['特急',8,6]];
-const P=[0,1,2,3,4,5].map(r=>D.map((d,i)=>d[2]==r?i:-1).filter(i=>i>=0));
+const P=[0,1,2,3,4,5].map(r=>D.map((d,i)=>d[2]==r&&!d[4]?i:-1).filter(i=>i>=0));
 PK.push({n:'篩界包',e:'🌠',t:4,p:10000,w:[0,0,0,99.7,.3,.01],c:5,pool:P[3].concat(P[4],P[5]),en:0,lock:1,foil:1});
 let S,tab='pack',sel=new Set(),rev=[],sort='new',flt='all',rst=false,to=null,ts=new Set(),trRes=null,trm='p',inc=null,ps=new Set(),pr=new Set(),got=[],pasteTxt='',bq=1,exCode='',impTxt='',impS=null;
 try{S=JSON.parse(localStorage.getItem('mcg1'))}catch(e){}
@@ -141,7 +159,7 @@ else if(c.t=='state'){try{S=JSON.parse(c.s);norm();pop('💾 你的存檔已被�
 else if(c.t=='reset'){RST=1}
 }catch(e){}}
 let RST=0;
-async function cloudSend(){if(!CL.pid||RST)return;CL.d=0;cloudName();try{head()}catch(e){}try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
+async function cloudSend(force){if(!CL.pid||RST||(XB&&!force))return;CL.d=0;cloudName();try{head()}catch(e){}try{const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,name:CL.name,fp:cloudFp(),data:S})});const j=await r.json();if(j.banned){cloudBan(j.reason);return}
 cloudMaint(j.maint||'');let ch=false;
 if(j.fix){try{localStorage.setItem('mcg1bak',JSON.stringify(S))}catch(e){}S=j.fix;norm();ch=true;pop('⚠️ 偵測到存檔數值異常，已還原到上一次正常的進度'+(j.why?'\n（'+j.why+'）':''))}
 if(S.tov&&j.adm&&(!S.adm||S.tadm))applyTov(null);
@@ -150,6 +168,7 @@ try{if(applyTov(j.tov||null))ch=true}catch(e){}
 if(j.cmds&&j.cmds.length){j.cmds.forEach(cloudCmd);ch=true}
 if(RST){try{localStorage.removeItem('mcg1')}catch(e){}location.reload();return}
 if(typeof j.frq=='number'){if(j.frq>0&&j.frq>frqSeen)pop('👥 你有 '+j.frq+' 個好友邀請，點右上角 👥 查看');frqSeen=j.frq}
+if(typeof j.unr=='number'){UNR=j.unr+(j.frq||0);if(j.unr>unrSeen&&tab!='ch')pop('💬 你有 '+j.unr+' 則新訊息或交換邀請，點右上角 👥 查看');unrSeen=j.unr;try{head()}catch(e){}}
 if(ch){try{localStorage.setItem('mcg1',JSON.stringify(S))}catch(e){}try{head();render()}catch(e){}}
 if(j.ann&&localStorage.getItem('mcg1ann')!=String(j.ann.id)){localStorage.setItem('mcg1ann',String(j.ann.id));pop('📢 公告\n'+j.ann.text)}}catch(e){}}
 async function cloudRedeem(code){try{const r=await fetch('/api/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pid:CL.pid,code})});const j=await r.json();if(j.error){alert('❌ '+j.error);return}pop('🎁 兌換成功：'+j.desc);await cloudSend()}catch(e){alert('連線失敗，請稍後再試')}}
@@ -186,9 +205,73 @@ const b=(t,a,c)=>`<button class="b" onclick="frDo('${a}','${c}')">${t}</button>`
 let h=box+`<b>🆔 我的好友碼</b><p style="font-size:22px;letter-spacing:3px"><b>${eh(FR.fc)}</b> <button class="b" onclick="frCopy()">複製</button></p><small>把好友碼傳給朋友，對方輸入後你就會收到邀請。</small>${FR.user?'':'<p><small>⚠️ 你還沒有註冊帳號：換裝置或清除瀏覽器資料後，好友會跟著不見。<a href="#" onclick="go(\'sv\');return false" style="color:inherit"><u>去註冊</u></a></small></p>'}</div>`;
 h+=box+`<b>➕ 加好友</b><p><input value="${eh(V.fc)}" placeholder="輸入對方的好友碼" maxlength="16" autocomplete="off" oninput="V.fc=this.value.toUpperCase()" style="padding:8px;width:180px;max-width:100%;text-transform:uppercase"> <button class="b" onclick="frDo('add',V.fc)">送出邀請</button></p></div>`;
 if(FR.incoming.length)h+=`<b>📨 收到的邀請（${FR.incoming.length}）</b><div style="margin:6px 0">`+FR.incoming.map(f=>row(f,'想加你為好友',b('接受','accept',f.fc)+' '+b('拒絕','remove',f.fc))).join('')+'</div>';
-h+=`<b>👥 我的好友（${FR.friends.length}）</b><div style="margin:6px 0">`+(FR.friends.length?FR.friends.map(f=>row(f,`${agoT(f.updated)}　💚${Math.floor(f.em).toLocaleString()}　🃏${f.cards}　${eh(f.tier||'普通')}`,`<button class="b" onclick="if(confirm('移除好友 ${eh(f.name).replace(/'/g,'')}？'))frDo('remove','${f.fc}')">移除</button>`)).join(''):'<div class="blk" style="padding:10px"><small>還沒有好友，把你的好友碼傳給朋友吧！</small></div>')+'</div>';
+h+=`<b>👥 我的好友（${FR.friends.length}）</b><div style="margin:6px 0">`+(FR.friends.length?FR.friends.map(f=>row(f,`${agoT(f.updated)}　💚${Math.floor(f.em).toLocaleString()}　🃏${f.cards}　${eh(f.tier||'普通')}`,`<button class="b" onclick="chOpen('${f.fc}')">💬 聊天${f.unr?' ('+f.unr+')':''}${f.xin?' 🔁':''}</button> <button class="b" onclick="if(confirm('移除好友 ${eh(f.name).replace(/'/g,'')}？'))frDo('remove','${f.fc}')">移除</button>`)).join(''):'<div class="blk" style="padding:10px"><small>還沒有好友，把你的好友碼傳給朋友吧！</small></div>')+'</div>';
 if(FR.outgoing.length)h+=`<b>⏳ 等待對方接受（${FR.outgoing.length}）</b><div style="margin:6px 0">`+FR.outgoing.map(f=>row(f,'已送出邀請',b('取消','remove',f.fc))).join('')+'</div>';
 return h}
+
+// ===== 好友聊天 / 交換卡片 =====
+const XM=10;let CH=null,XB=0,UNR=0,unrSeen=-1;
+const XST2=['等待對方回應','已完成','已被拒絕','已取消','已逾期'];
+const xcards=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&!D[c.k][4]).sort((a,b)=>b.id-a.id);
+function chOpen(fc){CH={fc,name:'',on:0,msgs:[],xf:[],last:0,txt:'',note:'',xo:0,xs:new Set(),acc:0,as:new Set(),busy:0};tab='ch';sfx('click');render();chPoll()}
+async function chPoll(){if(!CH||tab!='ch')return;try{const j=await post2('/api/chat/list',{fc:CH.fc,after:CH.last});if(j.error){toast('❌ '+j.error);return go('fr')}
+CH.name=j.peer.name;CH.on=j.peer.online;const had=CH.msgs.length,hl=CH.last;
+j.msgs.forEach(m=>{if(!CH.msgs.some(x=>x.id==m.id))CH.msgs.push(m)});CH.msgs.sort((a,b)=>a.id-b.id);CH.msgs=CH.msgs.slice(-150);if(CH.msgs.length)CH.last=CH.msgs[CH.msgs.length-1].id;
+CH.xf=j.xf;chPaint(CH.last!=hl||CH.msgs.length!=had)}catch(e){}}
+setInterval(()=>{if(tab=='ch'&&!document.hidden)chPoll()},3000);
+function chMsgs(){if(!CH.msgs.length)return '<small>還沒有訊息，說聲嗨吧 👋</small>';
+return CH.msgs.map(m=>{const who=m.me?'你':eh(CH.name);
+if(m.k=='xfer'){const x=CH.xf.find(y=>y.id==m.x);return `<div class="chs">🔁 ${who}送出了交換邀請${x?'（'+x.give.length+' 張）':''}${m.t?'：'+eh(m.t):''}</div>`}
+if(m.k=='xres')return `<div class="chs">↪ ${who}：${eh(m.t)}</div>`;
+return `<div class="chm ${m.me?'me':''}"><div class="chb">${eh(m.t)}</div><small>${new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></div>`}).join('')}
+function accPanel(x){return `<small>想回送卡片給對方嗎？不選也可以直接接受（當作對方送你的禮物）。最多 ${XM} 張。</small><div class="grid">${xcards().map(c=>`<div onclick="chAs(${c.id})" class="${CH.as.has(c.id)?'sel':''}">${card(c,'',true)}</div>`).join('')||'<small>沒有可以交換的卡片</small>'}</div><p>已選 ${CH.as.size}/${XM} 張 <button class="b" onclick="xAccept(${x.id})">${CH.as.size?'接受並回送':'直接接受'}</button> <button class="b" onclick="CH.acc=0;render()">取消</button></p>`}
+function chXf(){const l=CH.xf.filter(x=>x.st==0||Date.now()-(x.done||x.ts)<172800000).slice(0,6);if(!l.length)return '';
+return '<h3>🔁 交換</h3>'+l.map(x=>{let h=`<div class="blk" style="padding:10px;margin:8px 0"><b>${x.me?'你送出':eh(CH.name)+' 送來'} ${x.give.length} 張</b>　<small>${XST2[x.st]||''}</small><div class="grid">${x.give.map(c=>card(c)).join('')}</div>`;
+if(x.st==1&&x.back.length)h+=`<b>${x.me?eh(CH.name)+' 回送':'你回送'} ${x.back.length} 張</b><div class="grid">${x.back.map(c=>card(c)).join('')}</div>`;
+if(x.st==0&&x.me)h+=`<p><button class="b" onclick="xDo('cancel',${x.id})">取消並收回卡片</button></p>`;
+if(x.st==0&&!x.me)h+=CH.acc==x.id?accPanel(x):`<p><button class="b" onclick="CH.acc=${x.id};CH.as=new Set();render()">接受（可回送卡片）</button> <button class="b" onclick="xDo('reject',${x.id})">拒絕</button></p>`;
+return h+'</div>'}).join('')}
+function chPaint(sc){if(!CH)return;const m=$('#chm');if(!m)return;const near=m.scrollHeight-m.scrollTop-m.clientHeight<60;m.innerHTML=chMsgs();if(sc&&(near||!m.dataset.s)){m.scrollTop=m.scrollHeight;m.dataset.s=1}
+const x=$('#chx');if(x&&!CH.acc)x.innerHTML=chXf();const h=$('#chh');if(h)h.textContent='💬 '+(CH.name||'…')+(CH.on?'　🟢 在線':'')}
+function chOffer(){if(!CH.xo)return '<p><button class="b" onclick="CH.xo=1;render()">🔁 交換卡片</button></p>';
+return `<div class="blk" style="padding:10px;margin:8px 0"><b>🔁 選擇要送給 ${eh(CH.name)} 的卡片（最多 ${XM} 張）</b><br><small>送出後卡片會先暫存，對方接受才會交換，對方也可以回送卡片給你；對方拒絕、你取消或 48 小時沒人回應，卡片都會退回。已上鎖、鑑定中、創世卡和管理員專屬卡不能交換。</small><div class="grid">${xcards().map(c=>`<div onclick="chTg(${c.id})" class="${CH.xs.has(c.id)?'sel':''}">${card(c,'',true)}</div>`).join('')||'<small>沒有可以交換的卡片</small>'}</div><p><input placeholder="附註（選填，例如：想換你的鑽石）" maxlength="60" value="${eh(CH.note)}" oninput="CH.note=this.value" style="padding:8px;width:260px;max-width:100%"></p><p>已選 ${CH.xs.size}/${XM} 張 <button class="b" ${CH.xs.size?'':'disabled'} onclick="xOffer()">送出交換邀請</button> <button class="b" onclick="CH.xo=0;render()">取消</button></p></div>`}
+function vCh(){if(!CH)return '';return `<div class="blk" style="padding:10px;margin-bottom:10px"><button class="b" onclick="go('fr')">← 返回好友</button> <b id="chh">💬 ${eh(CH.name||'…')}</b><br><small>🔍 聊天內容管理員看得到，請文明聊天；交換卡片前請想清楚。</small></div><div id="chm" class="chlog"></div><p><input id="chi" value="${eh(CH.txt)}" maxlength="200" placeholder="輸入訊息…" autocomplete="off" oninput="CH.txt=this.value" onkeydown="if(event.key=='Enter')chSend()" style="padding:8px;width:70%;max-width:100%"> <button class="b" onclick="chSend()">送出</button></p>`+chOffer()+`<div id="chx">${chXf()}</div>`}
+async function chSend(){if(!CH||CH.busy)return;const t=(CH.txt||'').trim();if(!t)return;CH.busy=1;try{const j=await post2('/api/chat/send',{fc:CH.fc,text:t});if(j.error)toast('❌ '+j.error);else{CH.txt='';const i=$('#chi');if(i)i.value='';await chPoll()}}catch(e){toast('連線失敗，請稍後再試')}CH.busy=0}
+function chTg(id){if(CH.xs.has(id))CH.xs.delete(id);else if(CH.xs.size<XM)CH.xs.add(id);else toast('最多 '+XM+' 張');render()}
+function chAs(id){if(CH.as.has(id))CH.as.delete(id);else if(CH.as.size<XM)CH.as.add(id);else toast('最多 '+XM+' 張');render()}
+// 交換卡片的動作：先把目前進度同步給伺服器（伺服器要確認卡片真的在你手上），再呼叫伺服器，成功後立刻在本機移除送出的卡
+async function xcall(path,body,rm,msg){if(XB||!CH)return null;XB=1;try{await cloudSend(true);const j=await post2(path,Object.assign({fc:CH.fc},body));if(j.error){toast('❌ '+j.error);return null}
+if(rm&&rm.length){const s=new Set(rm);S.cards=S.cards.filter(c=>!s.has(c.id));save()}
+if(msg)pop(msg);await cloudSend(true);return j}catch(e){toast('連線失敗，請稍後再試');return null}finally{XB=0;cloudQ()}}
+async function xOffer(){if(!CH.xs.size)return;const ids=[...CH.xs],j=await xcall('/api/xfer/offer',{ids,note:CH.note},ids,'📨 已送出交換邀請，等 '+CH.name+' 回應');if(j){CH.xs.clear();CH.xo=0;CH.note='';await chPoll();render()}}
+async function xAccept(id){const ids=[...CH.as],j=await xcall('/api/xfer/accept',{id,ids},ids,'🤝 交換完成！');if(j){CH.acc=0;CH.as.clear();await chPoll();render()}}
+async function xDo(mode,id){if(mode=='reject'&&!confirm('拒絕這個交換？卡片會退回給對方。'))return;const j=await xcall('/api/xfer/'+mode,{id},[],mode=='cancel'?'↩️ 已取消，卡片已退回你的收藏':'已拒絕交換');if(j){await chPoll();render()}}
+
+// ===== 自動開卡包 =====
+const AO={on:0,i:0,gap:2,max:0,keep:0,stop:4,inv:1,done:0,t:null,s:null};
+function aoReset(){AO.s={packs:0,kept:0,sold:0,gold:0,best:-1,bestN:''}}aoReset();
+function aoStart(){const p=PK[AO.i];if(p.lock&&!S.eter){sfx('err');return toast('篩界包只有永恆通行證才能抽')}if(S.em<cst(p)&&!(AO.inv&&S.inv.length)){sfx('err');return toast('綠寶石不足')}AO.on=1;AO.done=0;aoReset();aoLoop();render()}
+function aoStop(m){AO.on=0;clearTimeout(AO.t);if(m)pop(m);render()}
+function aoLoop(){clearTimeout(AO.t);if(AO.on)AO.t=setTimeout(aoStep,AO.gap*1000)}
+function aoStep(){if(!AO.on)return;if(RST)return aoStop();if(XB)return aoLoop();
+if(AO.max&&AO.done>=AO.max)return aoStop('✅ 自動開包完成，共開了 '+AO.done+' 包');
+const p=PK[AO.i];let k;
+if(AO.inv&&S.inv.length)k=S.inv.shift();
+else{if(S.em-cst(p)<AO.keep)return aoStop('💚 再開下去會低於你設定的保留額度，自動開包已停止');if(!buyOne(AO.i))return aoStop('綠寶石不足，自動開包已停止');k=S.inv.pop()}
+S.opened++;AS={n:0,g:0};const kept=autoSell(k.cs);AO.done++;const q=AO.s;q.packs++;q.kept+=kept.length;q.sold+=AS.n;q.gold+=AS.g;
+let hit=null;k.cs.forEach(c=>{const r=D[c.k][2];if(r>q.best){q.best=r;q.bestN=D[c.k][0]}if(AO.stop&&r>=AO.stop&&(!hit||r>D[hit.k][2]))hit=c});
+rev=kept.sort((x,y)=>D[y.k][2]-D[x.k][2]);save();if(tab=='pack')render();
+if(hit){sfx('f5');return aoStop('🎉 開到'+R[D[hit.k][2]][0]+'「'+D[hit.k][0]+'」，自動開包已停止！')}
+if(AS.n)sfx('coin');aoLoop()}
+function vAo(){const p=PK[AO.i],dis=AO.on?'disabled':'';
+return `<div class="blk" style="padding:10px;margin-top:10px"><b>🤖 自動開卡包</b>${AO.on?' <span style="color:var(--em)">● 執行中</span>':''}<br><small>自動買包並拆開，直到達到設定的條件才停止。拆出的卡會依照下面「拆包自動賣出」的設定處理。</small>
+<p><label>卡包 <select ${dis} onchange="AO.i=+this.value;render()">${PK.map((x,i)=>`<option value="${i}" ${i==AO.i?'selected':''}>${x.e} ${x.n}${x.lock&&!S.eter?' 🔒':''}（💚${cst(x)}）</option>`).join('')}</select></label></p>
+<p><label>間隔 <select ${dis} onchange="AO.gap=+this.value">${[1,2,5].map(g=>`<option value="${g}" ${g==AO.gap?'selected':''}>${g} 秒</option>`).join('')}</select></label> <label>最多開 <input ${dis} type="number" min="0" value="${AO.max}" style="width:80px" onchange="AO.max=Math.max(0,Math.floor(+this.value)||0)"> 包（0＝不限）</label></p>
+<p><label>保留 💚 <input ${dis} type="number" min="0" value="${AO.keep}" style="width:110px" onchange="AO.keep=Math.max(0,Math.floor(+this.value)||0)"> 以上不花掉</label></p>
+<p><label>開到 <select ${dis} onchange="AO.stop=+this.value">${[[0,'不停下來'],[3,'傳說以上'],[4,'神話以上'],[5,'創世']].map(([v,n])=>`<option value="${v}" ${v==AO.stop?'selected':''}>${n}</option>`).join('')}</select> 就停止</label></p>
+<p><label><input ${dis} type="checkbox" ${AO.inv?'checked':''} onchange="AO.inv=this.checked?1:0"> 也先拆開背包裡還沒開的封包</label></p>
+<p>${AO.on?'<button class="b" onclick="aoStop(\'已停止自動開包\')">⏹ 停止</button>':'<button class="b" onclick="aoStart()">▶ 開始自動開包</button>'}</p>
+${AO.s.packs?`<p class="note">本次已開 ${AO.s.packs} 包｜收進收藏 ${AO.s.kept} 張｜自動賣出 ${AO.s.sold} 張（+💚${AO.s.gold}）｜最高稀有度：${AO.s.best>=0?R[AO.s.best][0]+'「'+eh(AO.s.bestN)+'」':'—'}</p>`:''}<small>⚠️ 請保持這個頁面開著；重新整理頁面會停止。</small></div>`}
 function adminCard(){return`<div class="blk" style="padding:10px;margin-top:10px;border-color:#ff3b6b"><b>🛡️ 管理員特別通行證${S.adm?'（已授予）':''}</b><ul><li>只能由管理員發放，無法購買，也無法用兌換碼取得</li><li>包含永恆通行證所有功能</li><li>買任何卡包 1 折（含篩界包）</li><li>賣卡價格 +50%</li><li>挖礦收益 ×100</li></ul><p>${S.adm?'你持有這張特別通行證 🛡️':'尚未持有'}</p></div>`}
 addEventListener('visibilitychange',()=>{if(document.hidden){if(CL.d)cloudSend()}else cloudSend()});
 addEventListener('load',()=>setTimeout(cloudSend,300));setInterval(()=>{if(!document.hidden)cloudSend()},30000);
@@ -209,7 +292,7 @@ function tshow(x){const e=$('#toast');clearTimeout(toast.h);TV=1;TS=x.s?1:0;e.te
 function tnext(){const x=TQ.shift();if(x)return tshow(x);TV=0;TS=0;const e=$('#toast');e.style.display='none';e.onclick=null}
 function toast(t){if(/不足|無效|無法|有誤|已經用過|找不到|失敗|不對|異常/.test(t))sfx('err');if(TS)TQ.push({t,s:0});else tshow({t,s:0})}
 function pop(t,sticky){const x={t,s:sticky?1:0};if(TV||TQ.length)TQ.push(x);else tshow(x);sfx('ding')} // 伺服器事件的綠色彈窗：會排隊，不會互相蓋掉
-function head(){$('#em').textContent=S.em;$('#pn').textContent=CL.name?'👤 '+CL.name:'';$('#ht').textContent=S.adm?'🛡️ 方塊卡牌店 管理員':S.eter?'♾️ 方塊卡牌店 永恆':S.prem?'💎 方塊卡牌店 至尊':S.vip?'👑 方塊卡牌店 VIP':'⛏️ 方塊卡牌店';$('#t-col').innerHTML='🎒<br>收藏 '+S.cards.filter(c=>!c.pend).length;$('#t-gr').innerHTML='🔍<br>鑑定 '+S.cards.filter(c=>c.pend).length}
+function head(){$('#em').textContent=S.em;{const fb=$('#frbtn');if(fb)fb.textContent=UNR>0?'👥 '+UNR:'👥'}$('#pn').textContent=CL.name?'👤 '+CL.name:'';$('#ht').textContent=S.adm?'🛡️ 方塊卡牌店 管理員':S.eter?'♾️ 方塊卡牌店 永恆':S.prem?'💎 方塊卡牌店 至尊':S.vip?'👑 方塊卡牌店 VIP':'⛏️ 方塊卡牌店';$('#t-col').innerHTML='🎒<br>收藏 '+S.cards.filter(c=>!c.pend).length;$('#t-gr').innerHTML='🔍<br>鑑定 '+S.cards.filter(c=>c.pend).length}
 const SP={
 cube:'oooooooooo/occcccccao/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/ocaaaaaabo/obbbbbbbbo/oooooooooo',
 ore:'oooooooooo/occcccccao/ocaadaaabo/ocadddaabo/ocaadaaabo/ocaaaadabo/ocaaaddabo/ocaaaadabo/obbbbbbbbo/oooooooooo',
@@ -298,7 +381,7 @@ const FX={o:'#1c1a17',w:'#8a5a2b',x:'#b98a4e',y:'#f5f0e0',r:'#e04b4b',e:'#f0a030
 function ico(k,s=34){const d=D[k],t=TH[d[0]];if(!t||!SP[t[0]])return d[1];const key=k+'_'+s;if(SVC[key])return SVC[key];const p=PAL[t[1]],cm={a:p[0],b:p[1],c:p[2],d:p[3]};let r='';
 SP[t[0]].split('/').slice(0,10).forEach((row,y)=>{row=row.padEnd(10,'.');let x=0;while(x<10){const ch=row[x]||'.';if(ch=='.'){x++;continue}let n=1;while(row[x+n]==ch&&x+n<10)n++;r+=`<rect x="${x}" y="${y}" width="${n}" height="1" fill="${cm[ch]||FX[ch]||'#f0f'}"/>`;x+=n}});
 return SVC[key]=`<svg viewBox="0 0 10 10" width="${s}" height="${s}" shape-rendering="crispEdges" role="img" aria-label="${d[0]}" style="display:block;margin:auto">${r}</svg>`}
-function card(c,x='',p=false){const d=D[c.k],r=R[d[2]];return `<div data-r="${d[2]}" class="card ${d[2]>=5?'gen':''} ${c.foil?'foil':''} ${c.en&&c.en.length?'ench':''} ${x}" style="--rc:${r[1]}"><b class="nm">${d[0]}</b><div class="em">${ico(c.k)}</div><small>${r[0]}${c.foil?' ✦閃卡':''}</small>${enTxt(c)}<small>#${c.ser}/${c.max}</small>${p?`<small class="pr">💚${price(c)}</small><i class="hrt" onclick="event.stopPropagation();lk(${c.id})" aria-label="上鎖">${c.lk?'❤️':'🤍'}</i>`:''}${c.grade?`<div class="slab ${c.grade>=9?'gh':''}">鑑定 ${c.grade}/10</div>`:''}</div>`}
+function card(c,x='',p=false){const d=D[c.k],r=R[d[2]];return `<div data-r="${d[2]}" class="card ${d[2]>=5?'gen':''} ${c.foil?'foil':''} ${c.en&&c.en.length?'ench':''} ${x}" style="--rc:${r[1]}"><b class="nm">${d[0]}</b><div class="em">${ico(c.k)}</div><small>${r[0]}${c.foil?' ✦閃卡':''}</small>${d[4]?'<small class="md">🛡️'+d[5]+'</small>':''}${enTxt(c)}<small>#${c.ser}/${c.max}</small>${p?`<small class="pr">💚${price(c)}</small><i class="hrt" onclick="event.stopPropagation();lk(${c.id})" aria-label="上鎖">${c.lk?'❤️':'🤍'}</i>`:''}${c.grade?`<div class="slab ${c.grade>=9?'gh':''}">鑑定 ${c.grade}/10</div>`:''}</div>`}
 const PG=[[2,8],[2,8],[3,10],[4,80],[4,40]],cst=p=>Math.ceil(p.p*(S.adm?.1:p.lock?1:S.eter?.3:S.prem?.6:S.vip?.8:1));
 function drawK(r,pool){const a=pool.filter(i=>D[i][2]==r);return Math.random()<.65&&a.length?a[Math.floor(Math.random()*a.length)]:rk(r)}
 function buyOne(i){const p=PK[i],cost=cst(p);if(S.em<cost||(p.lock&&!S.eter))return 0;
@@ -337,7 +420,7 @@ function sell(){const a=selCards();let t=0;a.forEach(c=>t+=price(c));S.em+=t;con
 function send(t){const a=selCards().filter(c=>!c.grade);if(!a.length)return;const f=a.reduce((s,c)=>s+fee(c,t),0);if(S.em<f)return toast('綠寶石不足');S.em-=f;a.forEach(c=>{c.pend=Date.now()+T[t][1]*1000;c.pd=T[t][1];sel.delete(c.id)});toast(`已送出 ${a.length} 張（${T[t][0]}）`);save();render()}
 function spd(id){const c=S.cards.find(x=>x.id==id),f=sp(c);if(S.em<f)return toast('綠寶石不足');S.em-=f;c.pend=Date.now();gtick();render()}
 function gtick(){let n=0;S.cards.forEach(c=>{if(c.pend&&c.pend<=Date.now()){c.pend=0;c.grade=pick(W)+1;n++;S.log.unshift(`${ico(c.k,18)} ${D[c.k][0]} → ${c.grade}/10`);S.log=S.log.slice(0,8);sfx(c.grade==10?'f4':c.grade>=8?'f2':'ding');toast(c.grade==10?`🎉 ${D[c.k][0]} 鑑定滿分 10！`:`${D[c.k][0]} 鑑定完成：${c.grade}/10`)}});if(n){save();if(tab=='col'||tab=='gr')render();else head()}}
-function mtick(){S.pm=S.m.slice();S.m=S.m.map(m=>Math.min(1.8,Math.max(.6,m+(1-m)*.1+(Math.random()-.5)*.16)));save();if(tab=='mkt'||tab=='col')render()}
+function mtick(){S.pm=S.m.slice();S.m=S.m.map((m,i)=>Math.min(1.8,Math.max(D[i]&&D[i][4]?1:.6,m+(1-m)*.1+(Math.random()-.5)*.16)));save();if(tab=='mkt'||tab=='col')render()}
 function flipAll(){let m=-1;document.querySelectorAll('.dn').forEach(e=>{m=Math.max(m,+(e.dataset.r||0));e.classList.remove('dn')});if(m>=0)sfx('f'+m)}
 document.addEventListener('click',e=>{const c=e.target.closest('.dn');if(c){c.classList.remove('dn');sfx('f'+(c.dataset.r||0))}});
 function list(){let a=S.cards.filter(c=>!c.pend);
@@ -345,7 +428,7 @@ if(flt=='raw')a=a.filter(c=>!c.grade);else if(flt=='gr')a=a.filter(c=>c.grade);e
 if(sort=='val')a.sort((x,y)=>val(y)-val(x));else if(sort=='rar')a.sort((x,y)=>D[y.k][2]-D[x.k][2]||val(y)-val(x));else a.sort((x,y)=>y.id-x.id);return a}
 function selAll(f){list().forEach(c=>{if(f(c)&&!c.lk)sel.add(c.id)});render()}
 function setBq(){if(!S.prem){sfx('err');return toast('十連抽需要至尊通行證（到「通行證」分頁購買）')}bq=10;render()}
-function vPack(){if(!S.prem)bq=1;return`<h3>卡包商店（19 種）<span><button class="b" style="${bq==1?'outline:4px solid var(--em)':''}" onclick="bq=1;render()">單抽</button> <button class="b" style="${bq==10?'outline:4px solid var(--em)':''}" onclick="setBq()">十連抽${S.prem?'':' 🔒'}</button></span></h3><div class="pgrid">${PK.map((p,i)=>`<button class="blk pt" onclick="buy(${i})" aria-label="${p.n}"><span class="big">${p.e}</span><b>${p.n}${p.lock&&!S.eter?' 🔒':''}</b><small>${bq>1?'×'+bq+' ':''}💚${cst(p)*bq}${S.vip&&!p.lock?' <s>'+p.p*bq+'</s>':''}</small></button>`).join('')}</div>`+vAuto()+vInv()+
+function vPack(){if(!S.prem)bq=1;return`<h3>卡包商店（19 種）<span><button class="b" style="${bq==1?'outline:4px solid var(--em)':''}" onclick="bq=1;render()">單抽</button> <button class="b" style="${bq==10?'outline:4px solid var(--em)':''}" onclick="setBq()">十連抽${S.prem?'':' 🔒'}</button></span></h3><div class="pgrid">${PK.map((p,i)=>`<button class="blk pt" onclick="buy(${i})" aria-label="${p.n}"><span class="big">${p.e}</span><b>${p.n}${p.lock&&!S.eter?' 🔒':''}</b><small>${bq>1?'×'+bq+' ':''}💚${cst(p)*bq}${S.vip&&!p.lock?' <s>'+p.p*bq+'</s>':''}</small></button>`).join('')}</div>`+vAo()+vAuto()+vInv()+
 `<p class="note">每包最後一張至少稀有，卡片可能帶附魔（稀有度越高越容易）。保底：再開 ${Math.max(0,PT()-S.pity)} 包內必出傳說以上。${S.prem?`至尊保底：高階（史詩包以上）累積 ${Math.max(0,PCN()-(S.pc||0))} 包內必出創世。`:''}沒錢了可以按右上角挖礦。</p>`+
 (rev.length?`<h3 id="rv">開出的卡片 <span><button class="b" onclick="flipAll()">全部翻開</button> <button class="b" onclick="rev=[];render()">收下</button></span></h3><div class="grid">${rev.map(c=>card(c,'dn'+(D[c.k][2]>=2?' glow':''))).join('')}</div><p class="note">點卡片翻開。卡片已放進收藏，未鑑定，賣價打 75 折。</p>`:'')}
 function vCol(){const a=list();return `<div class="tools"><select onchange="sort=this.value;render()" aria-label="排序"><option value="new"${sort=='new'?' selected':''}>最新</option><option value="val"${sort=='val'?' selected':''}>價值高到低</option><option value="rar"${sort=='rar'?' selected':''}>稀有度</option></select><select onchange="flt=this.value;render()" aria-label="篩選"><option value="all"${flt=='all'?' selected':''}>全部</option><option value="raw"${flt=='raw'?' selected':''}>未鑑定</option><option value="gr"${flt=='gr'?' selected':''}>已鑑定</option><option value="foil"${flt=='foil'?' selected':''}>閃卡</option><option value="lk"${flt=='lk'?' selected':''}>已上鎖</option></select></div>
@@ -355,9 +438,9 @@ function vGr(){const a=S.cards.filter(c=>c.pend).sort((x,y)=>x.pend-y.pend);
 return (a.length?a.map(c=>{const rem=Math.max(0,Math.ceil((c.pend-Date.now())/1000));return `<div class="blk row">${card(c)}<div><b>鑑定中</b><br><small>剩餘 ${rem} 秒</small><div class="bar"><i style="width:${Math.min(100,Math.max(4,100-rem/(c.pd||90)*100))}%"></i></div></div><button class="b" onclick="spd(${c.id})">加速<br>💚${sp(c)}</button></div>`}).join(''):'<p>目前沒有送鑑定的卡片。到「收藏」選擇未鑑定的卡片，再選標準、快速或特急送評。</p>')+
 `<h3>最近結果</h3>${S.log.length?S.log.map(l=>`<div>${l}</div>`).join(''):'<small>還沒有結果</small>'}
 <details class="blk"><summary>鑑定說明</summary><p>分數 1–10，分數越高價值越高。標準 90 秒、快速 30 秒（費用 ×2.5）、特急 8 秒（費用 ×6）。費用依卡片行情計算，便宜的卡送鑑定通常不划算。鑑定中的卡片不能賣出，也可以付費加速。</p><p>價值倍率：1分 ×0.3、4分 ×0.6、7分 ×1、8分 ×1.4、9分 ×2.2、10分 ×5。</p></details>`}
-function vMkt(){const tv=S.cards.reduce((s,c)=>s+price(c),0),dx=S.dex.filter(Boolean).length;
-const rows=D.map((d,i)=>i).sort((a,b)=>D[b][2]-D[a][2]||D[b][3]-D[a][3]).map(i=>{const d=D[i],up=S.m[i]>=S.pm[i],n=S.cards.filter(c=>c.k==i).length;return `<tr><td>${S.dex[i]?ico(i,18):'❔'} ${S.dex[i]?d[0]:'？？？'}</td><td style="color:${R[d[2]][1]}">${R[d[2]][0]}</td><td>💚${(d[3]*S.m[i]).toFixed(1)} <span class="${up?'up':'dnc'}">${up?'▲':'▼'}</span></td><td>${n?'×'+n:''}</td></tr>`}).join('');
-return `<div class="blk" style="padding:10px"><b>收藏總值 💚${tv}</b><br><small>圖鑑 ${dx}/${D.length}　已開 ${S.opened} 包</small></div><h3>行情（每 ${S.eter?2:S.prem?5:S.vip?7:10} 秒更新，7 分普通版基準價）</h3><table>${rows}</table>
+function vMkt(){const tv=S.cards.reduce((s,c)=>s+price(c),0),dx=S.dex.filter((v,i)=>v&&D[i]&&!D[i][4]).length,dm=S.dex.filter((v,i)=>v&&D[i]&&D[i][4]).length,NDX=D.filter(d=>!d[4]).length;
+const rows=D.map((d,i)=>i).filter(i=>!D[i][4]||S.dex[i]).sort((a,b)=>D[b][2]-D[a][2]||D[b][3]-D[a][3]).map(i=>{const d=D[i],up=S.m[i]>=S.pm[i],n=S.cards.filter(c=>c.k==i).length;return `<tr><td>${S.dex[i]?ico(i,18):'❔'} ${S.dex[i]?d[0]:'？？？'}</td><td style="color:${R[d[2]][1]}">${R[d[2]][0]}</td><td>💚${(d[3]*S.m[i]).toFixed(1)} <span class="${up?'up':'dnc'}">${up?'▲':'▼'}</span></td><td>${n?'×'+n:''}</td></tr>`}).join('');
+return `<div class="blk" style="padding:10px"><b>收藏總值 💚${tv}</b><br><small>圖鑑 ${dx}/${NDX}${dm?`　🛡️ 模組卡 ${dm}/${D.length-NDX}`:''}　已開 ${S.opened} 包</small></div><h3>行情（每 ${S.eter?2:S.prem?5:S.vip?7:10} 秒更新，7 分普通版基準價）</h3><table>${rows}</table>
 <details class="blk"><summary>價值規則</summary><p>價值 = 基準價 × 行情 × 鑑定倍率 × 閃卡 ×2.5 × 序號加成。未鑑定卡打 75 折。序號 #1 價值 ×10，#2–#10 ×3，前 1% ×1.5。賣出收 8% 手續費。附魔最多三個，每個依等級增加約 3% 到 83% 的價值；可在收藏花綠寶石幫沒附魔的卡附魔，成功率 70%，失敗則材料消失。</p><p>稀有度發行量：普通 9999、稀有 2000、史詩 500、傳說 100、神話 25、創世 8（創世卡價值極高，只在高階卡包以極低機率出現，至尊通行證可提高機率）。</p><p>18 種一般卡包分五個檔次：入門 💚100、進階 200、高階 400、傳說包 600、Boss 包 1100，越貴稀有卡機率越高。每種卡包有主題，約 65% 的卡出自該主題。附魔包的卡有 50% 機率額外附魔。另有「篩界包」固定 💚10000（不打折），只有永恆通行證能買，5 張全是傳說以上的閃卡。</p><button class="b" onclick="reset()">${rst?'再按一次確認重設':'重設進度'}</button></details>`}
 function reset(){if(!rst){rst=true;render();return}try{localStorage.removeItem('mcg1')}catch(e){}location.reload()}
 function bar(){const a=selCards(),el=$('#actbar');if(tab!='col'||!sel.size){el.style.display='none';return}el.style.display='block';
@@ -368,11 +451,11 @@ function enchant(){const a=selCards().filter(c=>!(c.en&&c.en.length));if(!a.leng
 const REF=40,NP=[['🧑‍🌾','農夫'],['📚','圖書管理員'],['⚒️','鐵匠'],['🥩','屠夫'],['🗺️','製圖師'],['🐑','牧羊人'],['🔮','祭司'],['🧪','牧師']];
 function genTr(){const o=[];for(let j=0;j<6;j++){const np=NP[Math.floor(Math.random()*NP.length)],r=Math.floor(Math.random()*4);
 if(j<3)o.push({id:j+1,np,t:'u',r,n:[6,5,4,4][r],g:rk(r+1)});
-else{const own=S.cards.filter(c=>D[c.k][2]==r).map(c=>c.k),k=own.length?own[Math.floor(Math.random()*own.length)]:rk(r),c2=P[r].filter(i=>i!=k),un=c2.filter(i=>!S.dex[i]),pl=un.length?un:c2;o.push({id:j+1,np,t:'s',r,k,g:pl[Math.floor(Math.random()*pl.length)],fee:Math.ceil(D[k][3]*.1)+5})}}
+else{const own=S.cards.filter(c=>D[c.k][2]==r&&!D[c.k][4]).map(c=>c.k),k=own.length?own[Math.floor(Math.random()*own.length)]:rk(r),c2=P[r].filter(i=>i!=k),un=c2.filter(i=>!S.dex[i]),pl=un.length?un:c2;o.push({id:j+1,np,t:'s',r,k,g:pl[Math.floor(Math.random()*pl.length)],fee:Math.ceil(D[k][3]*.1)+5})}}
 S.tr={exp:Date.now()+300000,o};to=null;ts.clear();save()}
 function ensureTr(){if(!S.tr||Date.now()>S.tr.exp)genTr()}
 function refTr(){if(S.em<REF)return toast('綠寶石不足');S.em-=REF;genTr();render()}
-const need=o=>o.t=='u'?o.n:1,elig=o=>S.cards.filter(c=>!c.pend&&!c.lk&&(o.t=='u'?D[c.k][2]==o.r:c.k==o.k)),cn=k=>`<b style="color:${R[D[k][2]][1]}">${ico(k,18)} ${D[k][0]}</b>（${R[D[k][2]][0]}）`;
+const need=o=>o.t=='u'?o.n:1,elig=o=>S.cards.filter(c=>!c.pend&&!c.lk&&!D[c.k][4]&&(o.t=='u'?D[c.k][2]==o.r:c.k==o.k)),cn=k=>`<b style="color:${R[D[k][2]][1]}">${ico(k,18)} ${D[k][0]}</b>（${R[D[k][2]][0]}）`;
 function openTr(id){to=to==id?null:id;ts.clear();render()}
 function trTg(id){const o=S.tr.o.find(x=>x.id==to);if(!o)return;if(ts.has(id))ts.delete(id);else if(ts.size<need(o))ts.add(id);render()}
 function doTr(){const o=S.tr.o.find(x=>x.id==to);if(!o)return;const n=need(o),ok=new Set(elig(o).map(c=>c.id)),ids=[...ts].filter(i=>ok.has(i)),fee=o.fee||0;
@@ -394,12 +477,12 @@ const ty=body[0]==0?'o':body[0]==1?'r':null;if(!ty)return null;const tid=(body[1
 for(let j=0;j<n;j++){const k=body[p],ser=body[p+1]*256+body[p+2],f=body[p+3];p+=4;if(f==null)return null;const en=[];for(let e=0;e<(f>>5&3);e++){const x=body[p++];if(x==null)return null;en.push([x>>3,(x&7)+1])}
 const cd=unpack([k,f&1,ser,k<D.length?RUN[D[k][2]]:0,f>>1&15,en]);if(!cd)return null;cs.push(cd)}
 return p==body.length?{ty,tid,cs}:null}catch(e){return null}}
-function unpack(a){if(!Array.isArray(a)||a.length<6)return null;const[k,f,ser,max,g,en]=a;if(!Number.isInteger(k)||k<0||k>=D.length)return null;const r=D[k][2];
+function unpack(a){if(!Array.isArray(a)||a.length<6)return null;const[k,f,ser,max,g,en]=a;if(!Number.isInteger(k)||k<0||k>=D.length||D[k][4])return null;const r=D[k][2];
 if(!Number.isInteger(ser)||ser<1||ser>RUN[r]||max!=RUN[r]||!Number.isInteger(g)||g<0||g>10||!Array.isArray(en)||en.length>3)return null;
 const us=new Set();for(const e of en){if(!Array.isArray(e)||!Number.isInteger(e[0])||e[0]<0||e[0]>=EN.length||!Number.isInteger(e[1])||e[1]<1||e[1]>5||us.has(e[0]))return null;us.add(e[0])}
 return{id:0,k,foil:!!f,ser,max,grade:g,pend:0,pd:0,en:en.map(e=>[e[0],e[1]])}}
 const TR={max:5,day:5,cool:600000,open:10,lo:.5,hi:2},dayKey=()=>new Date().toDateString(),tdn=()=>S.td&&S.td.d==dayKey()?S.td.n:0,tdAdd=n=>{S.td={d:dayKey(),n:Math.max(0,tdn()+n)}};
-const addCard=c=>{c.id=S.id++;c.t=Date.now();S.dex[c.k]=1;S.cards.push(c)},tradeable=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&!(c.t&&Date.now()-c.t<TR.cool)).sort((a,b)=>b.id-a.id),hold=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&c.t&&Date.now()-c.t<TR.cool).length;
+const addCard=c=>{c.id=S.id++;c.t=Date.now();S.dex[c.k]=1;S.cards.push(c)},tradeable=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&!D[c.k][4]&&!(c.t&&Date.now()-c.t<TR.cool)).sort((a,b)=>b.id-a.id),hold=()=>S.cards.filter(c=>!c.pend&&!c.lk&&D[c.k][2]<5&&c.t&&Date.now()-c.t<TR.cool).length;
 function trOk(){if((S.opened||0)<TR.open){sfx('err');toast(`需要先開過 ${TR.open} 包卡包才能交易（目前 ${S.opened||0} 包）`);return false}if(tdn()>=TR.day){sfx('err');toast(`今天的交易次數已達上限（${TR.day} 次）`);return false}return true}
 function psTg(id){ps.has(id)?ps.delete(id):ps.size<TR.max&&ps.add(id);render()}
 function prTg(id){pr.has(id)?pr.delete(id):pr.size<TR.max&&pr.add(id);render()}
@@ -411,8 +494,8 @@ function cancelOffer(tid){const e=S.esc.find(x=>x.tid==tid);if(!e)return;e.cs.fo
 function dismissRep(tid){S.rep=S.rep.filter(x=>x.tid!=tid);save();render()}
 function readCode(){const d=dec(pasteTxt);if(!d)return toast('交易碼無效或不完整，請重新複製');
 const cs=d.cs;if(cs.length>10)return toast('交易碼內容有誤');
-if(d.ty=='o'){if(S.esc.some(e=>e.tid==d.tid))return toast('這是你自己發出的交易碼，請傳給對方');if(S.seen[d.tid])return toast('這個交易碼已經用過了');if(!cs.length)return toast('交易碼內沒有卡片');if(cs.some(c=>D[c.k][2]>=5))return toast('交易碼無效：創世卡不能交易');if(cs.length>TR.max)return toast('交易碼無效：一次最多 '+TR.max+' 張');inc={tid:d.tid,cs};pr.clear();pasteTxt='';render()}
-else if(d.ty=='r'){const e=S.esc.find(x=>x.tid==d.tid);if(!e)return toast('找不到對應的交易（可能已取消或已完成）');if(cs.some(c=>D[c.k][2]>=5))return toast('回覆碼無效：創世卡不能交易');cs.forEach(addCard);got=cs;S.esc=S.esc.filter(x=>x!=e);S.seen[d.tid]=1;pasteTxt='';sfx('coin');toast(`交易完成，收到 ${cs.length} 張卡`);save();render()}
+if(d.ty=='o'){if(S.esc.some(e=>e.tid==d.tid))return toast('這是你自己發出的交易碼，請傳給對方');if(S.seen[d.tid])return toast('這個交易碼已經用過了');if(!cs.length)return toast('交易碼內沒有卡片');if(cs.some(c=>D[c.k][2]>=5||D[c.k][4]))return toast('交易碼無效：創世卡和管理員專屬卡不能交易');if(cs.length>TR.max)return toast('交易碼無效：一次最多 '+TR.max+' 張');inc={tid:d.tid,cs};pr.clear();pasteTxt='';render()}
+else if(d.ty=='r'){const e=S.esc.find(x=>x.tid==d.tid);if(!e)return toast('找不到對應的交易（可能已取消或已完成）');if(cs.some(c=>D[c.k][2]>=5||D[c.k][4]))return toast('回覆碼無效：創世卡和管理員專屬卡不能交易');cs.forEach(addCard);got=cs;S.esc=S.esc.filter(x=>x!=e);S.seen[d.tid]=1;pasteTxt='';sfx('coin');toast(`交易完成，收到 ${cs.length} 張卡`);save();render()}
 else toast('無法辨識的碼')}
 function acceptOffer(){if(!inc||S.seen[inc.tid])return;const mine=tradeable().filter(c=>pr.has(c.id)),ids=new Set(mine.map(c=>c.id)),tid=inc.tid;if(!trOk())return;if(!mine.length||mine.length>TR.max)return toast('請選擇 1 到 '+TR.max+' 張要回送的卡');const iv=inc.cs.reduce((a,c)=>a+price(c),0),mv=mine.reduce((a,c)=>a+price(c),0);if(mv<iv*TR.lo||mv>iv*TR.hi)return toast(`價值差太大：你回送的要在 💚${Math.ceil(iv*TR.lo)} 到 💚${Math.floor(iv*TR.hi)} 之間（目前 💚${mv}）`);
 S.cards=S.cards.filter(c=>!ids.has(c.id));const code=enc('r',tid,mine);
@@ -423,7 +506,7 @@ function vP(){return (got.length?`<h3>剛收到的卡 <button class="b" onclick=
 (inc?`<div class="blk" style="padding:10px;margin-top:10px"><b>🎁 收到交易邀請</b><br><small>對方要給你 ${inc.cs.length} 張卡，約值 💚${inc.cs.reduce((s,c)=>s+price(c),0)}</small><div class="grid">${inc.cs.map(c=>card(c)).join('')}</div><p><b>選擇你要回送的卡片</b><small>（價值需在對方卡片的 ${TR.lo*100}% 到 ${TR.hi*100}% 之間）</small></p>${tsel('prTg',pr)}<p>已選 ${pr.size}/${TR.max} 張，價值 💚${tradeable().filter(c=>pr.has(c.id)).reduce((a,c)=>a+price(c),0)}（需 💚${Math.ceil(inc.cs.reduce((a,c)=>a+price(c),0)*TR.lo)} 到 💚${Math.floor(inc.cs.reduce((a,c)=>a+price(c),0)*TR.hi)}） <button class="b" onclick="acceptOffer()">接受交易</button> <button class="b" onclick="inc=null;render()">拒絕</button></p></div>`:'')+
 (S.rep.length?`<h3>要傳給對方的回覆碼</h3>`+S.rep.map(r=>`<div class="blk" style="padding:10px;margin-bottom:8px"><small>你已收到對方的卡，並回送 ${r.n} 張。把這段回覆碼傳給對方，對方貼上就能收到。</small><textarea id="r-${r.tid}" readonly rows="3" style="${TA}">${r.code}</textarea><p><button class="b" onclick="cp('r-${r.tid}')">複製回覆碼</button> <button class="b" onclick="dismissRep('${r.tid}')">已傳給對方</button></p></div>`).join(''):'')+
 (S.esc.length?`<h3>我發出的交易</h3>`+S.esc.map(e=>`<div class="blk" style="padding:10px;margin-bottom:8px"><b>⏳ 等待對方回覆</b>　<small>${e.cs.length} 張卡暫存中</small><div class="grid">${e.cs.map(c=>card(c)).join('')}</div><small>把交易碼傳給對方，等對方傳回「回覆碼」，貼到上面讀取即可完成。</small><textarea id="c-${e.tid}" readonly rows="3" style="${TA}">${e.code}</textarea><p><button class="b" onclick="cp('c-${e.tid}')">複製交易碼</button> <button class="b" onclick="cancelOffer('${e.tid}')">取消並取回卡片</button></p></div>`).join(''):'')+
-`<div class="blk" style="padding:10px;margin-top:10px"><b>📜 交易限制</b><ul><li>需要先開過 ${TR.open} 包卡包（目前 ${S.opened||0} 包）</li><li>每天最多交易 ${TR.day} 次（今天已 ${tdn()} 次，發起或接受都算 1 次）</li><li>每次最多 ${TR.max} 張卡</li><li>剛開出或剛換到的卡要等 10 分鐘才能再交易${hold()?`（目前 ${hold()} 張冷卻中）`:''}</li><li>創世卡不能交易</li><li>雙方價值不能差太多：回送的價值要在對方卡片的 ${TR.lo*100}% 到 ${TR.hi*100}% 之間</li></ul></div>`+
+`<div class="blk" style="padding:10px;margin-top:10px"><b>📜 交易限制</b><ul><li>需要先開過 ${TR.open} 包卡包（目前 ${S.opened||0} 包）</li><li>每天最多交易 ${TR.day} 次（今天已 ${tdn()} 次，發起或接受都算 1 次）</li><li>每次最多 ${TR.max} 張卡</li><li>剛開出或剛換到的卡要等 10 分鐘才能再交易${hold()?`（目前 ${hold()} 張冷卻中）`:''}</li><li>創世卡和管理員專屬卡不能交易</li><li>雙方價值不能差太多：回送的價值要在對方卡片的 ${TR.lo*100}% 到 ${TR.hi*100}% 之間</li></ul></div>`+
 `<h3>發起交易</h3><div class="blk" style="padding:10px"><small>選擇要給對方的卡片（最多 ${TR.max} 張，已上鎖、鑑定中、冷卻中和創世卡不會出現）。建立交易碼後，卡片會先暫存，直到對方回覆或你取消。</small>${tsel('psTg',ps)}<p>已選 ${ps.size}/${TR.max} 張 <button class="b" ${ps.size?'':'disabled'} onclick="mkOffer()">建立交易碼</button></p></div>`+
 `<details class="blk"><summary>玩家交易怎麼用</summary><ol><li>A 選卡片，按「建立交易碼」，把交易碼傳給 B（LINE、Discord 等都可以）。</li><li>B 貼上交易碼按「讀取」，看到 A 的卡，選出要回送的卡，按「接受交易」。B 會立刻拿到 A 的卡。</li><li>B 把產生的「回覆碼」傳回給 A。</li><li>A 貼上回覆碼按「讀取」，就會收到 B 的卡，交易完成。</li></ol><p class="note">這個遊戲沒有伺服器，交易完全靠雙方互相信任，請只和認識的朋友交易。每個交易碼只能用一次，但程式無法阻止有人亂改程式碼或在對方接受後取消，所以重要的卡請小心。</p></details>`}
 function vTr(){return `<div class="tools"><button class="b" ${trm=='p'?'disabled':''} onclick="trm='p';render()">👥 玩家交易</button><button class="b" ${trm=='n'?'disabled':''} onclick="trm='n';render()">🧑‍🌾 村民交易</button></div>`+(trm=='p'?vP():vNpc())}
@@ -446,7 +529,7 @@ function vSv(){return accBlock()+`<div class="blk" style="padding:10px;margin-bo
 (impS?`<p>存檔內容：💚${impS.em}　卡片 ${impS.cards.length} 張　已開 ${impS.opened||0} 包${impS.prem?'　💎至尊':impS.vip?'　👑VIP':''}</p><p><small>載入後會覆蓋這個裝置目前的進度（目前 💚${S.em}、卡片 ${S.cards.length} 張），無法復原。</small></p><p><button class="b" onclick="impGo()">覆蓋並載入</button></p>`:'')+`</div>`}
 function go(t){sfx('click');tab=t;rst=false;render();if(t=='fr'||t=='sv')frLoad()}
 function render(){head();['pack','col','gr','mkt','tr','pass'].forEach(t=>$('#t-'+t).setAttribute('aria-selected',t==tab));
-$('#v').innerHTML=tab=='pack'?vPack():tab=='col'?vCol():tab=='gr'?vGr():tab=='tr'?vTr():tab=='sv'?vSv():tab=='fr'?vFr():tab=='pass'?vPass():vMkt();bar()}
+$('#v').innerHTML=tab=='pack'?vPack():tab=='col'?vCol():tab=='gr'?vGr():tab=='tr'?vTr():tab=='sv'?vSv():tab=='fr'?vFr():tab=='ch'?vCh():tab=='pass'?vPass():vMkt();bar();if(tab=='ch')chPaint(1)}
 setInterval(()=>{gtick();if(tab=='gr'||(tab=='tr'&&trm=='n'&&S.tr&&Date.now()>S.tr.exp))render()},1000);(function ml(){setTimeout(()=>{mtick();ml()},S.eter?2000:S.prem?5000:S.vip?7000:10000)})();
 gtick();render();
 </script>

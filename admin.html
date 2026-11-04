@@ -15,12 +15,12 @@ pre{white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto;back
 <div id="lg"><input id="pw" type="password" placeholder="管理員密碼"><button id="go">登入</button> <span id="er" class="bad"></span></div>
 <div id="app" hidden>
 <div class="chips" id="st"></div>
-<div class="tb"><button data-t="d">📊 統計</button><button data-t="p">👥 玩家</button><button data-t="b">🚫 封鎖清單</button><button data-t="c">🎁 兌換碼</button><button data-t="t">📢 全服工具</button><button data-t="l">📜 紀錄</button><button id="lo">登出</button></div>
+<div class="tb"><button data-t="d">📊 統計</button><button data-t="p">👥 玩家</button><button data-t="b">🚫 封鎖清單</button><button data-t="c">🎁 兌換碼</button><button data-t="t">📢 全服工具</button><button data-t="m">💬 聊天</button><button data-t="l">📜 紀錄</button><button id="lo">登出</button></div>
 <div id="d" hidden></div>
 <div id="main"></div>
 </div>
 <script>
-let PW=sessionStorage.getItem('pw')||'',TAB='p',Q='',SO='recent',FI='',LOGPID='',LOGACT='',LOGQ='',SELP=new Set();
+let CHP='',CHW='',CHQ='',CHT=null,PW=sessionStorage.getItem('pw')||'',TAB='p',Q='',SO='recent',FI='',LOGPID='',LOGACT='',LOGQ='',SELP=new Set();
 const $=s=>document.querySelector(s);
 function el(t,x,c,k){const e=document.createElement(t);if(x!=null)e.textContent=x;if(c)e.className=c;if(k)k(e);return e}
 const fmt=t=>t?new Date(t).toLocaleString():'-';
@@ -36,7 +36,8 @@ function tplText(t){const c=CLD&&CLD.cards[t.k],p=[(c?c.e+' '+c.n:'#'+t.k)+' ×'
 // 卡片選擇器：卡片、數量、閃卡、序號、鑑定分、最多 3 個附魔（各自等級）
 async function picker(){const cl=await cardData(),box=el('div'),rows=[],add=btn('＋ 加一張卡',()=>addRow());
 function addRow(){const r=el('div',null,'cr'),ks=el('select'),n=el('input'),ser=el('input'),gr=sel([[0,'未鑑定']].concat([1,2,3,4,5,6,7,8,9,10].map(x=>[x,'鑑定 '+x+'/10'])),0,()=>{}),fo=chk('閃卡',false);
-for(let q=5;q>=0;q--){const g=el('optgroup');g.label=RNM[q];cl.cards.filter(c=>c.r==q).forEach(c=>{const o=el('option',c.e+' '+c.n);o.value=c.k;g.append(o)});ks.append(g)}
+[...new Set(cl.cards.filter(c=>c.ao).map(c=>c.mod))].forEach(m=>{const g=el('optgroup');g.label='🛡️ 管理員專屬・'+m;cl.cards.filter(c=>c.ao&&c.mod==m).forEach(c=>{const o=el('option',c.e+' '+c.n+'（'+RNM[c.r]+'・💚'+c.p+'起）');o.value=c.k;g.append(o)});ks.append(g)});
+for(let q=5;q>=0;q--){const g=el('optgroup');g.label=RNM[q];cl.cards.filter(c=>c.r==q&&!c.ao).forEach(c=>{const o=el('option',c.e+' '+c.n);o.value=c.k;g.append(o)});ks.append(g)}
 n.type='number';n.min=1;n.max=50;n.value=1;ser.type='number';ser.min=0;
 const hint=()=>{const c=cl.cards[ks.value];ser.placeholder='序號（0=隨機，最大 '+c.max+'）';ser.style.width='180px'};ks.onchange=hint;hint();
 const ens=[0,1,2].map(()=>{const e=sel([['','無附魔']].concat(cl.en.map((x,i)=>[String(i),x])),'',()=>{}),l=sel([1,2,3,4,5].map(x=>[x,ENR[x-1]]),1,()=>{});return{e,l}});
@@ -52,7 +53,7 @@ if(window.CompressionStream){u=await zip(u,new CompressionStream('deflate-raw'))
 function dl(text,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 async function stats(){const s=await api('/api/admin/stats');const c=$('#st');c.replaceChildren();[['玩家',s.total],['在線',s.online],['24h活躍',s.active24],['停權',s.banned],['封鎖項',s.bans],['總💚',s.em],['總拆包',s.opened],['特別通行證',s.adm],['兌換碼',s.codes]].forEach(x=>c.append(el('span',x[0]+' '+x[1])))}
 async function boot(){await stats();$('#lg').hidden=true;$('#app').hidden=false;tab(TAB)}
-function tab(n){TAB=n;document.querySelectorAll('.tb button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==n));$('#d').hidden=true;({d:vDash,p:vPlayers,b:vBans,c:vCodes,t:async()=>{await vTools();vMaint()},l:vLogs})[n]()}
+function tab(n){clearInterval(CHT);TAB=n;document.querySelectorAll('.tb button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==n));$('#d').hidden=true;({d:vDash,p:vPlayers,b:vBans,c:vCodes,t:async()=>{await vTools();vMaint()},l:vLogs,m:vChat})[n]()}
 async function vPlayers(){const m=$('#main');
 const j=await api('/api/admin/list?q='+encodeURIComponent(Q)+'&s='+SO+'&f='+FI);m.replaceChildren();
 const qi=el('input',null,null,e=>{e.placeholder='搜尋名字 / ID / IP / 帳號';e.value=Q;e.onchange=()=>{Q=e.value;vPlayers()}});
@@ -118,6 +119,31 @@ m.append(sel([['','全部動作']].concat(j.acts.map(a=>[a,a])),LOGACT,v=>{LOGAC
 if(LOGPID)m.append(btn('✖ 只看某位玩家（'+LOGPID.slice(0,8)+'…）點我取消',()=>{LOGPID='';vLogs()}));
 const t=el('table');j.logs.forEach(l=>{const tr=el('tr');tr.append(el('td',fmt(l.ts)),el('td',l.act),el('td',l.detail||''),el('td',null,null,e=>{if(l.pid)e.append(btn('玩家',()=>{tab('p');detail(l.pid)}))}));t.append(tr)});
 m.append(el('div',null,'w',e=>e.append(t)),el('p','最多顯示 300 筆','dim'))}
+// 聊天監看：看全部對話，或只看某位玩家（可再指定對象），也能搜尋文字
+const XST=['等待中','已接受','被拒絕','已取消','已逾期'];
+function xtxt(a){return (a&&a.length?a.map(c=>{const d=CLD&&CLD.cards[c.k];return (d?d.e+d.n:'#'+c.k)+(c.foil?'✦':'')+' #'+c.ser+(c.grade?' '+c.grade+'分':'')+(c.en&&c.en.length?' ✨'+c.en.map(e=>(CLD&&CLD.en[e[0]]||e[0])+ENR[e[1]-1]).join(''):'')}).join('、'):'（無）')}
+async function vChat(){const m=$('#main');await cardData();
+const load=async()=>{const j=await api('/api/admin/chat?n=300&pid='+encodeURIComponent(CHP)+'&with='+encodeURIComponent(CHW)+'&q='+encodeURIComponent(CHQ));
+box.replaceChildren();
+if(!j.msgs.length)box.append(el('p','沒有符合的聊天紀錄','dim'));
+let last='';
+j.msgs.slice().reverse().forEach(r=>{const day=new Date(r.ts).toLocaleDateString();if(day!=last){box.append(el('div',day,'dim'));last=day}
+const row=el('div',null,'kv');row.style.cssText='padding:4px 0;border-bottom:1px solid #222';
+const who=el('a',(r.an||'?')+' → '+(r.bn||'?'),'rel',e=>e.onclick=()=>{CHP=r.a;CHW=r.b;vChat()});
+const t=new Date(r.ts).toLocaleTimeString();
+let body='';
+if(r.kind=='msg')body=r.body;
+else if(r.kind=='xfer'){const x=j.xf[r.x]||{};body='🔁 交換邀請：送出 '+xtxt(x.give)+(r.body?'｜附註：'+r.body:'')+'　【'+(XST[x.st]||'?')+(x.st==1&&x.back&&x.back.length?'，對方回送 '+xtxt(x.back):'')+'】'}
+else if(r.kind=='xres')body='↪ 交換結果：'+r.body;
+else body=r.body;
+row.append(el('span',t+'　','dim'),who,el('span','：'+body));box.append(row)});
+box.append(el('p','最新的 '+j.msgs.length+' 筆（全站共 '+j.total+' 筆）。點「名字 → 名字」只看這兩個人的對話。','dim'))};
+const qi=el('input',null,null,e=>{e.placeholder='搜尋聊天內容';e.value=CHQ;e.onchange=()=>{CHQ=e.value;load()}});
+const auto=chk('每 5 秒自動更新',false);auto.c.onchange=()=>{clearInterval(CHT);if(auto.c.checked)CHT=setInterval(()=>{if(TAB=='m')load().catch(()=>{})},5000)};
+const box=el('div');
+m.replaceChildren(el('div','💬 玩家聊天紀錄（只有管理員看得到；玩家在聊天室也會看到「管理員看得到聊天內容」的提醒）','dim'),qi,btn('重新整理',load),auto);
+if(CHP||CHW)m.append(btn('✖ 取消篩選'+(CHP?'（'+CHP.slice(0,8)+'…'+(CHW?' ↔ '+CHW.slice(0,8)+'…':'')+'）':''),()=>{CHP='';CHW='';vChat()}));
+m.append(box);await load()}
 function batchBar(box){box.replaceChildren();if(!SELP.size){box.hidden=true;return}box.hidden=false;
 const go=async(body,msg)=>{if(msg&&!confirm(msg+'（共 '+SELP.size+' 位）'))return;const r=await api('/api/admin/batch',Object.assign({pids:[...SELP]},body));alert('完成，處理了 '+r.n+' 位');SELP.clear();stats();vPlayers()};
 box.append(el('b','已選 '+SELP.size+' 位　'),
@@ -136,7 +162,7 @@ const sn=el('div',null,'row');sn.append(el('b','📸 存檔快照（自動每小
 (j.snaps||[]).forEach(s=>{const r=el('div',null,'kv');r.append(el('span',fmt(s.ts)+'　💚'+s.em+'　卡'+s.cards+'　'+(s.why||'')+'　'),btn('還原',()=>{if(confirm('把玩家存檔還原成這個時間點？（目前的存檔會先自動存成快照）'))act(p.pid,'restore',{ts:s.ts})}),btn('下載',async()=>{const r=await api('/api/admin/snap?pid='+encodeURIComponent(p.pid)+'&ts='+s.ts);try{dl(await saveCode(r.data),(p.name||'玩家')+'-快照.txt','text/plain')}catch(e){alert('產生失敗')}}),btn('刪',()=>act(p.pid,'delsnap',{ts:s.ts}),'bad'));sn.append(r)});
 d.append(sn);
 const ta=el('textarea');ta.rows=8;ta.hidden=true;ta.style.fontSize='12px';
-d.append(el('div',null,'row',e=>e.append(btn('🛠️ 編輯存檔 JSON',()=>{ta.hidden=!ta.hidden;if(!ta.value)ta.value=p.data||''}),btn('套用編輯後的存檔',()=>{if(ta.hidden||!ta.value)return alert('先按「編輯存檔 JSON」並修改內容');if(confirm('用這份 JSON 取代玩家存檔？（目前的存檔會先存成快照）'))act(p.pid,'setstate',{json:ta.value})}),btn('📜 此玩家紀錄',()=>{LOGPID=p.pid;LOGACT='';LOGQ='';tab('l')}))),ta)}
+d.append(el('div',null,'row',e=>e.append(btn('🛠️ 編輯存檔 JSON',()=>{ta.hidden=!ta.hidden;if(!ta.value)ta.value=p.data||''}),btn('套用編輯後的存檔',()=>{if(ta.hidden||!ta.value)return alert('先按「編輯存檔 JSON」並修改內容');if(confirm('用這份 JSON 取代玩家存檔？（目前的存檔會先存成快照）'))act(p.pid,'setstate',{json:ta.value})}),btn('📜 此玩家紀錄',()=>{LOGPID=p.pid;LOGACT='';LOGQ='';tab('l')}),btn('💬 此玩家的聊天',()=>{CHP=p.pid;CHW='';CHQ='';tab('m')}))),ta)}
 async function vDash(){const m=$('#main'),j=await api('/api/admin/dash');m.replaceChildren();
 m.append(el('div',null,'chips',e=>[['有帳號',j.c.acct],['有異常紀錄',j.c.sus],['信任名單',j.c.trust],['全服卡片總數',j.c.cards]].forEach(x=>e.append(el('span',x[0]+' '+x[1])))));
 const mx=Math.max(1,...j.days.map(x=>x.n));
