@@ -564,7 +564,7 @@ async function adminInner(req, res, u) {
     else if (c.t === 'msg') c.s = String(c.s || '').slice(0, 300);
     else if (c.t === 'cards') { const tpl = cleanTpl(c.tpl); if (!tpl.length) return send(res, 400, { error: '沒有有效的卡片' }); c.tpl = tpl; }
     else return send(res, 400, { error: 'bad cmd' });
-    const rows = await q('SELECT pid FROM players WHERE banned=0 LIMIT 2000');
+    const rows = await q('SELECT pid FROM players WHERE banned=0 AND updated>$1 LIMIT 2000', [now - 120000]); // 只發給「現在在線」的玩家（2 分鐘內有同步過），離線的不會補發
     for (const r of rows) await pushCmd(r.pid, c);
     log('broadcast', '', JSON.stringify(c)); return send(res, 200, { ok: 1, n: rows.length });
   }

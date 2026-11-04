@@ -106,13 +106,13 @@ async function vTools(){const m=$('#main');m.replaceChildren();
 const a=el('textarea');a.rows=3;a.placeholder='全服公告內容（每位玩家下次連線會跳出一次）';
 m.append(el('h3','📢 全服公告'),a,el('br'),btn('發布公告',async()=>{if(!a.value.trim())return;await api('/api/admin/announce',{text:a.value});alert('已發布')}),btn('清除公告',async()=>{await api('/api/admin/announce',{text:''});alert('已清除')}));
 const n=el('input');n.type='number';n.placeholder='數量（負數=扣）';
-m.append(el('h3','💚 全服送綠寶石'),n,btn('送給所有人',async()=>{if(+n.value&&confirm('送給所有未停權的玩家？')){const j=await api('/api/admin/broadcast',{cmd:{t:'em',n:+n.value}});alert('已排入 '+j.n+' 位玩家')}}));
+m.append(el('h3','💚 在線玩家送綠寶石'),n,btn('送給在線玩家',async()=>{if(+n.value&&confirm('只會送給現在在線的玩家，離線的拿不到、之後也不會補發。確定？')){const j=await api('/api/admin/broadcast',{cmd:{t:'em',n:+n.value}});alert('已送給 '+j.n+' 位在線玩家')}}));
 const tv=(await api('/api/admin/tierov')).tierov,tn={keep:'不改通行證',none:'無通行證',vip:'VIP',prem:'至尊',eter:'永恆'},ad=chk('同時給所有人管理員特別通行證（買卡包 1 折、賣價 +50%、挖礦 ×100）',false),ts=sel([['keep','通行證不變（要搭配管理員特別通行證）'],['none','全部變成：無通行證'],['vip','全部變成：VIP'],['prem','全部變成：至尊'],['eter','全部變成：永恆']],'eter',()=>{}),th=el('input');th.type='number';th.placeholder='持續幾小時（0=手動關閉）';
 m.append(el('h3','🎫 全服暫時通行證'),el('p',tv?'目前：所有人暫時'+(tv.adm?'擁有管理員特別通行證':'是「'+tn[tv.v]+'」')+'，'+(tv.until?'到 '+fmt(tv.until):'直到手動關閉'):'目前：未啟用','dim'),ts,th,el('br'),ad,el('br'),btn('開啟',async()=>{if(confirm('所有未持有特別通行證的玩家會暫時'+(ad.c.checked?'擁有管理員特別通行證':'變成「'+tn[ts.value]+'」')+'，結束後恢復原本的。確定？')){await api('/api/admin/tierov',{v:ts.value,adm:ad.c.checked?1:0,hours:+th.value||0});alert('已開啟');vTools()}}),btn('關閉（恢復原本）',async()=>{await api('/api/admin/tierov',{v:''});alert('已關閉');vTools()}),el('p','暫時通行證不會寫進玩家真正的通行證，結束後自動恢復；期間購買或兌換的通行證會保留。真正持有管理員特別通行證的人不受影響。','dim'));
 const s=el('input');s.placeholder='彈窗訊息';
 const bp=await picker();
-m.append(el('h3','🃏 全服發卡片'),bp.el,btn('發給所有人',async()=>{const c=bp.get();if(c.length&&confirm('把這些卡片發給所有未停權的玩家？')){const j=await api('/api/admin/broadcast',{cmd:{t:'cards',tpl:c}});alert('已排入 '+j.n+' 位玩家')}}));
-m.append(el('h3','💬 全服彈窗訊息'),s,btn('傳給所有人',async()=>{if(s.value&&confirm('傳給所有玩家？')){const j=await api('/api/admin/broadcast',{cmd:{t:'msg',s:s.value}});alert('已排入 '+j.n+' 位玩家')}}))}
+m.append(el('h3','🃏 在線玩家發卡片'),bp.el,btn('發給在線玩家',async()=>{const c=bp.get();if(c.length&&confirm('只會發給現在在線的玩家，離線的拿不到、之後也不會補發。確定？')){const j=await api('/api/admin/broadcast',{cmd:{t:'cards',tpl:c}});alert('已送給 '+j.n+' 位在線玩家')}}));
+m.append(el('h3','💬 在線玩家彈窗訊息'),s,btn('傳給在線玩家',async()=>{if(s.value&&confirm('只會傳給現在在線的玩家，離線的看不到、之後也不會補發。確定？')){const j=await api('/api/admin/broadcast',{cmd:{t:'msg',s:s.value}});alert('已送給 '+j.n+' 位在線玩家')}}))}
 async function vLogs(){const m=$('#main'),j=await api('/api/admin/logs?n=300&pid='+encodeURIComponent(LOGPID)+'&act='+encodeURIComponent(LOGACT)+'&q='+encodeURIComponent(LOGQ));m.replaceChildren();
 const qi=el('input',null,null,e=>{e.placeholder='搜尋內容';e.value=LOGQ;e.onchange=()=>{LOGQ=e.value;vLogs()}});
 m.append(sel([['','全部動作']].concat(j.acts.map(a=>[a,a])),LOGACT,v=>{LOGACT=v;vLogs()}),qi,btn('重新整理',vLogs));
