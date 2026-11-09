@@ -9,6 +9,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 
 let db = { players: {}, codes: {}, events: [], settings: { maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25 }, log: [] };
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
+db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
 db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25 }, db.settings);
 let dirty = false;
 const persist = () => { if (!dirty) return; dirty = false; fs.writeFile(DB_FILE + '.tmp', JSON.stringify(db), e => { if (!e) fs.rename(DB_FILE + '.tmp', DB_FILE, () => {}); }); };
@@ -32,16 +33,17 @@ const pushEvents = () => broadcast('events', { now: now(), events: pubEvents() }
 const RANGE = [[0, 150], [150, 230], [230, 275], [275, 293], [293, 299], [299, 300]];
 function mkCmd(b) {
   const c = { id: uid(6), type: b.type, msg: String(b.msg || '').slice(0, 80) };
-  if (['money', 'setmoney', 'cores', 'rebirth'].includes(b.type)) { c.value = Number(b.value); if (!Number.isFinite(c.value)) throw 'value 不是數字'; if (c.type === 'setmoney' && c.value < 0) throw '金額不可為負'; }
+  if (b.type === 'card') { c.value = parseInt(b.value); if (!(c.value >= 0 && c.value <= 29)) throw '卡片等級需為 0~29'; }
+  else if (['money', 'setmoney', 'cores', 'rebirth'].includes(b.type)) { c.value = Number(b.value); if (!Number.isFinite(c.value)) throw 'value 不是數字'; if (c.type === 'setmoney' && c.value < 0) throw '金額不可為負'; }
   else if (b.type === 'buff') {
     const n = Math.min(Math.max(parseInt(b.count) || 1, 1), 500);
     if (b.id !== undefined && b.id !== '' && b.id !== null) { const i = parseInt(b.id); if (!(i >= 0 && i < 300)) throw 'Buff 編號需 0~299'; c.ids = Array(n).fill(i); }
     else { const r = RANGE[parseInt(b.rarity)]; if (!r) throw '稀有度需 0~5'; c.ids = Array.from({ length: n }, () => r[0] + Math.floor(Math.random() * (r[1] - r[0]))); }
-  } else if (b.type !== 'reset') throw '未知類型';
+  } else if (b.type === 'msg') { if (!c.msg) throw '訊息不可空白'; } else if (b.type !== 'reset') throw '未知類型';
   return c;
 }
-function queue(p, cmd) { (p.recent = p.recent || []).push({ id: cmd.id, t: now(), acked: false, money: cmd.type === 'money' || cmd.type === 'setmoney' ? Math.max(0, cmd.value) : 0, buffs: (cmd.ids || []).length, cores: cmd.type === 'cores' ? Math.max(0, cmd.value) : 0, rebirth: cmd.type === 'rebirth' ? Math.max(0, cmd.value) : 0 }); p.recent = p.recent.slice(-300); p.pending.push(cmd); if (p.pending.length > 200) p.pending.shift(); touch(); sendTo(p.id, 'cmd', cmd); }
-const describe = c => ({ money: `金錢 ${c.value > 0 ? '+' : ''}${c.value}`, setmoney: `金錢設為 ${c.value}`, cores: `資本核心 ${c.value}`, rebirth: `重生 ${c.value}`, buff: `Buff x${(c.ids || []).length}`, reset: '重置進度' }[c.type]);
+function queue(p, cmd) { (p.recent = p.recent || []).push({ id: cmd.id, t: now(), acked: false, money: cmd.type === 'money' || cmd.type === 'setmoney' ? Math.max(0, cmd.value) : 0, buffs: (cmd.ids || []).length, cores: cmd.type === 'cores' ? Math.max(0, cmd.value) : 0, rebirth: cmd.type === 'rebirth' ? Math.max(0, cmd.value) : 0, card: cmd.type === 'card' ? cmd.value : 0 }); p.recent = p.recent.slice(-300); p.pending.push(cmd); if (p.pending.length > 200) p.pending.shift(); touch(); sendTo(p.id, 'cmd', cmd); }
+const describe = c => ({ money: `金錢 ${c.value > 0 ? '+' : ''}${c.value}`, setmoney: `金錢設為 ${c.value}`, cores: `資本核心 ${c.value}`, rebirth: `重生 ${c.value}`, buff: `Buff x${(c.ids || []).length}`, reset: '重置進度', msg: `私訊「${c.msg}」`, card: `卡片設為 ${c.value} 級` }[c.type]);
 
 // ---------- 排程：活動開始/結束公告、撒錢 ----------
 setInterval(() => {
@@ -57,7 +59,33 @@ setInterval(() => {
   if (changed) { touch(); pushEvents(); }
 }, 1000);
 setInterval(() => conns.forEach(s => s.forEach(r => r.write(': ping\n\n'))), 20000);
+setInterval(() => {
+  db.autoAnn.forEach(a => { if (now() >= a.next) { a.next = now() + a.every * 60000; broadcast('announce', { text: a.text, style: a.style }); touch(); } });
+}, 5000);
+setInterval(() => { db.hist.push([now(), conns.size]); if (db.hist.length > 1440) db.hist.shift(); touch(); }, 60000);
 
+
+
+// ---------- 封鎖系統（帳號 + 裝置 + IP + 同裝置小號）----------
+const ipOf = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+const cookieDev = req => (/(?:^|;\s*)mcdev=(\w+)/.exec(req.headers.cookie || '') || [])[1];
+const livE = e => e && (!e.exp || e.exp > now());
+const banHit = (dev, ip) => (dev && livE(db.bans.devices[dev]) && db.bans.devices[dev]) || (ip && livE(db.bans.ips[ip]) && db.bans.ips[ip]) || null;
+const isBanned = p => { if (!p.banned) return false; if (p.banUntil && p.banUntil < now()) { p.banned = false; touch(); return false; } return true; };
+function kick(id, reason) { sendTo(id, 'kick', { reason }); (conns.get(id) || []).forEach(r => { try { r.end(); } catch {} }); }
+function banPlayer(t, reason, hours, ipHours, alts) {
+  const exp = hours > 0 ? now() + hours * 3600e3 : 0, set = new Set([t]);
+  if (alts) Object.values(db.players).forEach(x => { if (x !== t && (x.devs || []).some(d => (t.devs || []).includes(d))) set.add(x); });
+  set.forEach(x => { x.banned = true; x.banUntil = exp; x.banReason = reason + (x !== t ? `（與 ${t.name} 同裝置）` : ''); kick(x.id, '你已被封鎖：' + x.banReason); });
+  (t.devs || []).forEach(d => db.bans.devices[d] = { reason, t: now(), exp, name: t.name, by: t.id });
+  if (ipHours > 0) (t.ips || []).forEach(ip => db.bans.ips[ip] = { reason, t: now(), exp: now() + ipHours * 3600e3, name: t.name, by: t.id });
+  log(`🚫 封鎖 ${[...set].map(x => x.name).join('、')}（${reason}｜${hours > 0 ? hours + ' 小時' : '永久'}｜裝置 ${(t.devs || []).length}｜IP ${ipHours > 0 ? (t.ips || []).length : 0}）`); touch();
+}
+function unban(t) {
+  t.banned = false; t.banUntil = 0; t.strikes = 0; t.flags = [];
+  for (const k of ['devices', 'ips']) for (const key in db.bans[k]) if (db.bans[k][key].by === t.id) delete db.bans[k][key];
+  log(`解除封鎖 ${t.name}`); touch();
+}
 
 // ---------- 輕量防作弊：存檔合理性檢查 ----------
 const NUM = (x, max = 1e100) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= max;
@@ -74,7 +102,7 @@ function structural(s) { // 回傳 {fatal, reasons}
   if (!Array.isArray(s.companies || []) || (s.companies || []).length > 30 || !(s.companies || []).every(c => c && INT(c.level, 5000))) return bad('公司資料異常');
   st.bankDeposit = st.bankDeposit || 0; st.bankLoan = st.bankLoan || 0; st.upgrades = st.upgrades || { click: 0, company: 0, discount: 0 }; st.inventory = st.inventory || {}; st.equippedBuffs = st.equippedBuffs || [];
   const r = [];
-  if (!INT(st.rebirths, 300) || !INT(st.capitalCores) || !INT(st.currentCardLevel, 30) || !INT(st.maxCardOwnedLevel, 30) || !NUM(st.baseClick, 1e6)) return bad('進度數值異常');
+  if (!INT(st.rebirths, 300) || !INT(st.capitalCores) || !INT(st.currentCardLevel, 29) || !INT(st.maxCardOwnedLevel, 29) || !NUM(st.baseClick, 1e6)) return bad('進度數值異常');
   if (st.currentCardLevel > st.maxCardOwnedLevel) r.push('目前卡片等級高於已擁有最高等級');
   for (const k of ['click', 'company', 'discount']) if (!INT(st.upgrades[k], 1e6)) return bad('天賦數值異常');
   if (typeof st.inventory !== 'object' || !Object.entries(st.inventory).every(([k, v]) => INT(+k, 299) && INT(v, 1e7))) return bad('背包資料異常');
@@ -102,6 +130,7 @@ function vet(p, s) {
   const oldB = old.balance || 0, oldD = old.bankDeposit || 0, oldW = oldB + oldD;
   const g = { money: 0, buffs: 0, cores: 0, rebirth: 0 };
   (p.recent || []).forEach(x => { if (!x.acked || t - x.t < 120000) for (const k in g) g[k] += x[k]; });
+  const gc = Math.max(0, ...(p.recent || []).filter(x => !x.acked || t - x.t < 120000).map(x => x.card || 0));
   const oS = (p.save.stocks || []), nS = (s.stocks || []), oC = (p.save.companies || []), nC = (s.companies || []);
   let sold = 0, bought = 0, lv = 0;
   nS.forEach((n, i) => { const o = oS[i] || 0; if (n < o) sold += (o - n) * STOCK_PRICE_CAP; else bought += n - o; });
@@ -120,13 +149,13 @@ function vet(p, s) {
   if (cnt(st) - cnt(old) > Math.floor(cash / 1e11) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
   if (st.rebirths - (old.rebirths || 0) > 2 + g.rebirth) r.push(`重生次數暴增（+${st.rebirths - (old.rebirths || 0)}）`);
-  if (st.maxCardOwnedLevel > (old.maxCardOwnedLevel || 0) && Math.floor(100 * Math.pow(10, st.maxCardOwnedLevel - 1) * Math.pow(0.9, st.upgrades.discount)) > cash) r.push(`卡片等級暴增（→ ${st.maxCardOwnedLevel}）`);
+  if (st.maxCardOwnedLevel > (old.maxCardOwnedLevel || 0) && st.maxCardOwnedLevel > gc && Math.floor(100 * Math.pow(10, st.maxCardOwnedLevel - 1) * Math.pow(0.9, st.upgrades.discount)) > cash) r.push(`卡片等級暴增（→ ${st.maxCardOwnedLevel}）`);
   return { reasons: r };
 }
 
 // ---------- 工具 ----------
-const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); };
-const body = req => new Promise((ok, no) => { let s = ''; req.on('data', d => { s += d; if (s.length > 3e6) { req.destroy(); no('too big'); } }); req.on('end', () => { try { ok(s ? JSON.parse(s) : {}); } catch { ok({}); } }); });
+const json = (res, code, obj, hdr) => { res.writeHead(code, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, hdr)); res.end(JSON.stringify(obj)); };
+const body = (req, max = 3e6) => new Promise((ok, no) => { let s = ''; req.on('data', d => { s += d; if (s.length > max) { req.destroy(); no('too big'); } }); req.on('end', () => { try { ok(s ? JSON.parse(s) : {}); } catch { ok({}); } }); });
 const adminTokens = new Map(); const fails = new Map();
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css' };
 const playerByToken = t => Object.values(db.players).find(p => p.token === t);
@@ -137,20 +166,24 @@ async function api(req, res, url) {
   // ---- 玩家 ----
   if (p === '/api/status') return json(res, 200, { maintenance: db.settings.maintenance, motd: db.settings.motd, online: [...conns.keys()].length });
   if (p === '/api/login' && m === 'POST') {
-    const b = await body(req); const name = String(b.name || '').trim().slice(0, 16);
+    const b = await body(req); const name = String(b.name || '').trim().slice(0, 16), ip = ipOf(req);
+    const dev = cookieDev(req) || String(b.dev || '').replace(/\W/g, '').slice(0, 32) || uid(8);
     if (!name) return json(res, 400, { error: '請輸入名稱' });
+    const hit = banHit(dev, ip); if (hit) return json(res, 403, { error: '此裝置或網路已被封鎖：' + (hit.reason || '') });
     if (db.settings.maintenance) return json(res, 503, { error: '伺服器維護中：' + (db.settings.motd || '請稍後再試') });
     let pl = Object.values(db.players).find(x => x.name === name);
     if (pl) { if (pl.token !== b.key) return json(res, 409, { error: '此名稱已被使用，若是你的帳號請輸入登入金鑰' }); }
     else { pl = db.players[uid(4)] = { name, token: uid(12), save: null, created: now(), lastSeen: now(), banned: false, pending: [], redeemed: [] }; pl.id = Object.keys(db.players).find(k => db.players[k] === pl); log(`新玩家註冊：${name}`); }
-    if (pl.banned) return json(res, 403, { error: '帳號已被封鎖：' + (pl.banReason || '') });
+    if (isBanned(pl)) return json(res, 403, { error: '帳號已被封鎖：' + (pl.banReason || '') });
+    pl.devs = pl.devs || []; pl.ips = pl.ips || [];
+    if (!pl.devs.includes(dev)) pl.devs.push(dev); if (!pl.ips.includes(ip)) pl.ips.push(ip); pl.devs = pl.devs.slice(-10); pl.ips = pl.ips.slice(-10);
     pl.lastSeen = now(); touch();
-    return json(res, 200, { name: pl.name, key: pl.token, hasSave: !!pl.save });
+    return json(res, 200, { name: pl.name, key: pl.token, hasSave: !!pl.save }, { 'Set-Cookie': `mcdev=${dev}; Max-Age=31536000; Path=/; SameSite=Lax; HttpOnly` });
   }
   const pl = playerByToken(req.headers['x-token'] || url.searchParams.get('key'));
   if (p.startsWith('/api/') && !p.startsWith('/api/admin')) {
     if (!pl) return json(res, 401, { error: '未登入' });
-    if (pl.banned) return json(res, 403, { error: '帳號已被封鎖' });
+    if (isBanned(pl)) return json(res, 403, { error: '帳號已被封鎖：' + (pl.banReason || '') });
     if (p === '/api/save' && m === 'GET') return json(res, 200, { save: pl.save });
     if (p === '/api/save' && m === 'POST') {
       const b = await body(req); const s = b.save, v = vet(pl, s);
@@ -159,11 +192,12 @@ async function api(req, res, url) {
       if (v.reasons.length) {
         pl.strikes = (pl.strikes || 0) + 1; pl.flags = pl.flags || []; pl.flags.unshift({ t: now(), r: v.reasons }); pl.flags.length = Math.min(pl.flags.length, 20);
         if (now() - (pl.lastFlagLog || 0) > 60000) { pl.lastFlagLog = now(); log(`⚠ 可疑存檔 ${pl.name}：${v.reasons.join('；')}`); }
-        if (db.settings.autoBan > 0 && pl.strikes >= db.settings.autoBan) { pl.banned = true; pl.banReason = '系統偵測作弊'; sendTo(pl.id, 'kick', { reason: '你已被封鎖：系統偵測作弊' }); log(`🚫 自動封鎖 ${pl.name}（可疑 ${pl.strikes} 次）`); }
+        if (db.settings.autoBan > 0 && pl.strikes >= db.settings.autoBan && !pl.banned) banPlayer(pl, '系統偵測作弊', 0, 24, true);
         reject = db.settings.ac === 'reject';
       }
       pl.lastSeen = now(); touch();
       if (reject) return json(res, 422, { error: '偵測到異常數據，已還原為伺服器進度' });
+      if (pl.save && (!pl.snaps || !pl.snaps.length || now() - pl.snaps[0].t > 30 * 60000)) { pl.snaps = pl.snaps || []; pl.snaps.unshift({ t: now(), save: pl.save }); pl.snaps.length = Math.min(pl.snaps.length, 8); }
       pl.save = s; pl.lastSaveAt = now(); return json(res, 200, { ok: true });
     }
     if (p === '/api/ack' && m === 'POST') { const b = await body(req); pl.pending = pl.pending.filter(c => !(b.ids || []).includes(c.id)); (pl.recent || []).forEach(r => { if ((b.ids || []).includes(r.id)) { r.acked = true; r.t = now(); } }); touch(); return json(res, 200, { ok: true }); }
@@ -195,21 +229,23 @@ async function api(req, res, url) {
   }
   if (p.startsWith('/admin/api/')) {
     const exp = adminTokens.get(req.headers['x-admin']); if (!exp || exp < now()) return json(res, 401, { error: '請重新登入' });
-    const b = m === 'POST' ? await body(req) : {}; let r;
+    const b = m === 'POST' ? await body(req, p === '/admin/api/restore' ? 6e7 : 3e6) : {}; let r;
     try {
       if (p === '/admin/api/overview') {
         const all = Object.values(db.players).map(summary);
-        return json(res, 200, { flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
+        return json(res, 200, { hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
       }
       if (p === '/admin/api/players') { const q = (url.searchParams.get('q') || '').toLowerCase(); return json(res, 200, Object.values(db.players).filter(x => x.name.toLowerCase().includes(q)).map(summary).sort((a, b) => b.online - a.online || b.balance - a.balance)); }
       if ((r = p.match(/^\/admin\/api\/player\/(\w+)(?:\/(\w+))?$/))) {
         const t = db.players[r[1]]; if (!t) return json(res, 404, { error: '找不到玩家' }); const act = r[2];
-        if (m === 'DELETE') { sendTo(t.id, 'kick', { reason: '帳號已被刪除' }); delete db.players[t.id]; log(`刪除玩家 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
-        if (!act) return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, save: t.save }));
+        if (m === 'DELETE') { kick(t.id, '帳號已被刪除'); delete db.players[t.id]; log(`刪除玩家 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
+        if (!act) { const alts = Object.values(db.players).filter(x => x !== t).map(x => ({ id: x.id, name: x.name, banned: x.banned, by: (x.devs || []).some(d => (t.devs || []).includes(d)) ? '同裝置' : (x.ips || []).some(i => (t.ips || []).includes(i)) ? '同 IP' : '' })).filter(x => x.by); return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, note: t.note || '', alts, ips: t.ips || [], devCount: (t.devs || []).length, snaps: (t.snaps || []).map(x => ({ t: x.t, balance: Math.floor((x.save.state || {}).balance || 0) })) })); }
         if (act === 'cmd') { const c = mkCmd(b); queue(t, c); log(`對 ${t.name} 執行：${describe(c)}`); return json(res, 200, { ok: true, online: online(t.id) }); }
-        if (act === 'ban') { t.banned = !!b.banned; t.banReason = String(b.reason || ''); if (t.banned) sendTo(t.id, 'kick', { reason: '你已被封鎖：' + t.banReason }); log(`${t.banned ? '封鎖' : '解封'} ${t.name} ${t.banReason}`); touch(); return json(res, 200, { ok: true }); }
+        if (act === 'ban') { if (b.banned) banPlayer(t, String(b.reason || '違規').slice(0, 60), Number(b.hours) || 0, b.ipHours === undefined ? 24 : Number(b.ipHours) || 0, b.alts !== false); else unban(t); return json(res, 200, { ok: true }); }
+        if (act === 'note') { t.note = String(b.note || '').slice(0, 300); log(`備註 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
+        if (act === 'rollback') { const sn = (t.snaps || [])[parseInt(b.index)]; if (!sn) throw '找不到該快照'; t.save = sn.save; t.lastSaveAt = now(); t.strikes = 0; t.flags = []; sendTo(t.id, 'reload', {}); log(`回溯 ${t.name} 的存檔到 ${new Date(sn.t).toLocaleString('zh-TW')}`); touch(); return json(res, 200, { ok: true }); }
         if (act === 'clearflags') { t.strikes = 0; t.flags = []; touch(); return json(res, 200, { ok: true }); }
-        if (act === 'kick') { sendTo(t.id, 'kick', { reason: String(b.reason || '你已被管理員踢出') }); log(`踢出 ${t.name}`); return json(res, 200, { ok: true }); }
+        if (act === 'kick') { kick(t.id, String(b.reason || '你已被管理員踢出')); log(`踢出 ${t.name}`); return json(res, 200, { ok: true }); }
         if (act === 'rename') { const n = String(b.name || '').trim().slice(0, 16); if (!n || Object.values(db.players).some(x => x.name === n)) throw '名稱無效或重複'; log(`改名 ${t.name} → ${n}`); t.name = n; touch(); return json(res, 200, { ok: true }); }
       }
       if (p === '/admin/api/gift') {
@@ -237,13 +273,20 @@ async function api(req, res, url) {
       }
       if ((r = p.match(/^\/admin\/api\/codes\/([\w-]+)$/)) && m === 'DELETE') { delete db.codes[r[1]]; touch(); return json(res, 200, { ok: true }); }
       if (p === '/admin/api/settings' && m === 'POST') {
-        if (b.maintenance !== undefined) { db.settings.maintenance = !!b.maintenance; if (b.maintenance) conns.forEach((_, id) => sendTo(id, 'kick', { reason: '伺服器進入維護：' + (b.motd || db.settings.motd) })); }
+        if (b.maintenance !== undefined) { db.settings.maintenance = !!b.maintenance; if (b.maintenance) [...conns.keys()].forEach(id => kick(id, '伺服器進入維護：' + (b.motd || db.settings.motd))); }
         if (b.motd !== undefined) db.settings.motd = String(b.motd).slice(0, 100);
         if (['off', 'flag', 'reject'].includes(b.ac)) db.settings.ac = b.ac;
         if (b.autoBan !== undefined) db.settings.autoBan = Math.max(0, parseInt(b.autoBan) || 0);
         if (b.maxCps !== undefined) db.settings.maxCps = Math.min(200, Math.max(1, Number(b.maxCps) || 25)); log(`設定更新 maintenance=${db.settings.maintenance}`); touch(); return json(res, 200, db.settings);
       }
       if (p === '/admin/api/log') return json(res, 200, db.log);
+      if (p === '/admin/api/bans' && m === 'GET') { const f = o => Object.entries(o).filter(([, e]) => livE(e)).map(([key, e]) => Object.assign({ key }, e)); return json(res, 200, { players: Object.values(db.players).filter(isBanned).map(summary), devices: f(db.bans.devices), ips: f(db.bans.ips) }); }
+      if (p === '/admin/api/bans/remove') { if (!['devices', 'ips'].includes(b.kind)) throw '類型錯誤'; delete db.bans[b.kind][b.key]; log(`移除${b.kind === 'ips' ? ' IP ' : '裝置'}封鎖`); touch(); return json(res, 200, { ok: true }); }
+      if (p === '/admin/api/bans/ip') { const ip = String(b.ip || '').trim(); if (!ip) throw '請輸入 IP'; db.bans.ips[ip] = { reason: String(b.reason || '手動封鎖'), t: now(), exp: Number(b.hours) > 0 ? now() + b.hours * 3600e3 : 0, name: '(手動)' }; log(`手動封鎖 IP ${ip}`); touch(); return json(res, 200, { ok: true }); }
+      if (p === '/admin/api/autoann' && m === 'GET') return json(res, 200, db.autoAnn);
+      if (p === '/admin/api/autoann' && m === 'POST') { const text = String(b.text || '').slice(0, 200), every = Math.max(1, Number(b.every) || 10); if (!text) throw '內容空白'; db.autoAnn.push({ id: uid(4), text, style: b.style || 'info', every, next: now() + every * 60000 }); log(`建立定時公告：${text}（每 ${every} 分鐘）`); touch(); return json(res, 200, { ok: true }); }
+      if ((r = p.match(/^\/admin\/api\/autoann\/(\w+)$/)) && m === 'DELETE') { db.autoAnn = db.autoAnn.filter(x => x.id !== r[1]); touch(); return json(res, 200, { ok: true }); }
+      if (p === '/admin/api/restore' && m === 'POST') { const d = b.db; if (!d || typeof d.players !== 'object') throw '備份檔格式錯誤'; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); conns.forEach((_, id) => kick(id, '伺服器還原資料，請重新登入')); log('還原備份'); touch(); return json(res, 200, { ok: true, players: Object.keys(db.players).length }); }
       if (p === '/admin/api/backup') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="backup.json"' }); return res.end(JSON.stringify(db)); }
     } catch (e) { return json(res, 400, { error: String(e) }); }
   }
@@ -256,5 +299,11 @@ http.createServer((req, res) => {
   const f = url.pathname === '/' ? 'index.html' : url.pathname === '/admin' ? 'admin.html' : url.pathname.slice(1);
   if (!['index.html', 'admin.html', 'online.js'].includes(f)) { res.writeHead(404); return res.end('Not found'); }
   const fp = path.join(__dirname, f);
-  fs.readFile(fp, (e, d) => { if (e) { res.writeHead(404); return res.end('Not found'); } res.writeHead(200, { 'Content-Type': MIME[path.extname(fp)] || 'application/octet-stream' }); res.end(d); });
+  const hdr = {};
+  if (f === 'index.html') {
+    const dev = cookieDev(req) || uid(8), hit = banHit(dev, ipOf(req));
+    if (hit) { res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end('<meta name=viewport content="width=device-width"><h2 style="font-family:sans-serif;text-align:center;margin-top:30vh">此裝置或網路已被封鎖</h2>'); }
+    hdr['Set-Cookie'] = `mcdev=${dev}; Max-Age=31536000; Path=/; SameSite=Lax; HttpOnly`;
+  }
+  fs.readFile(fp, (e, d) => { if (e) { res.writeHead(404); return res.end('Not found'); } res.writeHead(200, Object.assign({ 'Content-Type': MIME[path.extname(fp)] || 'application/octet-stream' }, hdr)); res.end(d); });
 }).listen(PORT, () => console.log(`極簡資本伺服器：http://localhost:${PORT}　後台：http://localhost:${PORT}/admin`));

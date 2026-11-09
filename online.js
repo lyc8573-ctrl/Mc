@@ -1,6 +1,8 @@
 // 伺服器連線層：登入、雲端存檔、活動倍率、公告、指令發放、兌換碼
 (() => {
 const $ = (t, css, h = '') => { const e = document.createElement(t); e.style.cssText = css || ''; e.innerHTML = h; return e; };
+const unboot = () => { const b = document.getElementById('boot'); if (b) b.remove(); };
+const DEV = localStorage.getItem('mc_dev') || (() => { const d = Array.from(crypto.getRandomValues(new Uint8Array(8)), x => x.toString(16).padStart(2, '0')).join(''); localStorage.setItem('mc_dev', d); return d; })();
 const K = 'mc_account'; let acc = JSON.parse(localStorage.getItem(K) || 'null'), evs = [], off = 0, es, applied = new Set(), dead = false;
 const api = (p, o = {}) => fetch(p, { method: o.body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'x-token': acc ? acc.key : '' }, body: o.body && JSON.stringify(o.body) }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.status); return j; });
 const full = () => $('div', 'position:fixed;inset:0;z-index:99999;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center');
@@ -13,23 +15,25 @@ function loginScreen(msg = '') {
   <input id="lk" placeholder="登入金鑰（新玩家免填）" style="padding:10px;font-size:1rem;width:260px;border:1px solid #ccc;border-radius:8px">
   <button class="btn" style="padding:10px 30px;font-size:1rem">進入遊戲</button>`;
   o.querySelector('button').onclick = async () => {
-    try { const r = await api('/api/login', { body: { name: o.querySelector('#ln').value, key: o.querySelector('#lk').value } }); acc = { name: r.name, key: r.key }; localStorage.setItem(K, JSON.stringify(acc)); o.remove(); start(); }
+    try { const r = await api('/api/login', { body: { name: o.querySelector('#ln').value, key: o.querySelector('#lk').value, dev: DEV } }); acc = { name: r.name, key: r.key }; localStorage.setItem(K, JSON.stringify(acc)); o.remove(); start(); }
     catch (e) { o.remove(); loginScreen(e.message); }
   };
-  document.body.appendChild(o);
+  document.body.appendChild(o); unboot();
 }
-function blocked(msg) { dead = true; if (es) es.close(); const o = full(); o.innerHTML = `<h2>${msg}</h2><button class="btn secondary">重新整理</button>`; o.querySelector('button').onclick = () => location.reload(); document.body.appendChild(o); }
+function blocked(msg) { dead = true; if (es) es.close(); const o = full(); o.innerHTML = `<h2>${msg}</h2><button class="btn secondary">重新整理</button>`; o.querySelector('button').onclick = () => location.reload(); document.body.appendChild(o); unboot(); }
 
 function apply(c) {
   if (applied.has(c.id)) return; applied.add(c.id);
+  if (c.type === 'msg') { toast('💬 管理員：' + c.msg, '#17a2b8'); api('/api/ack', { body: { ids: [c.id] } }).catch(() => {}); return; }
   if (c.type === 'money') state.balance += c.value;
   else if (c.type === 'setmoney') state.balance = c.value;
+  else if (c.type === 'card') { state.currentCardLevel = c.value; state.maxCardOwnedLevel = c.value; }
   else if (c.type === 'cores') state.capitalCores = Math.max(0, (state.capitalCores || 0) + c.value);
   else if (c.type === 'rebirth') state.rebirths = Math.max(0, (state.rebirths || 0) + c.value);
   else if (c.type === 'buff') c.ids.forEach(i => state.inventory[i] = (state.inventory[i] || 0) + 1);
   else if (c.type === 'reset') { Object.assign(state, { balance: 0, rebirths: 0, capitalCores: 0, bankDeposit: 0, inventory: {}, equippedBuffs: [], multiplier: 1 }); companies.forEach((x, i) => { x.level = 0; x.cost = Math.floor(300 * Math.pow(1.5, i)); }); stocks.forEach(s => s.owned = 0); }
   state.balance = Math.floor(state.balance); recalcMultiplier(); refresh();
-  toast(c.msg || ({ money: '💰 收到管理員發放的金錢', buff: '✨ 收到 Buff 獎勵', cores: '收到資本核心', rebirth: '重生次數已調整', setmoney: '餘額已被管理員調整', reset: '進度已被管理員重置' })[c.type]);
+  toast(c.msg || ({ card: '💳 你的卡片已被管理員調整', money: '💰 收到管理員發放的金錢', buff: '✨ 收到 Buff 獎勵', cores: '收到資本核心', rebirth: '重生次數已調整', setmoney: '餘額已被管理員調整', reset: '進度已被管理員重置' })[c.type]);
   save().then(() => api('/api/ack', { body: { ids: [c.id] } })).catch(() => {});
 }
 const save = () => api('/api/save', { body: { save: getSavePackage() } });
@@ -40,8 +44,9 @@ function calcEvents() {
   window.EVENT_CLICK_MULT = c; window.EVENT_INCOME_MULT = i; return act;
 }
 const bar = $('div', 'position:fixed;top:0;left:0;right:0;z-index:9000;background:#6f42c1;color:#fff;font-size:.8rem;text-align:center;padding:3px;display:none');
-setInterval(() => { const t = Date.now() + off, act = calcEvents(); bar.style.display = act.length ? 'block' : 'none';
-  bar.innerHTML = act.map(e => { const s = Math.max(0, Math.floor((e.end - t) / 1000)); return `🎉 ${e.name}${e.type === 'rain' ? '' : ' x' + e.factor} (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`; }).join('　'); try { updateUI(); } catch {} }, 1000);
+let lastM = '';
+setInterval(() => { const t = Date.now() + off, act = calcEvents(); const mk = window.EVENT_CLICK_MULT + '/' + window.EVENT_INCOME_MULT; const chg = mk !== lastM; lastM = mk; bar.style.display = act.length ? 'block' : 'none';
+  bar.innerHTML = act.map(e => { const s = Math.max(0, Math.floor((e.end - t) / 1000)); return `🎉 ${e.name}${e.type === 'rain' ? '' : ' x' + e.factor} (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`; }).join('　'); if (chg) { try { updateUI(); } catch {} } }, 1000);
 
 function connect() {
   es = new EventSource('/api/stream?key=' + encodeURIComponent(acc.key));
@@ -49,6 +54,7 @@ function connect() {
   es.addEventListener('events', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
   es.addEventListener('cmd', e => apply(JSON.parse(e.data)));
   es.addEventListener('announce', e => { const d = JSON.parse(e.data); toast('📢 ' + d.text, d.style === 'event' ? '#6f42c1' : '#17a2b8'); try { speakText(d.text); } catch {} });
+  es.addEventListener('reload', () => api('/api/save').then(r => { if (r.save) { applySavePackage(r.save); refresh(); toast('管理員已回溯你的存檔進度', '#fd7e14'); } }).catch(() => {}));
   es.addEventListener('kick', e => blocked(JSON.parse(e.data).reason));
   es.onerror = () => { if (dead) return; es.close(); setTimeout(() => !dead && connect(), 3000); };
 }
@@ -67,9 +73,9 @@ function menu() {
 async function start() {
   try {
     const r = await api('/api/save'); if (r.save) { applySavePackage(r.save); refresh(); } else await save();
-    connect(); menu(); setInterval(() => !dead && save().catch(e => { if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
+    unboot(); connect(); menu(); setInterval(() => !dead && save().catch(e => { if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
     window.addEventListener('pagehide', () => navigator.sendBeacon && 0);
-  } catch (e) { localStorage.removeItem(K); acc = null; loginScreen(e.message); }
+  } catch (e) { if (/封鎖/.test(e.message)) blocked(e.message); else { localStorage.removeItem(K); acc = null; loginScreen(e.message); } }
 }
-if (acc) api('/api/login', { body: { name: acc.name, key: acc.key } }).then(start).catch(e => { acc = null; loginScreen(e.message); }); else loginScreen();
+if (acc) api('/api/login', { body: { name: acc.name, key: acc.key, dev: DEV } }).then(start).catch(e => { if (/封鎖/.test(e.message)) return blocked(e.message); acc = null; loginScreen(e.message); }); else loginScreen();
 })();
