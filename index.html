@@ -174,6 +174,8 @@
 </style>
 </head>
 <body>
+<div id="boot" style="position:fixed;inset:0;z-index:100000;background:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:1.1rem;color:#555">載入中…</div>
+<script>setTimeout(function(){var b=document.getElementById("boot");if(b)b.textContent="連線逾時，請重新整理頁面"},15000)</script>
 
 <div id="main-container">
     <div id="balance-header">
@@ -2286,7 +2288,7 @@
         savePermanentLoan(state.bankLoan);
         updateUI();
     }, 1000);
-    setInterval(updateStocks, 800);
+    /* 股價改由伺服器統一推送（見 online.js） */
 
     const appWrapper = document.getElementById('app');
     const dots = document.querySelectorAll('.dot');

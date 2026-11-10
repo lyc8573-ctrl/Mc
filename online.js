@@ -46,15 +46,20 @@ function calcEvents() {
 const bar = $('div', 'position:fixed;top:0;left:0;right:0;z-index:9000;background:#6f42c1;color:#fff;font-size:.8rem;text-align:center;padding:3px;display:none');
 let lastM = '';
 setInterval(() => { const t = Date.now() + off, act = calcEvents(); const mk = window.EVENT_CLICK_MULT + '/' + window.EVENT_INCOME_MULT; const chg = mk !== lastM; lastM = mk; bar.style.display = act.length ? 'block' : 'none';
-  bar.innerHTML = act.map(e => { const s = Math.max(0, Math.floor((e.end - t) / 1000)); return `🎉 ${e.name}${e.type === 'rain' ? '' : ' x' + e.factor} (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`; }).join('　'); if (chg) { try { updateUI(); } catch {} } }, 1000);
+  bar.innerHTML = act.map(e => { const s = Math.max(0, Math.floor((e.end - t) / 1000)); return `🎉 ${e.name}${['click', 'income', 'all'].includes(e.type) ? ' x' + e.factor : ''} (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`; }).join('　'); if (chg) { try { updateUI(); } catch {} } }, 1000);
 
 function connect() {
   es = new EventSource('/api/stream?key=' + encodeURIComponent(acc.key));
   es.addEventListener('hello', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
   es.addEventListener('events', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
+  es.addEventListener('market', e => { const d = JSON.parse(e.data); try {
+    stocks.forEach((s, i) => { s.price = d.p[i]; if (d.h) s.history = d.h[i].slice(); else { s.history.push(s.price); s.history.shift(); } });
+    drawChart(); renderStocks(); } catch (err) {} });
   es.addEventListener('cmd', e => apply(JSON.parse(e.data)));
   es.addEventListener('announce', e => { const d = JSON.parse(e.data); toast('📢 ' + d.text, d.style === 'event' ? '#6f42c1' : '#17a2b8'); try { speakText(d.text); } catch {} });
   es.addEventListener('reload', () => api('/api/save').then(r => { if (r.save) { applySavePackage(r.save); refresh(); toast('管理員已回溯你的存檔進度', '#fd7e14'); } }).catch(() => {}));
+  es.addEventListener('packet', e => { const d = JSON.parse(e.data); const t = $('div', 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:99997;background:#dc3545;color:#fff;padding:12px 16px;border-radius:12px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.35)', `🧧 ${d.name}<br><small>限量 ${d.left} 份，手快有！</small><br>`);
+    const b = $('button', 'margin-top:6px;padding:8px 22px;border:0;border-radius:8px;background:#ffc107;font-weight:bold;font-size:1rem', '搶紅包'); b.onclick = () => { b.disabled = true; api('/api/claim', { body: { id: d.id } }).then(() => { t.remove(); }).catch(er => { toast(er.message, '#6c757d'); t.remove(); }); }; t.appendChild(b); document.body.appendChild(t); setTimeout(() => t.remove(), 60000); });
   es.addEventListener('kick', e => blocked(JSON.parse(e.data).reason));
   es.onerror = () => { if (dead) return; es.close(); setTimeout(() => !dead && connect(), 3000); };
 }

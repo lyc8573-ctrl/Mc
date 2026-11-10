@@ -26,7 +26,7 @@ const sendTo = (id, ev, data) => (conns.get(id) || []).forEach(r => sse(r, ev, d
 const broadcast = (ev, data) => conns.forEach(set => set.forEach(r => sse(r, ev, data)));
 const now = () => Date.now();
 const activeEvents = () => db.events.filter(e => !e.ended && e.start <= now() && e.end > now());
-const pubEvents = () => db.events.filter(e => !e.ended && e.end > now()).map(e => ({ id: e.id, name: e.name, type: e.type, factor: e.factor, start: e.start, end: e.end }));
+const pubEvents = () => db.events.filter(e => !e.ended && e.end > now()).map(e => ({ id: e.id, name: e.name, type: e.type, factor: e.factor, start: e.start, end: e.end, n: e.n, left: e.type === 'packet' ? e.n - (e.claimed || []).length : undefined }));
 const pushEvents = () => broadcast('events', { now: now(), events: pubEvents() });
 
 // ---------- 指令（發放獎勵）----------
@@ -45,12 +45,53 @@ function mkCmd(b) {
 function queue(p, cmd) { (p.recent = p.recent || []).push({ id: cmd.id, t: now(), acked: false, money: cmd.type === 'money' || cmd.type === 'setmoney' ? Math.max(0, cmd.value) : 0, buffs: (cmd.ids || []).length, cores: cmd.type === 'cores' ? Math.max(0, cmd.value) : 0, rebirth: cmd.type === 'rebirth' ? Math.max(0, cmd.value) : 0, card: cmd.type === 'card' ? cmd.value : 0 }); p.recent = p.recent.slice(-300); p.pending.push(cmd); if (p.pending.length > 200) p.pending.shift(); touch(); sendTo(p.id, 'cmd', cmd); }
 const describe = c => ({ money: `金錢 ${c.value > 0 ? '+' : ''}${c.value}`, setmoney: `金錢設為 ${c.value}`, cores: `資本核心 ${c.value}`, rebirth: `重生 ${c.value}`, buff: `Buff x${(c.ids || []).length}`, reset: '重置進度', msg: `私訊「${c.msg}」`, card: `卡片設為 ${c.value} 級` }[c.type]);
 
+
+// ---------- 活動引擎 ----------
+const PRIZE_TYPES = ['droprain', 'lottery', 'login', 'packet', 'contest'];
+const MONEYISH = ['money', 'cores'];
+function prizeCmd(e, scale = 1, msg) {
+  const pz = Object.assign({}, e.prize, { msg: msg || (e.prize && e.prize.msg) || e.name });
+  if (scale !== 1) { if (MONEYISH.includes(pz.type)) pz.value = Math.ceil(Number(pz.value) * scale); if (pz.type === 'buff') pz.count = Math.max(1, Math.ceil((parseInt(pz.count) || 1) * scale)); }
+  return mkCmd(pz);
+}
+const onlinePlayers = () => [...conns.keys()].map(id => db.players[id]).filter(Boolean);
+const wealthOf = p => { const st = (p.save && p.save.state) || {}; return (st.balance || 0) + (st.bankDeposit || 0); };
+function giveLogin(e, pl) { e.claimed = e.claimed || []; if (e.claimed.includes(pl.id)) return; e.claimed.push(pl.id); queue(pl, prizeCmd(e, 1, `🎁 ${e.name}`)); }
+function shockMarket(f) { market.p.forEach((p, i) => { market.p[i] = Math.min(1e9, Math.max(1, p * f)); market.h[i][49] = market.p[i]; }); touch(); broadcast('market', mktFull()); }
+function onStart(e) {
+  if (e.type === 'market') { shockMarket(e.factor); broadcast('announce', { text: e.factor >= 1 ? `📈 ${e.name}：全部股票 x${e.factor}！` : `📉 ${e.name}：全部股票 x${e.factor}！`, style: 'event' }); }
+  if (e.type === 'login') onlinePlayers().forEach(p => giveLogin(e, p));
+  if (e.type === 'packet') { e.claimed = []; broadcast('packet', { id: e.id, name: e.name, left: e.n }); }
+  if (e.type === 'contest') { e.base = {}; Object.values(db.players).forEach(p => { if (p.save) e.base[p.id] = wealthOf(p); }); }
+}
+function onEnd(e) {
+  if (e.type === 'market' && e.revert) { shockMarket(1 / e.factor); broadcast('announce', { text: `📊 ${e.name} 結束，股價回復`, style: 'info' }); }
+  if (e.type === 'lottery') {
+    const pool = onlinePlayers().sort(() => Math.random() - 0.5).slice(0, e.n);
+    if (!pool.length) return broadcast('announce', { text: `🎰 ${e.name}：目前無人在線，未開獎`, style: 'info' });
+    pool.forEach(p => queue(p, prizeCmd(e, 1, `🎰 恭喜中獎：${e.name}`)));
+    broadcast('announce', { text: `🎰 ${e.name} 開獎！得主：${pool.map(p => p.name).join('、')}`, style: 'event' }); log(`抽獎 ${e.name} 得主：${pool.map(p => p.name).join('、')}`);
+  }
+  if (e.type === 'contest') {
+    const rank = Object.values(db.players).filter(p => p.save && !isBanned(p)).map(p => ({ p, g: wealthOf(p) - (e.base[p.id] || 0) })).filter(x => x.g > 0).sort((a, b) => b.g - a.g).slice(0, Math.min(e.n, 10));
+    rank.forEach((x, i) => queue(x.p, prizeCmd(e, [1, 0.5, 0.25][i] || 0.1, `🏆 ${e.name} 第 ${i + 1} 名獎勵`)));
+    broadcast('announce', { text: rank.length ? `🏆 ${e.name} 結果：${rank.slice(0, 3).map((x, i) => `${i + 1}.${x.p.name}`).join(' ')}` : `🏆 ${e.name} 結束，無人上榜`, style: 'event' }); log(`競賽 ${e.name} 結果：${rank.map(x => x.p.name).join('、')}`);
+  }
+}
+function endEvent(e, manual) {
+  if (e.ended) return; e.ended = true; try { onEnd(e); } catch (err) { console.error(err); }
+  broadcast('announce', { text: `活動結束：${e.name}`, style: 'info' });
+  if (!manual && e.repeat > 0) { let st = e.start + e.repeat * 60000; while (st + (e.end - e.start) <= now()) st += e.repeat * 60000; const c = Object.assign({}, e, { id: uid(4), start: st, end: st + (e.end - e.start), ended: false, startedNotified: false, claimed: [], base: undefined, nextTick: 0 }); db.events.push(c); log(`重複活動已排程：${c.name}（${new Date(st).toLocaleString('zh-TW')}）`); }
+  touch(); pushEvents();
+}
+
 // ---------- 排程：活動開始/結束公告、撒錢 ----------
 setInterval(() => {
   let changed = false;
   for (const e of db.events) {
-    if (!e.ended && !e.startedNotified && now() >= e.start) { e.startedNotified = true; changed = true; broadcast('announce', { text: `🎉 活動開始：${e.name}`, style: 'event' }); }
-    if (!e.ended && now() >= e.end) { e.ended = true; changed = true; broadcast('announce', { text: `活動結束：${e.name}`, style: 'info' }); }
+    if (!e.ended && !e.startedNotified && now() >= e.start) { e.startedNotified = true; changed = true; broadcast('announce', { text: `🎉 活動開始：${e.name}`, style: 'event' }); try { onStart(e); } catch (err) { console.error(err); } }
+    if (!e.ended && now() >= e.end) { endEvent(e, false); changed = true; }
+    if (!e.ended && e.type === 'droprain' && now() >= e.start && now() >= (e.nextTick || 0)) { e.nextTick = now() + e.interval * 1000; onlinePlayers().forEach(p => queue(p, prizeCmd(e, 1, `🎁 ${e.name}`))); }
     if (!e.ended && e.type === 'rain' && now() >= e.start && now() >= (e.nextTick || 0)) {
       e.nextTick = now() + e.interval * 1000;
       for (const id of conns.keys()) if (db.players[id] && online(id)) queue(db.players[id], mkCmd({ type: 'money', value: e.factor, msg: `💰 ${e.name}` }));
@@ -87,6 +128,21 @@ function unban(t) {
   log(`解除封鎖 ${t.name}`); touch();
 }
 
+
+// ---------- 全服統一股市（伺服器統一產生價格）----------
+const SVOL = i => 0.3 - i * 0.009;
+if (!db.market || !db.market.p || db.market.p.length !== 30) db.market = { p: Array.from({ length: 30 }, () => 10 + Math.random() * 100), frozen: false, volMul: 1 };
+db.market.h = db.market.h && db.market.h.length === 30 ? db.market.h : db.market.p.map(p => Array.from({ length: 50 }, () => p * (0.9 + Math.random() * 0.2)));
+const market = db.market; let mtick = 0;
+const mktFull = () => ({ p: market.p, h: market.h });
+setInterval(() => {
+  if (market.frozen) return;
+  market.p.forEach((p, i) => { const v = SVOL(i) * (market.volMul || 1); market.p[i] = Math.min(1e9, Math.max(1, p * (1 + Math.random() * v * 2 - v))); market.h[i].push(market.p[i]); market.h[i].shift(); });
+  broadcast('market', { p: market.p });
+  if (++mtick % 40 === 0) touch();
+}, 800);
+const stockCap = i => Math.max(1, ...(market.h[i] || [1])) * 1.3;
+
 // ---------- 輕量防作弊：存檔合理性檢查 ----------
 const NUM = (x, max = 1e100) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= max;
 const INT = (x, max = 1e15) => NUM(x, max) && Number.isInteger(x);
@@ -98,7 +154,7 @@ function structural(s) { // 回傳 {fatal, reasons}
   if (!s || typeof s !== 'object' || !s.state || typeof s.state !== 'object') return bad('存檔格式錯誤');
   const st = s.state;
   if (!NUM(st.balance) || !NUM(st.bankDeposit || 0) || !NUM(st.bankLoan || 0)) return bad('金額數值異常');
-  if (!Array.isArray(s.stocks || []) || (s.stocks || []).length > 30 || !(s.stocks || []).every(x => INT(x))) return bad('股票資料異常');
+  if (!Array.isArray(s.stocks || []) || (s.stocks || []).length > 30 || !(s.stocks || []).every(x => INT(x, 1e100))) return bad('股票資料異常');
   if (!Array.isArray(s.companies || []) || (s.companies || []).length > 30 || !(s.companies || []).every(c => c && INT(c.level, 5000))) return bad('公司資料異常');
   st.bankDeposit = st.bankDeposit || 0; st.bankLoan = st.bankLoan || 0; st.upgrades = st.upgrades || { click: 0, company: 0, discount: 0 }; st.inventory = st.inventory || {}; st.equippedBuffs = st.equippedBuffs || [];
   const r = [];
@@ -118,7 +174,7 @@ function vet(p, s) {
   const sv = structural(s); if (sv.fatal) return sv; if (db.settings.ac === 'off') return { reasons: [] };
   const st = s.state, r = sv.reasons, t = now(), old = p.save && p.save.state;
   const w = st.balance + st.bankDeposit;
-  if (!old) { if (w > 1e12) r.push(`新帳號帶入高額存檔 $${Math.floor(w)}`); return { reasons: r }; }
+  if (!old) { if (w > 1e12) log(`ℹ 新帳號 ${p.name} 帶入高額存檔 $${Math.floor(w)}（僅記錄）`); return { reasons: r }; }
   const cps = db.settings.maxCps || 25, ev = evMult();
   const dt = Math.min(Math.max((t - (p.lastSaveAt || t - 5000)) / 1000, 1), 3600);
   // 收入上限一律用「上一次已接受的存檔」推算，避免玩家用假等級撐高自己的上限
@@ -133,7 +189,7 @@ function vet(p, s) {
   const gc = Math.max(0, ...(p.recent || []).filter(x => !x.acked || t - x.t < 120000).map(x => x.card || 0));
   const oS = (p.save.stocks || []), nS = (s.stocks || []), oC = (p.save.companies || []), nC = (s.companies || []);
   let sold = 0, bought = 0, lv = 0;
-  nS.forEach((n, i) => { const o = oS[i] || 0; if (n < o) sold += (o - n) * STOCK_PRICE_CAP; else bought += n - o; });
+  nS.forEach((n, i) => { const o = oS[i] || 0; if (n < o) sold += (o - n) * stockCap(i); else bought += n - o; });
   nC.forEach((c, i) => lv += Math.max(0, c.level - ((oC[i] && oC[i].level) || 0)));
   const loanUp = Math.max(0, st.bankLoan - (old.bankLoan || 0));
   const cash = oldW + earn + g.money + sold + loanUp;
@@ -209,11 +265,22 @@ async function api(req, res, url) {
       c.uses++; pl.redeemed.push(code); queue(pl, Object.assign(mkCmd(c.cmd), { msg: `🎁 兌換成功：${code}` })); log(`${pl.name} 兌換 ${code}`);
       return json(res, 200, { ok: true });
     }
+    if (p === '/api/claim' && m === 'POST') {
+      const b = await body(req), e = activeEvents().find(x => x.id === b.id && x.type === 'packet');
+      if (!e) return json(res, 410, { error: '紅包已結束' }); e.claimed = e.claimed || [];
+      if (e.claimed.includes(pl.id)) return json(res, 409, { error: '你已經搶過了' });
+      if (e.claimed.length >= e.n) return json(res, 410, { error: '紅包被搶完了！' });
+      e.claimed.push(pl.id); queue(pl, prizeCmd(e, 1, `🧧 搶到紅包：${e.name}`));
+      if (e.claimed.length >= e.n) broadcast('announce', { text: `🧧 ${e.name} 已被搶完！`, style: 'info' });
+      return json(res, 200, { ok: true, rank: e.claimed.length });
+    }
     if (p === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       if (!conns.has(pl.id)) conns.set(pl.id, new Set()); conns.get(pl.id).add(res);
       sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance });
+      sse(res, 'market', mktFull());
       pl.pending.forEach(c => sse(res, 'cmd', c));
+      activeEvents().forEach(e => { if (e.type === 'login') giveLogin(e, pl); if (e.type === 'packet' && !(e.claimed || []).includes(pl.id) && e.n - (e.claimed || []).length > 0) sse(res, 'packet', { id: e.id, name: e.name, left: e.n - (e.claimed || []).length }); });
       req.on('close', () => { const s = conns.get(pl.id); if (s) { s.delete(res); if (!s.size) conns.delete(pl.id); } pl.lastSeen = now(); touch(); });
       return;
     }
@@ -256,15 +323,19 @@ async function api(req, res, url) {
       if (p === '/admin/api/announce') { const text = String(b.text || '').slice(0, 200); if (!text) throw '內容空白'; broadcast('announce', { text, style: b.style || 'info' }); log(`公告：${text}`); return json(res, 200, { ok: true }); }
       if (p === '/admin/api/events' && m === 'GET') return json(res, 200, db.events.slice().reverse().slice(0, 100));
       if (p === '/admin/api/events' && m === 'POST') {
-        if (!['click', 'income', 'all', 'rain'].includes(b.type)) throw '活動類型錯誤';
+        const TYPES = ['click', 'income', 'all', 'rain', 'market', ...PRIZE_TYPES];
+        if (!TYPES.includes(b.type)) throw '活動類型錯誤';
         const factor = Number(b.factor), mins = Number(b.minutes), delay = Number(b.delayMinutes) || 0;
-        if (!(factor > 0) || !(mins > 0)) throw '倍率/時間需為正數';
-        const start = now() + delay * 60000, e = { id: uid(4), name: String(b.name || '限時活動').slice(0, 30), type: b.type, factor, interval: Math.max(5, Number(b.interval) || 30), start, end: start + mins * 60000, ended: false };
-        db.events.push(e); log(`建立活動：${e.name}（${e.type} x${e.factor}，${mins} 分鐘）`); touch(); pushEvents();
+        if (!(mins > 0)) throw '持續時間需為正數';
+        if (!PRIZE_TYPES.includes(b.type) && !(factor > 0)) throw '倍率/金額需為正數';
+        if (b.type === 'market' && !(factor > 0 && factor <= 100)) throw '股價倍率需介於 0~100';
+        let prize = null; if (PRIZE_TYPES.includes(b.type)) { prize = b.prize || {}; mkCmd(Object.assign({ msg: 'x' }, prize)); prize = { type: prize.type, value: prize.value, id: prize.id, rarity: prize.rarity, count: prize.count, msg: prize.msg }; }
+        const start = now() + delay * 60000, e = { id: uid(4), name: String(b.name || '限時活動').slice(0, 30), type: b.type, factor: factor || 1, interval: Math.max(5, Number(b.interval) || 30), n: Math.min(Math.max(parseInt(b.n) || 1, 1), 1000), prize, repeat: Math.max(0, Number(b.repeat) || 0), revert: !!b.revert, start, end: start + mins * 60000, ended: false };
+        db.events.push(e); log(`建立活動：${e.name}（${e.type}，${mins} 分鐘${e.repeat ? '，每 ' + e.repeat + ' 分鐘重複' : ''}）`); touch(); pushEvents();
         if (delay > 0) broadcast('announce', { text: `📣 活動預告：${e.name}，${delay} 分鐘後開始！`, style: 'event' });
         return json(res, 200, e);
       }
-      if ((r = p.match(/^\/admin\/api\/events\/(\w+)\/end$/)) && m === 'POST') { const e = db.events.find(x => x.id === r[1]); if (e) { e.ended = true; log(`提前結束活動 ${e.name}`); touch(); pushEvents(); broadcast('announce', { text: `活動結束：${e.name}`, style: 'info' }); } return json(res, 200, { ok: true }); }
+      if ((r = p.match(/^\/admin\/api\/events\/(\w+)\/end$/)) && m === 'POST') { const e = db.events.find(x => x.id === r[1]); if (e) { log(`提前結束活動 ${e.name}`); e.repeat = 0; if (!e.startedNotified) { e.ended = true; touch(); pushEvents(); } else endEvent(e, true); } return json(res, 200, { ok: true }); }
       if (p === '/admin/api/codes' && m === 'GET') return json(res, 200, db.codes);
       if (p === '/admin/api/codes' && m === 'POST') {
         const code = String(b.code || uid(3)).trim().toUpperCase(); if (!/^[A-Z0-9_-]{3,24}$/.test(code)) throw '代碼需 3~24 位英數字';
@@ -279,6 +350,16 @@ async function api(req, res, url) {
         if (b.autoBan !== undefined) db.settings.autoBan = Math.max(0, parseInt(b.autoBan) || 0);
         if (b.maxCps !== undefined) db.settings.maxCps = Math.min(200, Math.max(1, Number(b.maxCps) || 25)); log(`設定更新 maintenance=${db.settings.maintenance}`); touch(); return json(res, 200, db.settings);
       }
+      if (p === '/admin/api/market' && m === 'GET') return json(res, 200, { p: market.p, frozen: market.frozen, volMul: market.volMul || 1 });
+      if (p === '/admin/api/market' && m === 'POST') {
+        const f = Number(b.factor), idx = b.index === 'all' || b.index === undefined ? -1 : parseInt(b.index);
+        if (b.action === 'shock') { if (!(f > 0 && f <= 100)) throw '倍率需介於 0~100'; market.p.forEach((p, i) => { if (idx < 0 || idx === i) { market.p[i] = Math.min(1e9, Math.max(1, p * f)); market.h[i][49] = market.p[i]; } }); log(`股市調整：${idx < 0 ? '全部股票' : '股票 #' + idx} x${f}`); if (b.announce) broadcast('announce', { text: f >= 1 ? `📈 股市大漲！${idx < 0 ? '全部股票' : '股票代號 ' + (1000 + idx * 13)} x${f}` : `📉 股市大跌！${idx < 0 ? '全部股票' : '股票代號 ' + (1000 + idx * 13)} x${f}`, style: 'event' }); }
+        else if (b.action === 'freeze') { market.frozen = !!b.on; log(market.frozen ? '股市凍結' : '股市恢復'); }
+        else if (b.action === 'vol') { if (!(f >= 0 && f <= 10)) throw '波動倍率需介於 0~10'; market.volMul = f; log(`股市波動倍率 x${f}`); }
+        else if (b.action === 'reset') { market.p = market.p.map(() => 10 + Math.random() * 100); market.h = market.p.map(p => Array.from({ length: 50 }, () => p * (0.9 + Math.random() * 0.2))); db.market.p = market.p; db.market.h = market.h; log('重設股市價格'); }
+        else throw '未知操作';
+        touch(); broadcast('market', mktFull()); return json(res, 200, { ok: true });
+      }
       if (p === '/admin/api/log') return json(res, 200, db.log);
       if (p === '/admin/api/bans' && m === 'GET') { const f = o => Object.entries(o).filter(([, e]) => livE(e)).map(([key, e]) => Object.assign({ key }, e)); return json(res, 200, { players: Object.values(db.players).filter(isBanned).map(summary), devices: f(db.bans.devices), ips: f(db.bans.ips) }); }
       if (p === '/admin/api/bans/remove') { if (!['devices', 'ips'].includes(b.kind)) throw '類型錯誤'; delete db.bans[b.kind][b.key]; log(`移除${b.kind === 'ips' ? ' IP ' : '裝置'}封鎖`); touch(); return json(res, 200, { ok: true }); }
@@ -286,7 +367,7 @@ async function api(req, res, url) {
       if (p === '/admin/api/autoann' && m === 'GET') return json(res, 200, db.autoAnn);
       if (p === '/admin/api/autoann' && m === 'POST') { const text = String(b.text || '').slice(0, 200), every = Math.max(1, Number(b.every) || 10); if (!text) throw '內容空白'; db.autoAnn.push({ id: uid(4), text, style: b.style || 'info', every, next: now() + every * 60000 }); log(`建立定時公告：${text}（每 ${every} 分鐘）`); touch(); return json(res, 200, { ok: true }); }
       if ((r = p.match(/^\/admin\/api\/autoann\/(\w+)$/)) && m === 'DELETE') { db.autoAnn = db.autoAnn.filter(x => x.id !== r[1]); touch(); return json(res, 200, { ok: true }); }
-      if (p === '/admin/api/restore' && m === 'POST') { const d = b.db; if (!d || typeof d.players !== 'object') throw '備份檔格式錯誤'; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); conns.forEach((_, id) => kick(id, '伺服器還原資料，請重新登入')); log('還原備份'); touch(); return json(res, 200, { ok: true, players: Object.keys(db.players).length }); }
+      if (p === '/admin/api/restore' && m === 'POST') { const d = b.db; if (!d || typeof d.players !== 'object') throw '備份檔格式錯誤'; const keep = db.market; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); db.market = keep; conns.forEach((_, id) => kick(id, '伺服器還原資料，請重新登入')); log('還原備份'); touch(); return json(res, 200, { ok: true, players: Object.keys(db.players).length }); }
       if (p === '/admin/api/backup') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="backup.json"' }); return res.end(JSON.stringify(db)); }
     } catch (e) { return json(res, 400, { error: String(e) }); }
   }
