@@ -7,13 +7,18 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 if (ADMIN_PASSWORD === 'admin1234') console.warn('⚠ 正在使用預設後台密碼，請設定環境變數 ADMIN_PASSWORD！');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-let db = { players: {}, codes: {}, events: [], settings: { maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25 }, log: [] };
+let db = { players: {}, codes: {}, events: [], settings: { maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, xferMax: 0, xferDaily: 0, bucketHour: 1e11 }, log: [] };
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
 db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
-db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25 }, db.settings);
+db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, xferMax: 0, xferDaily: 0, bucketHour: 1e11 }, db.settings);
+db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++;
+console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
+const PERSIST_WARN = !!process.env.RENDER && !String(DATA_DIR).startsWith('/var/data');
+if (PERSIST_WARN) console.warn('⚠ 偵測到在 Render 上但沒有使用持久硬碟：重啟或休眠後所有玩家資料與帳號會消失！');
 let dirty = false;
 const persist = () => { if (!dirty) return; dirty = false; fs.writeFile(DB_FILE + '.tmp', JSON.stringify(db), e => { if (!e) fs.rename(DB_FILE + '.tmp', DB_FILE, () => {}); }); };
-setInterval(persist, 3000); process.on('SIGINT', () => { dirty = true; persist(); setTimeout(() => process.exit(), 300); });
+setInterval(persist, 3000); const flushExit = () => { try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { console.error('存檔失敗', e); } process.exit(0); };
+process.on('SIGINT', flushExit); process.on('SIGTERM', flushExit);
 const touch = () => { dirty = true; };
 const uid = (n = 8) => crypto.randomBytes(n).toString('hex');
 const log = (m) => { db.log.unshift({ t: Date.now(), m }); db.log.length = Math.min(db.log.length, 500); touch(); };
@@ -107,6 +112,11 @@ setInterval(() => { db.hist.push([now(), conns.size]); if (db.hist.length > 1440
 
 
 
+// ---------- 帳號密碼（玩家自訂，換裝置或被登出時用名稱+密碼登入）----------
+const hashPw = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
+const setPw = (p, pw) => { p.salt = uid(8); p.pwHash = hashPw(pw, p.salt); touch(); };
+const checkPw = (p, pw) => { if (!p.pwHash || !pw) return false; try { return crypto.timingSafeEqual(Buffer.from(hashPw(pw, p.salt), 'hex'), Buffer.from(p.pwHash, 'hex')); } catch { return false; } };
+const loginFails = new Map();
 // ---------- 封鎖系統（帳號 + 裝置 + IP + 同裝置小號）----------
 const ipOf = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
 const cookieDev = req => (/(?:^|;\s*)mcdev=(\w+)/.exec(req.headers.cookie || '') || [])[1];
@@ -147,7 +157,8 @@ const stockCap = i => Math.max(1, ...(market.h[i] || [1])) * 1.3;
 const NUM = (x, max = 1e100) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= max;
 const INT = (x, max = 1e15) => NUM(x, max) && Number.isInteger(x);
 const rarityOf = id => id < 150 ? 0 : id < 230 ? 1 : id < 275 ? 2 : id < 293 ? 3 : id < 299 ? 4 : 5;
-const BUCKET_CAP = 1e13, BUCKET_RATE = 5e12 / 3600; // 轉帳/運氣等無法驗證的額外收入額度（約每小時 5 兆）
+// 額外額度（無法歸因的收入，如運氣）：每小時可恢復 bucketHour，上限為其 2 倍；P2P 轉帳已停用，故預設調低
+const bucketCap = () => 2 * (db.settings.bucketHour || 1e11), bucketRate = () => (db.settings.bucketHour || 1e11) / 3600;
 const STOCK_PRICE_CAP = 5000;
 function structural(s) { // 回傳 {fatal, reasons}
   const bad = (m) => ({ fatal: m, reasons: [] });
@@ -171,10 +182,10 @@ function structural(s) { // 回傳 {fatal, reasons}
 }
 function evMult() { let click = 1, income = 1; activeEvents().forEach(e => { if (e.type === 'click' || e.type === 'all') click *= e.factor; if (e.type === 'income' || e.type === 'all') income *= e.factor; }); return { click, income }; }
 function vet(p, s) {
-  const sv = structural(s); if (sv.fatal) return sv; if (db.settings.ac === 'off') return { reasons: [] };
+  const sv = structural(s); if (sv.fatal) return sv; const off = db.settings.ac === 'off', hard = [];
   const st = s.state, r = sv.reasons, t = now(), old = p.save && p.save.state;
   const w = st.balance + st.bankDeposit;
-  if (!old) { if (w > 1e12) log(`ℹ 新帳號 ${p.name} 帶入高額存檔 $${Math.floor(w)}（僅記錄）`); return { reasons: r }; }
+  if (!old) { if (w > 1e12) log(`ℹ 新帳號 ${p.name} 帶入高額存檔 $${Math.floor(w)}（僅記錄）`); return { reasons: off ? [] : r, hard }; }
   const cps = db.settings.maxCps || 25, ev = evMult();
   const dt = Math.min(Math.max((t - (p.lastSaveAt || t - 5000)) / 1000, 1), 3600);
   // 收入上限一律用「上一次已接受的存檔」推算，避免玩家用假等級撐高自己的上限
@@ -196,9 +207,16 @@ function vet(p, s) {
   const allowed = oldW * 3 + earn + 1e7 + sold + loanUp + g.money + oldD * 0.0003 * dt;
   const excess = w - allowed;
   if (excess > 0) {
-    p.bucket = Math.min(BUCKET_CAP, (p.bucket === undefined ? BUCKET_CAP : p.bucket) + (t - (p.bucketT || t)) / 1000 * BUCKET_RATE); p.bucketT = t;
+    p.bucket = Math.min(bucketCap(), (p.bucket === undefined ? bucketCap() : p.bucket) + (t - (p.bucketT || t)) / 1000 * bucketRate()); p.bucketT = t;
     if (excess <= p.bucket) p.bucket -= excess; else r.push(`資產暴增：${Math.floor(oldW)} → ${Math.floor(w)}（合理上限約 ${Math.floor(allowed)}）`);
   }
+  // 連續暴增偵測：無法歸因的收入相對於資產的比例，半衰期 60 秒；防止每次存檔都「合理地」暴增 3 倍
+  const explained = earn + sold + loanUp + g.money + oldD * 0.0003 * dt;
+  p.luck = (p.luck || 0) * Math.pow(0.5, dt / 60) + Math.max(0, w - oldW - explained) / Math.max(oldW, 1e6);
+  if (p.luck > 12) r.push(`短時間內連續出現無法解釋的收入暴增（指數 ${p.luck.toFixed(1)}）`);
+  // 轉帳保護（不受防作弊模式影響）：伺服器剛扣款後 2 分鐘內，存檔資產不得回彈
+  const rd = (p.debits || []).filter(x => t - x.t < 120000).reduce((a, x) => a + x.amt, 0);
+  if (rd > 0) { const strict = oldW * 1.5 + explained + 1e5; if (w > strict) hard.push(`轉帳後資產不符（剛轉出 ${rd}，存檔資產 ${Math.floor(w)} 高於上限 ${Math.floor(strict)}）`); }
   if (bought > cash) r.push(`股票數量暴增（+${bought} 股，現金不足）`);
   if (lv * 300 > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
   const cnt = x => Object.values(x.inventory || {}).reduce((a, b) => a + b, 0) + (x.equippedBuffs || []).length;
@@ -206,7 +224,86 @@ function vet(p, s) {
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
   if (st.rebirths - (old.rebirths || 0) > 2 + g.rebirth) r.push(`重生次數暴增（+${st.rebirths - (old.rebirths || 0)}）`);
   if (st.maxCardOwnedLevel > (old.maxCardOwnedLevel || 0) && st.maxCardOwnedLevel > gc && Math.floor(100 * Math.pow(10, st.maxCardOwnedLevel - 1) * Math.pow(0.9, st.upgrades.discount)) > cash) r.push(`卡片等級暴增（→ ${st.maxCardOwnedLevel}）`);
-  return { reasons: r };
+  return { reasons: off ? [] : r, hard };
+}
+
+
+// ---------- 好友系統（伺服器端：邀請/接受、在線狀態、聊天、轉帳）----------
+db.chats = db.chats || {}; db.unread = db.unread || {}; db.xfers = db.xfers || [];
+const pairKey = (a, b) => a < b ? a + '_' + b : b + '_' + a;
+const fr = p => { p.friends = p.friends || {}; p.reqIn = p.reqIn || []; p.reqOut = p.reqOut || []; return p; };
+const pubP = p => ({ id: p.id, name: p.name, online: online(p.id) && !isBanned(p), lastSeen: p.lastSeen });
+function friendsView(me) {
+  fr(me); const tag = id => db.players[id];
+  return {
+    friends: Object.entries(me.friends).map(([id, m]) => { const f = tag(id); if (!f) return null; const st = (f.save && f.save.state) || {};
+      return Object.assign(pubP(f), { nick: m.nick || '', fav: !!m.fav, since: m.since, rebirths: st.rebirths || 0, card: st.maxCardOwnedLevel || 0, wealth: Math.floor((st.balance || 0) + (st.bankDeposit || 0)), unread: db.unread[me.id + '>' + id] || 0 }); }).filter(Boolean),
+    incoming: me.reqIn.map(tag).filter(Boolean).map(pubP), outgoing: me.reqOut.map(tag).filter(Boolean).map(pubP)
+  };
+}
+const ping = (id, kind) => sendTo(id, 'friends', { kind });
+async function friendApi(req, res, pl, p, m) {
+  fr(pl); const J = (c, o) => json(res, c, o);
+  if (p === '/api/friends' && m === 'GET') return J(200, friendsView(pl));
+  if (p === '/api/chat' && m === 'GET') {
+    const id = new URL(req.url, 'http://x').searchParams.get('with'); if (!pl.friends[id]) return J(403, { error: '不是好友' });
+    db.unread[pl.id + '>' + id] = 0; touch(); return J(200, { msgs: (db.chats[pairKey(pl.id, id)] || []).slice(-60) });
+  }
+  if (m !== 'POST') return J(404, { error: 'not found' });
+  const b = await body(req);
+  if (p === '/api/friends/request') {
+    if (pl.muted) return J(403, { error: '你已被禁言，無法發送邀請' });
+    const name = String(b.name || '').trim(), t = Object.values(db.players).find(x => x.name === name);
+    if (!t || isBanned(t)) return J(404, { error: '找不到這位玩家' }); if (t === pl) return J(400, { error: '不能加自己為好友' });
+    fr(t); if (pl.friends[t.id]) return J(409, { error: '你們已經是好友了' });
+    if (Object.keys(pl.friends).length >= 100) return J(400, { error: '好友數量已達上限（100）' });
+    if (pl.reqIn.includes(t.id)) { acceptFriend(pl, t); return J(200, { ok: true, accepted: true }); }
+    if (pl.reqOut.includes(t.id)) return J(409, { error: '已經送出邀請，請等待對方回應' });
+    if (t.reqIn.length >= 50) return J(400, { error: '對方的待處理邀請過多' });
+    pl.reqOut.push(t.id); t.reqIn.push(pl.id); touch(); ping(t.id, 'request'); sendTo(t.id, 'announce', { text: `👥 ${pl.name} 想加你為好友`, style: 'info' }); return J(200, { ok: true });
+  }
+  if (p === '/api/friends/respond') {
+    const t = db.players[b.id]; if (!t || !pl.reqIn.includes(b.id)) return J(404, { error: '邀請不存在' });
+    if (b.accept) acceptFriend(pl, fr(t)); else { pl.reqIn = pl.reqIn.filter(x => x !== t.id); t.reqOut = fr(t).reqOut.filter(x => x !== pl.id); touch(); }
+    return J(200, { ok: true });
+  }
+  if (p === '/api/friends/cancel') { const t = db.players[b.id]; pl.reqOut = pl.reqOut.filter(x => x !== b.id); if (t) fr(t).reqIn = t.reqIn.filter(x => x !== pl.id); touch(); if (t) ping(t.id, 'request'); return J(200, { ok: true }); }
+  if (p === '/api/friends/remove') {
+    const t = db.players[b.id]; delete pl.friends[b.id]; if (t) { delete fr(t).friends[pl.id]; ping(t.id, 'removed'); } delete db.chats[pairKey(pl.id, b.id)]; touch(); return J(200, { ok: true });
+  }
+  if (p === '/api/friends/meta') { const f = pl.friends[b.id]; if (!f) return J(404, { error: '不是好友' }); if (b.nick !== undefined) f.nick = String(b.nick).slice(0, 16); if (b.fav !== undefined) f.fav = !!b.fav; touch(); return J(200, { ok: true }); }
+  if (p === '/api/chat') {
+    if (pl.muted) return J(403, { error: '你已被禁言' }); const t = db.players[b.to]; if (!t || !pl.friends[b.to]) return J(403, { error: '只能傳訊息給好友' });
+    const text = String(b.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200); if (!text) return J(400, { error: '訊息不可空白' });
+    if (now() - (pl.lastChat || 0) < 700) return J(429, { error: '傳太快了' }); pl.lastChat = now();
+    const k = pairKey(pl.id, t.id), arr = db.chats[k] = db.chats[k] || [], msg = { f: pl.id, t: now(), m: text }; arr.push(msg); if (arr.length > 100) arr.shift();
+    db.unread[t.id + '>' + pl.id] = (db.unread[t.id + '>' + pl.id] || 0) + 1; touch(); sendTo(t.id, 'dm', { from: pl.id, name: pl.name, text, t: msg.t }); return J(200, { ok: true, msg });
+  }
+  if (p === '/api/friends/send') {
+    if (pl.muted) return J(403, { error: '你已被禁言，無法轉帳' });
+    const t = db.players[b.id], amt = Math.floor(Number(b.amount)), S = db.settings, f = pl.friends[b.id];
+    if (!t || !f) return J(403, { error: '只能轉帳給好友' });
+    if (isBanned(t)) return J(403, { error: '對方帳號異常，無法轉帳' });
+    if (!(amt >= 1) || !Number.isFinite(amt)) return J(400, { error: '金額錯誤' });
+    if (S.xferMinFriendMin > 0 && now() - f.since < S.xferMinFriendMin * 60000) return J(403, { error: `成為好友滿 ${S.xferMinFriendMin} 分鐘後才能轉帳` });
+    if (S.xferMax > 0 && amt > S.xferMax) return J(400, { error: `單筆轉帳上限為 $${S.xferMax.toLocaleString('en-US')}` });
+    pl.sentLog = (pl.sentLog || []).filter(x => now() - x.t < 86400000);
+    if (S.xferDaily > 0 && pl.sentLog.reduce((a, x) => a + x.amt, 0) + amt > S.xferDaily) return J(400, { error: `24 小時內轉出總額上限為 $${S.xferDaily.toLocaleString('en-US')}` });
+    if (now() - (pl.lastXfer || 0) < 3000) return J(429, { error: '轉帳太頻繁，請稍後再試' });
+    const st = pl.save && pl.save.state; if (!st || st.balance < amt) return J(400, { error: '餘額不足（以伺服器最新存檔為準，請稍等幾秒再試）' });
+    // 原子操作：伺服器先扣款並提升存檔版本（舊版本的存檔會被拒收），玩家端依回應同步扣款；收款方以指令入帳
+    st.balance -= amt; pl.rev = (pl.rev || 0) + 1; pl.lastXfer = now(); pl.debits = (pl.debits || []).concat({ t: now(), amt }).slice(-20); pl.sentLog.push({ t: now(), amt });
+    queue(t, mkCmd({ type: 'money', value: amt, msg: `💸 ${pl.name} 轉給你 $${amt.toLocaleString('en-US')}` }));
+    db.xfers.unshift({ t: now(), from: pl.name, to: t.name, amt }); db.xfers.length = Math.min(db.xfers.length, 300);
+    log(`轉帳 ${pl.name} → ${t.name}：$${amt}`); touch(); return J(200, { ok: true, rev: pl.rev, amount: amt });
+  }
+  return J(404, { error: 'not found' });
+}
+function acceptFriend(a, b) {
+  const now_ = now(); fr(a); fr(b);
+  a.reqIn = a.reqIn.filter(x => x !== b.id); a.reqOut = a.reqOut.filter(x => x !== b.id); b.reqIn = b.reqIn.filter(x => x !== a.id); b.reqOut = b.reqOut.filter(x => x !== a.id);
+  a.friends[b.id] = { since: now_ }; b.friends[a.id] = { since: now_ }; touch(); ping(a.id, 'accepted'); ping(b.id, 'accepted');
+  sendTo(b.id, 'announce', { text: `👥 你和 ${a.name} 成為好友了！`, style: 'info' }); sendTo(a.id, 'announce', { text: `👥 你和 ${b.name} 成為好友了！`, style: 'info' });
 }
 
 // ---------- 工具 ----------
@@ -222,28 +319,41 @@ async function api(req, res, url) {
   // ---- 玩家 ----
   if (p === '/api/status') return json(res, 200, { maintenance: db.settings.maintenance, motd: db.settings.motd, online: [...conns.keys()].length });
   if (p === '/api/login' && m === 'POST') {
-    const b = await body(req); const name = String(b.name || '').trim().slice(0, 16), ip = ipOf(req);
+    const b = await body(req); const name = String(b.name || '').trim().slice(0, 16), ip = ipOf(req), pw = String(b.pw || '');
     const dev = cookieDev(req) || String(b.dev || '').replace(/\W/g, '').slice(0, 32) || uid(8);
     if (!name) return json(res, 400, { error: '請輸入名稱' });
     const hit = banHit(dev, ip); if (hit) return json(res, 403, { error: '此裝置或網路已被封鎖：' + (hit.reason || '') });
     if (db.settings.maintenance) return json(res, 503, { error: '伺服器維護中：' + (db.settings.motd || '請稍後再試') });
+    const fk = ip + '|' + name, f = loginFails.get(fk) || { n: 0, t: 0 };
+    if (f.n >= 8 && now() - f.t < 600000) return json(res, 429, { error: '嘗試次數過多，請 10 分鐘後再試' });
     let pl = Object.values(db.players).find(x => x.name === name);
-    if (pl) { if (pl.token !== b.key) return json(res, 409, { error: '此名稱已被使用，若是你的帳號請輸入登入金鑰' }); }
-    else { pl = db.players[uid(4)] = { name, token: uid(12), save: null, created: now(), lastSeen: now(), banned: false, pending: [], redeemed: [] }; pl.id = Object.keys(db.players).find(k => db.players[k] === pl); log(`新玩家註冊：${name}`); }
+    if (b.register) {
+      if (pl) return json(res, 409, { error: '此名稱已被使用，請換一個名稱，或直接登入' });
+      if (pw.length < 4 || pw.length > 64) return json(res, 400, { error: '密碼需為 4～64 個字元' });
+      pl = db.players[uid(4)] = { name, token: uid(12), save: null, created: now(), lastSeen: now(), banned: false, pending: [], redeemed: [] };
+      pl.id = Object.keys(db.players).find(k => db.players[k] === pl); setPw(pl, pw); log(`新玩家註冊：${name}`);
+    } else {
+      if (!pl) return json(res, 404, { error: '找不到這個帳號。第一次玩請按「註冊新帳號」（若伺服器資料曾被重置，舊帳號會一併消失）' });
+      if (!((b.key && b.key === pl.token) || checkPw(pl, pw))) { loginFails.set(fk, { n: f.n + 1, t: now() }); return json(res, 401, { error: pw || b.key ? '密碼錯誤' : '請輸入密碼' }); }
+      loginFails.delete(fk);
+    }
     if (isBanned(pl)) return json(res, 403, { error: '帳號已被封鎖：' + (pl.banReason || '') });
     pl.devs = pl.devs || []; pl.ips = pl.ips || [];
     if (!pl.devs.includes(dev)) pl.devs.push(dev); if (!pl.ips.includes(ip)) pl.ips.push(ip); pl.devs = pl.devs.slice(-10); pl.ips = pl.ips.slice(-10);
     pl.lastSeen = now(); touch();
-    return json(res, 200, { name: pl.name, key: pl.token, hasSave: !!pl.save }, { 'Set-Cookie': `mcdev=${dev}; Max-Age=31536000; Path=/; SameSite=Lax; HttpOnly` });
+    return json(res, 200, { name: pl.name, key: pl.token, hasSave: !!pl.save, needPw: !pl.pwHash }, { 'Set-Cookie': `mcdev=${dev}; Max-Age=31536000; Path=/; SameSite=Lax; HttpOnly` });
   }
   const pl = playerByToken(req.headers['x-token'] || url.searchParams.get('key'));
   if (p.startsWith('/api/') && !p.startsWith('/api/admin')) {
     if (!pl) return json(res, 401, { error: '未登入' });
     if (isBanned(pl)) return json(res, 403, { error: '帳號已被封鎖：' + (pl.banReason || '') });
-    if (p === '/api/save' && m === 'GET') return json(res, 200, { save: pl.save });
+    if (p === '/api/save' && m === 'GET') return json(res, 200, { save: pl.save, rev: pl.rev || 0 });
     if (p === '/api/save' && m === 'POST') {
-      const b = await body(req); const s = b.save, v = vet(pl, s);
+      const b = await body(req); const s = b.save;
+      if (b.rev !== undefined && b.rev < (pl.rev || 0)) return json(res, 409, { error: 'stale', stale: true, rev: pl.rev || 0 });
+      const v = vet(pl, s);
       if (v.fatal) { pl.strikes = (pl.strikes || 0) + 1; touch(); return json(res, 422, { error: '偵測到異常數據：' + v.fatal }); }
+      if (v.hard && v.hard.length) { pl.strikes = (pl.strikes || 0) + 1; pl.flags = pl.flags || []; pl.flags.unshift({ t: now(), r: v.hard }); pl.flags.length = Math.min(pl.flags.length, 20); log(`⚠ 轉帳保護攔截 ${pl.name}：${v.hard.join('；')}`); touch(); return json(res, 422, { error: '偵測到異常數據（轉帳保護），已還原為伺服器進度' }); }
       let reject = false;
       if (v.reasons.length) {
         pl.strikes = (pl.strikes || 0) + 1; pl.flags = pl.flags || []; pl.flags.unshift({ t: now(), r: v.reasons }); pl.flags.length = Math.min(pl.flags.length, 20);
@@ -254,7 +364,7 @@ async function api(req, res, url) {
       pl.lastSeen = now(); touch();
       if (reject) return json(res, 422, { error: '偵測到異常數據，已還原為伺服器進度' });
       if (pl.save && (!pl.snaps || !pl.snaps.length || now() - pl.snaps[0].t > 30 * 60000)) { pl.snaps = pl.snaps || []; pl.snaps.unshift({ t: now(), save: pl.save }); pl.snaps.length = Math.min(pl.snaps.length, 8); }
-      pl.save = s; pl.lastSaveAt = now(); return json(res, 200, { ok: true });
+      pl.save = s; pl.lastSaveAt = now(); return json(res, 200, { ok: true, rev: pl.rev || 0 });
     }
     if (p === '/api/ack' && m === 'POST') { const b = await body(req); pl.pending = pl.pending.filter(c => !(b.ids || []).includes(c.id)); (pl.recent || []).forEach(r => { if ((b.ids || []).includes(r.id)) { r.acked = true; r.t = now(); } }); touch(); return json(res, 200, { ok: true }); }
     if (p === '/api/redeem' && m === 'POST') {
@@ -265,6 +375,13 @@ async function api(req, res, url) {
       c.uses++; pl.redeemed.push(code); queue(pl, Object.assign(mkCmd(c.cmd), { msg: `🎁 兌換成功：${code}` })); log(`${pl.name} 兌換 ${code}`);
       return json(res, 200, { ok: true });
     }
+    if (p === '/api/setpw' && m === 'POST') {
+      const b = await body(req), np = String(b.pw || '');
+      if (np.length < 4 || np.length > 64) return json(res, 400, { error: '密碼需為 4～64 個字元' });
+      if (pl.pwHash && !checkPw(pl, String(b.old || ''))) return json(res, 401, { error: '舊密碼錯誤' });
+      setPw(pl, np); log(`${pl.name} 設定/修改密碼`); return json(res, 200, { ok: true });
+    }
+    if (p.startsWith('/api/friends') || p === '/api/chat') return friendApi(req, res, pl, p, m);
     if (p === '/api/claim' && m === 'POST') {
       const b = await body(req), e = activeEvents().find(x => x.id === b.id && x.type === 'packet');
       if (!e) return json(res, 410, { error: '紅包已結束' }); e.claimed = e.claimed || [];
@@ -300,17 +417,20 @@ async function api(req, res, url) {
     try {
       if (p === '/admin/api/overview') {
         const all = Object.values(db.players).map(summary);
-        return json(res, 200, { hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
+        return json(res, 200, { meta: db.meta, persistWarn: PERSIST_WARN, hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
       }
       if (p === '/admin/api/players') { const q = (url.searchParams.get('q') || '').toLowerCase(); return json(res, 200, Object.values(db.players).filter(x => x.name.toLowerCase().includes(q)).map(summary).sort((a, b) => b.online - a.online || b.balance - a.balance)); }
       if ((r = p.match(/^\/admin\/api\/player\/(\w+)(?:\/(\w+))?$/))) {
         const t = db.players[r[1]]; if (!t) return json(res, 404, { error: '找不到玩家' }); const act = r[2];
         if (m === 'DELETE') { kick(t.id, '帳號已被刪除'); delete db.players[t.id]; log(`刪除玩家 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
-        if (!act) { const alts = Object.values(db.players).filter(x => x !== t).map(x => ({ id: x.id, name: x.name, banned: x.banned, by: (x.devs || []).some(d => (t.devs || []).includes(d)) ? '同裝置' : (x.ips || []).some(i => (t.ips || []).includes(i)) ? '同 IP' : '' })).filter(x => x.by); return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, note: t.note || '', alts, ips: t.ips || [], devCount: (t.devs || []).length, snaps: (t.snaps || []).map(x => ({ t: x.t, balance: Math.floor((x.save.state || {}).balance || 0) })) })); }
+        if (!act) { const alts = Object.values(db.players).filter(x => x !== t).map(x => ({ id: x.id, name: x.name, banned: x.banned, by: (x.devs || []).some(d => (t.devs || []).includes(d)) ? '同裝置' : (x.ips || []).some(i => (t.ips || []).includes(i)) ? '同 IP' : '' })).filter(x => x.by); return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, note: t.note || '', hasPw: !!t.pwHash, muted: !!t.muted, friendCount: Object.keys(t.friends || {}).length, alts, ips: t.ips || [], devCount: (t.devs || []).length, snaps: (t.snaps || []).map(x => ({ t: x.t, balance: Math.floor((x.save.state || {}).balance || 0) })) })); }
         if (act === 'cmd') { const c = mkCmd(b); queue(t, c); log(`對 ${t.name} 執行：${describe(c)}`); return json(res, 200, { ok: true, online: online(t.id) }); }
         if (act === 'ban') { if (b.banned) banPlayer(t, String(b.reason || '違規').slice(0, 60), Number(b.hours) || 0, b.ipHours === undefined ? 24 : Number(b.ipHours) || 0, b.alts !== false); else unban(t); return json(res, 200, { ok: true }); }
+        if (act === 'resetpw') { const np = String(b.pw || ''); if (np.length < 4) throw '密碼至少 4 個字元'; setPw(t, np); log(`重設 ${t.name} 的密碼`); return json(res, 200, { ok: true }); }
+        if (act === 'mute') { t.muted = !!b.muted; log(`${t.muted ? '禁言' : '解除禁言'} ${t.name}`); touch(); return json(res, 200, { ok: true }); }
+        if (act === 'chats') { const out = []; Object.entries(db.chats).forEach(([k, arr]) => { if (k.split('_').includes(t.id)) arr.forEach(x => out.push({ t: x.t, from: (db.players[x.f] || {}).name || '?', to: (db.players[k.split('_').find(i => i !== x.f)] || {}).name || '?', m: x.m })); }); return json(res, 200, out.sort((a, c) => c.t - a.t).slice(0, 40)); }
         if (act === 'note') { t.note = String(b.note || '').slice(0, 300); log(`備註 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
-        if (act === 'rollback') { const sn = (t.snaps || [])[parseInt(b.index)]; if (!sn) throw '找不到該快照'; t.save = sn.save; t.lastSaveAt = now(); t.strikes = 0; t.flags = []; sendTo(t.id, 'reload', {}); log(`回溯 ${t.name} 的存檔到 ${new Date(sn.t).toLocaleString('zh-TW')}`); touch(); return json(res, 200, { ok: true }); }
+        if (act === 'rollback') { const sn = (t.snaps || [])[parseInt(b.index)]; if (!sn) throw '找不到該快照'; t.save = sn.save; t.lastSaveAt = now(); t.strikes = 0; t.flags = []; t.rev = (t.rev || 0) + 1; t.debits = []; sendTo(t.id, 'reload', {}); log(`回溯 ${t.name} 的存檔到 ${new Date(sn.t).toLocaleString('zh-TW')}`); touch(); return json(res, 200, { ok: true }); }
         if (act === 'clearflags') { t.strikes = 0; t.flags = []; touch(); return json(res, 200, { ok: true }); }
         if (act === 'kick') { kick(t.id, String(b.reason || '你已被管理員踢出')); log(`踢出 ${t.name}`); return json(res, 200, { ok: true }); }
         if (act === 'rename') { const n = String(b.name || '').trim().slice(0, 16); if (!n || Object.values(db.players).some(x => x.name === n)) throw '名稱無效或重複'; log(`改名 ${t.name} → ${n}`); t.name = n; touch(); return json(res, 200, { ok: true }); }
@@ -348,6 +468,7 @@ async function api(req, res, url) {
         if (b.motd !== undefined) db.settings.motd = String(b.motd).slice(0, 100);
         if (['off', 'flag', 'reject'].includes(b.ac)) db.settings.ac = b.ac;
         if (b.autoBan !== undefined) db.settings.autoBan = Math.max(0, parseInt(b.autoBan) || 0);
+        for (const [k, mx] of [['xferMinFriendMin', 1440], ['xferMax', 1e100], ['xferDaily', 1e100], ['bucketHour', 1e100]]) if (b[k] !== undefined) db.settings[k] = Math.min(mx, Math.max(0, Number(b[k]) || 0));
         if (b.maxCps !== undefined) db.settings.maxCps = Math.min(200, Math.max(1, Number(b.maxCps) || 25)); log(`設定更新 maintenance=${db.settings.maintenance}`); touch(); return json(res, 200, db.settings);
       }
       if (p === '/admin/api/market' && m === 'GET') return json(res, 200, { p: market.p, frozen: market.frozen, volMul: market.volMul || 1 });
@@ -360,6 +481,7 @@ async function api(req, res, url) {
         else throw '未知操作';
         touch(); broadcast('market', mktFull()); return json(res, 200, { ok: true });
       }
+      if (p === '/admin/api/xfers') return json(res, 200, db.xfers);
       if (p === '/admin/api/log') return json(res, 200, db.log);
       if (p === '/admin/api/bans' && m === 'GET') { const f = o => Object.entries(o).filter(([, e]) => livE(e)).map(([key, e]) => Object.assign({ key }, e)); return json(res, 200, { players: Object.values(db.players).filter(isBanned).map(summary), devices: f(db.bans.devices), ips: f(db.bans.ips) }); }
       if (p === '/admin/api/bans/remove') { if (!['devices', 'ips'].includes(b.kind)) throw '類型錯誤'; delete db.bans[b.kind][b.key]; log(`移除${b.kind === 'ips' ? ' IP ' : '裝置'}封鎖`); touch(); return json(res, 200, { ok: true }); }
