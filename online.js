@@ -15,7 +15,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const waitMsg = t => { let b = document.getElementById('boot'); if (!b) { b = $('div', 'position:fixed;inset:0;z-index:100000;background:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:1.1rem;color:#555;text-align:center;padding:20px'); b.id = 'boot'; document.body.appendChild(b); } b.textContent = t; };
 const full = () => $('div', 'position:fixed;inset:0;z-index:99999;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center');
 const toast = (t, bg = '#28a745') => { const e = $('div', `position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99998;background:${bg};color:#fff;padding:10px 16px;border-radius:10px;max-width:90vw;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:.95rem`, t); document.body.appendChild(e); setTimeout(() => e.remove(), 4500); };
-const refresh = () => { try { renderBuffSlots(); renderCurrentCard(); renderCompanies(); renderStocks(); renderFriendList(); updateUI(); } catch (e) { console.error(e); } };
+const refresh = () => { try { state.equippedBuffs = state.equippedBuffs.map(b => buffs[b.id] || b); recalcMultiplier(); renderBuffSlots(); renderCurrentCard(); renderCompanies(); renderStocks(); renderFriendList(); updateUI(); } catch (e) { console.error(e); } };
 
 function loginScreen(msg = '', mode) {
   const o = full(), last = localStorage.getItem('mc_lastname') || ''; mode = mode || 'login';

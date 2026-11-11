@@ -312,10 +312,10 @@
                         <button class="btn gold" onclick="openInventory()">增益背包 / 合成</button>
                     </div>
                     <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                        <button class="btn" style="flex:1; min-width:70px;" onclick="requestGacha(1)">單抽 ($10億)</button>
+                        <button class="btn" style="flex:1; min-width:70px;" onclick="requestGacha(1)">單抽 ($1000兆)</button>
                         <button class="btn" style="flex:1; min-width:70px; background:#8e44ad;" onclick="requestGacha(5)">5 連抽 ($50億)</button>
-                        <button class="btn" style="flex:1; min-width:70px; background:#f39c12;" onclick="requestGacha(10)">10 連抽 ($1000億)</button>
-                        <button class="btn" style="flex:1; min-width:100px; background:linear-gradient(135deg,#e6005c,#ff00ff);" onclick="requestGacha(100)">100 連抽 ($1000億)</button>
+                        <button class="btn" style="flex:1; min-width:70px; background:#f39c12;" onclick="requestGacha(10)">10 連抽 ($1京)</button>
+                        <button class="btn" style="flex:1; min-width:100px; background:linear-gradient(135deg,#e6005c,#ff00ff);" onclick="requestGacha(100)">100 連抽 ($10京)</button>
                     </div>
                 </div>
 
@@ -612,7 +612,7 @@
         alert("新版已收到轉移確認，但為保護資料，本機舊存檔不會自動刪除。請先確認新版資料完整，再自行決定是否清理舊存檔。");
     }
 
-    function initP2P() {
+    function initP2P() { return; /* 伺服器版停用 P2P，轉帳改用好友功能（伺服器驗證） */
         // 固定玩家代碼：首次建立後存進 localStorage，重整網頁不再隨機更換。
         const FIXED_CODE_KEY = 'minimalCapital36FixedPlayerCode';
         let shortId = localStorage.getItem(FIXED_CODE_KEY);
@@ -844,9 +844,10 @@
     const rarities = ["普通", "稀有", "史詩", "傳說", "神話", "創世"];
     const rarityColors = ["#95a5a6", "#3498db", "#9b59b6", "#f39c12", "#e74c3c", "#e6005c"];
     
+    const buffRand = (i) => { let t = Math.floor((i + 1) * 2654435761) >>> 0; t ^= t >>> 15; t = Math.imul(t, 0x85EBCA6B); t ^= t >>> 13; t = Math.imul(t, 0xC2B2AE35); t ^= t >>> 16; return (t >>> 0) / 4294967296; };
     const buffs = Array.from({length: 300}, (_, i) => {
         let r = i < 150 ? 0 : i < 230 ? 1 : i < 275 ? 2 : i < 293 ? 3 : i < 299 ? 4 : 5;
-        let baseEffect = 2 + (r * 2) + Math.floor(Math.random() * (r + 3));
+        let baseEffect = 2 + (r * 2) + Math.floor(buffRand(i) * (r + 3)); // 固定倍率：每個 Buff 編號的倍率永遠相同（不再隨機重骰）
         // 創世等級 Buff 的倍率翻倍
         if (r === 5) baseEffect *= 2;
         return { id: i, name: `靈魂增益 #${i+1}`, rarity: rarities[r], rarityIndex: r, effect: baseEffect };
@@ -1598,6 +1599,7 @@
     });
 
     function recalcMultiplier() {
+        state.equippedBuffs = state.equippedBuffs.map(b => buffs[b.id] || b); // 以固定倍率為準（修正舊存檔裡的隨機倍率）
         state.multiplier = Math.floor(state.equippedBuffs.reduce((acc, b) => acc * b.effect, 1));
     }
 
@@ -1732,7 +1734,7 @@
 
     window.requestGacha = (count) => {
         initAudio();
-        const singleCost = 100000000000;
+        const singleCost = 1000000000000000; // 1000 兆
         const totalCost = singleCost * count;
 
         if (state.balance < totalCost) {

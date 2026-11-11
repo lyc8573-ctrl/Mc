@@ -206,6 +206,8 @@ const rarityOf = id => id < 150 ? 0 : id < 230 ? 1 : id < 275 ? 2 : id < 293 ? 3
 // 額外額度（無法歸因的收入，如運氣）：每小時可恢復 bucketHour，上限為其 2 倍；P2P 轉帳已停用，故預設調低
 const bucketCap = () => 2 * (db.settings.bucketHour || 1e11), bucketRate = () => (db.settings.bucketHour || 1e11) / 3600;
 const STOCK_PRICE_CAP = 5000;
+const buffRand = i => { let t = Math.floor((i + 1) * 2654435761) >>> 0; t ^= t >>> 15; t = Math.imul(t, 0x85EBCA6B); t ^= t >>> 13; t = Math.imul(t, 0xC2B2AE35); t ^= t >>> 16; return (t >>> 0) / 4294967296; };
+const buffEffect = id => { const r = rarityOf(id); let e = 2 + r * 2 + Math.floor(buffRand(id) * (r + 3)); if (r === 5) e *= 2; return e; };
 function structural(s) { // 回傳 {fatal, reasons}
   const bad = (m) => ({ fatal: m, reasons: [] });
   if (!s || typeof s !== 'object' || !s.state || typeof s.state !== 'object') return bad('存檔格式錯誤');
@@ -221,8 +223,8 @@ function structural(s) { // 回傳 {fatal, reasons}
   if (typeof st.inventory !== 'object' || !Object.entries(st.inventory).every(([k, v]) => INT(+k, 299) && INT(v, 1e7))) return bad('背包資料異常');
   if (!Array.isArray(st.equippedBuffs) || st.equippedBuffs.length > 5) r.push('裝備 Buff 欄位數異常');
   else for (const b of st.equippedBuffs) {
-    const ri = b && INT(b.id, 299) ? rarityOf(b.id) : -1, max = ri < 0 ? 0 : ri === 5 ? 38 : 3 * ri + 4, min = ri === 5 ? 24 : 2 + 2 * Math.max(ri, 0);
-    if (ri < 0 || b.rarityIndex !== ri || !Number.isFinite(b.effect) || b.effect > max || b.effect < min) { r.push(`Buff 數值不合法（#${b && b.id} 倍率 ${b && b.effect}）`); break; }
+    if (!b || !INT(b.id, 299)) { r.push(`Buff 編號不合法（${b && b.id}）`); break; }
+    b.rarityIndex = rarityOf(b.id); b.effect = buffEffect(b.id); // 倍率以伺服器為準，玩家端無法自訂
   }
   return { reasons: r };
 }
@@ -266,7 +268,7 @@ function vet(p, s) {
   if (bought > cash) r.push(`股票數量暴增（+${bought} 股，現金不足）`);
   if (lv * 300 > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
   const cnt = x => Object.values(x.inventory || {}).reduce((a, b) => a + b, 0) + (x.equippedBuffs || []).length;
-  if (cnt(st) - cnt(old) > Math.floor(cash / 1e11) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
+  if (cnt(st) - cnt(old) > Math.floor(cash / 1e15) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
   if (st.rebirths - (old.rebirths || 0) > 2 + g.rebirth) r.push(`重生次數暴增（+${st.rebirths - (old.rebirths || 0)}）`);
   if (st.maxCardOwnedLevel > (old.maxCardOwnedLevel || 0) && st.maxCardOwnedLevel > gc && Math.floor(100 * Math.pow(10, st.maxCardOwnedLevel - 1) * Math.pow(0.9, st.upgrades.discount)) > cash) r.push(`卡片等級暴增（→ ${st.maxCardOwnedLevel}）`);
