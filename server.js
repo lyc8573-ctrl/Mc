@@ -47,7 +47,7 @@ if (GH_ON) {
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
 db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
 db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, xferMax: 0, xferDaily: 0, bucketHour: 1e11 }, db.settings);
-db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++;
+db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++; db.deleted = db.deleted || {};
 console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
 const PERSIST_WARN = !!process.env.RENDER && !String(DATA_DIR).startsWith('/var/data') && !GH_ON;
 if (PERSIST_WARN) console.warn('⚠ 偵測到在 Render 上但沒有持久硬碟，也沒有設定 GitHub 備份（GH_TOKEN / GH_REPO）：重啟或休眠後所有玩家資料與帳號會消失！');
@@ -158,6 +158,43 @@ setInterval(() => { db.hist.push([now(), conns.size]); if (db.hist.length > 1440
 
 
 
+
+// ---------- 徹底刪除玩家（帳號 + 所有關聯資料）----------
+function purgePlayer(t) {
+  const id = t.id, n = { friends: 0, requests: 0, chats: 0, season: 0, events: 0 };
+  kick(id, '你的帳號已被管理員刪除', true);
+  Object.values(db.players).forEach(x => { if (x === t) return;
+    if (x.friends && x.friends[id]) { delete x.friends[id]; n.friends++; }
+    ['reqIn', 'reqOut'].forEach(k => { if (x[k] && x[k].includes(id)) { x[k] = x[k].filter(y => y !== id); n.requests++; } });
+    if (x.friends) ping(x.id, 'removed'); });
+  Object.keys(db.chats || {}).forEach(k => { if (k.split('_').includes(id)) { delete db.chats[k]; n.chats++; } });
+  Object.keys(db.unread || {}).forEach(k => { if (k.split('>').includes(id)) delete db.unread[k]; });
+  const S = db.season; if (S) { if (S.base && id in S.base) { delete S.base[id]; n.season++; } if (S.peak && id in S.peak) { delete S.peak[id]; n.season++; } }
+  (db.events || []).forEach(e => { if (e.claimed && e.claimed.includes(id)) { e.claimed = e.claimed.filter(y => y !== id); n.events++; } if (e.base && id in e.base) { delete e.base[id]; n.events++; } });
+  db.deleted[t.token] = { name: t.name, t: now() }; // 墓碑：讓這個帳號的瀏覽器下次連線時清掉本機存檔，避免舊進度被重新帶回來
+  const nm = t.name; db.seasonHistory.forEach(h => { h.top = (h.top || []).filter(x => x.name !== nm); });
+  db.xfers = (db.xfers || []).filter(x => x.from !== nm && x.to !== nm);
+  if (!t.banned) ['devices', 'ips'].forEach(k => Object.keys(db.bans[k]).forEach(key => { if (db.bans[k][key].by === id) delete db.bans[k][key]; })); // 被封鎖者的裝置/IP 封鎖會保留
+  conns.delete(id); delete db.players[id]; lbClear(); touch();
+  return n;
+}
+function cleanOrphans(purgeBans) {
+  const ids = new Set(Object.keys(db.players)), names = new Set(Object.values(db.players).map(p => p.name)), n = { 好友關係: 0, 好友邀請: 0, 聊天室: 0, 未讀: 0, 賽季資料: 0, 活動資料: 0, 轉帳紀錄: 0, 賽季歷史: 0, 封鎖紀錄: 0 };
+  Object.values(db.players).forEach(x => {
+    Object.keys(x.friends || {}).forEach(k => { if (!ids.has(k)) { delete x.friends[k]; n.好友關係++; } });
+    ['reqIn', 'reqOut'].forEach(k => { if (x[k]) { const l = x[k].length; x[k] = x[k].filter(y => ids.has(y)); n.好友邀請 += l - x[k].length; } });
+  });
+  Object.keys(db.chats || {}).forEach(k => { if (!k.split('_').every(i => ids.has(i))) { delete db.chats[k]; n.聊天室++; } });
+  Object.keys(db.unread || {}).forEach(k => { if (!k.split('>').every(i => ids.has(i))) { delete db.unread[k]; n.未讀++; } });
+  const S = db.season; if (S) ['base', 'peak'].forEach(f => Object.keys(S[f] || {}).forEach(k => { if (!ids.has(k)) { delete S[f][k]; n.賽季資料++; } }));
+  (db.events || []).forEach(e => { if (e.claimed) { const l = e.claimed.length; e.claimed = e.claimed.filter(y => ids.has(y)); n.活動資料 += l - e.claimed.length; } if (e.base) Object.keys(e.base).forEach(k => { if (!ids.has(k)) { delete e.base[k]; n.活動資料++; } }); });
+  const gone = new Set(Object.values(db.deleted || {}).map(d => d.name).filter(nm => !names.has(nm)));
+  const xl = (db.xfers || []).length; db.xfers = (db.xfers || []).filter(x => !gone.has(x.from) && !gone.has(x.to)); n.轉帳紀錄 = xl - db.xfers.length;
+  db.seasonHistory.forEach(h => { const l = (h.top || []).length; h.top = (h.top || []).filter(x => !gone.has(x.name)); n.賽季歷史 += l - h.top.length; });
+  if (purgeBans) ['devices', 'ips'].forEach(k => Object.keys(db.bans[k]).forEach(key => { const e = db.bans[k][key]; if (e.by && !ids.has(e.by)) { delete db.bans[k][key]; n.封鎖紀錄++; } }));
+  lbClear(); touch(); return n;
+}
+
 // ---------- 帳號密碼（玩家自訂，換裝置或被登出時用名稱+密碼登入）----------
 const hashPw = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
 const setPw = (p, pw) => { p.salt = uid(8); p.pwHash = hashPw(pw, p.salt); touch(); };
@@ -169,7 +206,7 @@ const cookieDev = req => (/(?:^|;\s*)mcdev=(\w+)/.exec(req.headers.cookie || '')
 const livE = e => e && (!e.exp || e.exp > now());
 const banHit = (dev, ip) => (dev && livE(db.bans.devices[dev]) && db.bans.devices[dev]) || (ip && livE(db.bans.ips[ip]) && db.bans.ips[ip]) || null;
 const isBanned = p => { if (!p.banned) return false; if (p.banUntil && p.banUntil < now()) { p.banned = false; touch(); return false; } return true; };
-function kick(id, reason) { sendTo(id, 'kick', { reason }); (conns.get(id) || []).forEach(r => { try { r.end(); } catch {} }); }
+function kick(id, reason, wipe) { sendTo(id, 'kick', { reason, wipe: !!wipe }); (conns.get(id) || []).forEach(r => { try { r.end(); } catch {} }); }
 function banPlayer(t, reason, hours, ipHours, alts) {
   const exp = hours > 0 ? now() + hours * 3600e3 : 0, set = new Set([t]);
   if (alts) Object.values(db.players).forEach(x => { if (x !== t && (x.devs || []).some(d => (t.devs || []).includes(d))) set.add(x); });
@@ -429,6 +466,7 @@ async function api(req, res, url) {
       pl = db.players[uid(4)] = { name, token: uid(12), save: null, created: now(), lastSeen: now(), banned: false, pending: [], redeemed: [] };
       pl.id = Object.keys(db.players).find(k => db.players[k] === pl); setPw(pl, pw); log(`新玩家註冊：${name}`);
     } else {
+      if (!pl && b.key && db.deleted[b.key]) return json(res, 410, { error: '這個帳號已被管理員刪除', deleted: true });
       if (!pl) return json(res, 404, { error: '找不到這個帳號。第一次玩請按「註冊新帳號」（若伺服器資料曾被重置，舊帳號會一併消失）' });
       if (!((b.key && b.key === pl.token) || checkPw(pl, pw))) { loginFails.set(fk, { n: f.n + 1, t: now() }); return json(res, 401, { error: pw || b.key ? '密碼錯誤' : '請輸入密碼' }); }
       loginFails.delete(fk);
@@ -441,7 +479,7 @@ async function api(req, res, url) {
   }
   const pl = playerByToken(req.headers['x-token'] || url.searchParams.get('key'));
   if (p.startsWith('/api/') && !p.startsWith('/api/admin')) {
-    if (!pl) return json(res, 401, { error: '未登入' });
+    if (!pl) { if (db.deleted[req.headers['x-token'] || url.searchParams.get('key')]) return json(res, 410, { error: '這個帳號已被管理員刪除', deleted: true }); return json(res, 401, { error: '未登入' }); }
     if (isBanned(pl)) return json(res, 403, { error: '帳號已被封鎖：' + (pl.banReason || '') });
     if (p === '/api/save' && m === 'GET') return json(res, 200, { save: pl.save, rev: pl.rev || 0 });
     if (p === '/api/save' && m === 'POST') {
@@ -521,12 +559,12 @@ async function api(req, res, url) {
     try {
       if (p === '/admin/api/overview') {
         const all = Object.values(db.players).map(summary);
-        return json(res, 200, { gh: { on: GH_ON, last: ghState.last, err: ghState.err, repo: GH.repo, pulled: ghState.pulled }, meta: db.meta, persistWarn: PERSIST_WARN, hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
+        return json(res, 200, { keepalive: { selfOn: SELF_ON, self: lastHealth.self, ext: lastHealth.ext }, gh: { on: GH_ON, last: ghState.last, err: ghState.err, repo: GH.repo, pulled: ghState.pulled }, meta: db.meta, persistWarn: PERSIST_WARN, hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
       }
       if (p === '/admin/api/players') { const q = (url.searchParams.get('q') || '').toLowerCase(); return json(res, 200, Object.values(db.players).filter(x => x.name.toLowerCase().includes(q)).map(summary).sort((a, b) => b.online - a.online || b.balance - a.balance)); }
       if ((r = p.match(/^\/admin\/api\/player\/(\w+)(?:\/(\w+))?$/))) {
         const t = db.players[r[1]]; if (!t) return json(res, 404, { error: '找不到玩家' }); const act = r[2];
-        if (m === 'DELETE') { kick(t.id, '帳號已被刪除'); delete db.players[t.id]; log(`刪除玩家 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
+        if (m === 'DELETE') { const name = t.name, n = purgePlayer(t); log(`徹底刪除玩家 ${name}（好友關係 ${n.friends}、邀請 ${n.requests}、聊天 ${n.chats}、賽季 ${n.season}、活動 ${n.events}）`); return json(res, 200, { ok: true, removed: n }); }
         if (!act) { const alts = Object.values(db.players).filter(x => x !== t).map(x => ({ id: x.id, name: x.name, banned: x.banned, by: (x.devs || []).some(d => (t.devs || []).includes(d)) ? '同裝置' : (x.ips || []).some(i => (t.ips || []).includes(i)) ? '同 IP' : '' })).filter(x => x.by); return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, note: t.note || '', hasPw: !!t.pwHash, hideLb: !!t.hideLb, muted: !!t.muted, friendCount: Object.keys(t.friends || {}).length, alts, ips: t.ips || [], devCount: (t.devs || []).length, snaps: (t.snaps || []).map(x => ({ t: x.t, balance: Math.floor((x.save.state || {}).balance || 0) })) })); }
         if (act === 'cmd') { const c = mkCmd(b); queue(t, c); log(`對 ${t.name} 執行：${describe(c)}`); return json(res, 200, { ok: true, online: online(t.id) }); }
         if (act === 'ban') { if (b.banned) banPlayer(t, String(b.reason || '違規').slice(0, 60), Number(b.hours) || 0, b.ipHours === undefined ? 24 : Number(b.ipHours) || 0, b.alts !== false); else unban(t); return json(res, 200, { ok: true }); }
@@ -590,6 +628,7 @@ async function api(req, res, url) {
       if (p === '/admin/api/xfers') return json(res, 200, db.xfers);
       if (p === '/admin/api/season' && m === 'GET') { const S = seasonOn(); return json(res, 200, { season: S && Object.assign(seasonPub(), { auto: S.auto, days: S.days }), board: S ? ranking('season').slice(0, 20).map(x => ({ name: x.p.name, score: Math.floor(x.s) })) : [], history: db.seasonHistory }); }
       if (p === '/admin/api/season' && m === 'POST') { if (b.action === 'start') startSeason(b); else if (b.action === 'end') endSeason(true); else if (b.action === 'cancel') endSeason(false); else throw '未知操作'; return json(res, 200, { ok: true }); }
+      if (p === '/admin/api/cleanup' && m === 'POST') { const n = cleanOrphans(!!b.bans); log('清理殘留資料：' + (Object.entries(n).filter(([, v]) => v).map(([k, v]) => k + ' ' + v).join('、') || '無')); return json(res, 200, n); }
       if (p === '/admin/api/log') return json(res, 200, db.log);
       if (p === '/admin/api/bans' && m === 'GET') { const f = o => Object.entries(o).filter(([, e]) => livE(e)).map(([key, e]) => Object.assign({ key }, e)); return json(res, 200, { players: Object.values(db.players).filter(isBanned).map(summary), devices: f(db.bans.devices), ips: f(db.bans.ips) }); }
       if (p === '/admin/api/bans/remove') { if (!['devices', 'ips'].includes(b.kind)) throw '類型錯誤'; delete db.bans[b.kind][b.key]; log(`移除${b.kind === 'ips' ? ' IP ' : '裝置'}封鎖`); touch(); return json(res, 200, { ok: true }); }
@@ -604,8 +643,11 @@ async function api(req, res, url) {
   json(res, 404, { error: 'not found' });
 }
 
+let lastHealth = { ext: 0, self: 0 };
+const SELF_URL = process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || '', SELF_ON = !!SELF_URL && process.env.KEEPALIVE !== 'off';
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/healthz') { if (url.searchParams.get('self')) lastHealth.self = now(); else lastHealth.ext = now(); res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); return res.end('ok'); }
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin/api/')) return api(req, res, url).catch(e => { console.error(e); json(res, 500, { error: 'server error' }); });
   const f = url.pathname === '/' ? 'index.html' : url.pathname === '/admin' ? 'admin.html' : url.pathname.slice(1);
   if (!['index.html', 'admin.html', 'online.js'].includes(f)) { res.writeHead(404); return res.end('Not found'); }
@@ -618,3 +660,7 @@ http.createServer((req, res) => {
   }
   fs.readFile(fp, (e, d) => { if (e) { res.writeHead(404); return res.end('Not found'); } res.writeHead(200, Object.assign({ 'Content-Type': MIME[path.extname(fp)] || 'application/octet-stream' }, hdr)); res.end(d); });
 }).listen(PORT, () => console.log(`極簡資本伺服器：http://localhost:${PORT}　後台：http://localhost:${PORT}/admin`));
+if (SELF_ON) { // 每 9 分鐘用公開網址打一次自己：Render 免費方案 15 分鐘沒有外部流量就會休眠
+  const pingSelf = () => fetch(SELF_URL.replace(/\/$/, '') + '/healthz?self=1').catch(() => {});
+  setTimeout(pingSelf, 60e3); setInterval(pingSelf, 9 * 60e3); console.log('保活：每 9 分鐘自我探測 ' + SELF_URL);
+}

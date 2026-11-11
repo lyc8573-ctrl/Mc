@@ -8,9 +8,14 @@ const K = 'mc_account';
 const readCookie = () => { try { const m = /(?:^|;\s*)mc_acc=([^;]+)/.exec(document.cookie); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch { return null; } };
 const loadAcc = () => { try { const a = JSON.parse(localStorage.getItem(K) || 'null'); if (a && a.name && a.key) return a; } catch {} return readCookie(); };
 const storeAcc = a => { try { localStorage.setItem(K, JSON.stringify(a)); localStorage.setItem('mc_lastname', a.name); } catch {} document.cookie = 'mc_acc=' + encodeURIComponent(JSON.stringify(a)) + ';max-age=31536000;path=/;SameSite=Lax'; try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {} };
+const wipeLocal = () => { // 帳號被刪：先封住遊戲的自動存檔（否則它會馬上把舊進度寫回去），再清除並重新整理
+  try { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function (k) { if (/^minimalCapital|^tutorialCompleted/.test(String(k))) return; return orig.apply(this, arguments); }; } catch {}
+  try { Object.keys(localStorage).filter(k => k.startsWith('minimalCapital') || k === 'tutorialCompleted' || k === 'mc_lastname').forEach(k => localStorage.removeItem(k)); } catch {}
+  document.cookie = 'mc_acc=;max-age=0;path=/'; if (!wipeLocal.t) wipeLocal.t = setTimeout(() => location.reload(), 2500);
+};
 const clearAcc = () => { try { localStorage.removeItem(K); } catch {} document.cookie = 'mc_acc=;max-age=0;path=/'; };
 let acc = loadAcc(), evs = [], off = 0, es, applied = new Set(), dead = false;
-const api = (p, o = {}) => fetch(p, { method: o.body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'x-token': acc ? acc.key : '' }, body: o.body && JSON.stringify(o.body) }).catch(() => { const er = new Error('無法連線到伺服器'); er.status = 0; er.data = {}; throw er; }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) { const er = new Error(j.error || r.status); er.data = j; er.status = r.status; throw er; } return j; });
+const api = (p, o = {}) => fetch(p, { method: o.body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'x-token': acc ? acc.key : '' }, body: o.body && JSON.stringify(o.body) }).catch(() => { const er = new Error('無法連線到伺服器'); er.status = 0; er.data = {}; throw er; }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) { const er = new Error(j.error || r.status); er.data = j; er.status = r.status; if (r.status === 410 && j.deleted && acc) { acc = null; clearAcc(); wipeLocal(); dead = true; try { if (es) es.close(); } catch {} blocked('你的帳號已被管理員刪除，本機存檔已清除，頁面即將重新整理'); } throw er; } return j; });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const waitMsg = t => { let b = document.getElementById('boot'); if (!b) { b = $('div', 'position:fixed;inset:0;z-index:100000;background:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:1.1rem;color:#555;text-align:center;padding:20px'); b.id = 'boot'; document.body.appendChild(b); } b.textContent = t; };
 const full = () => $('div', 'position:fixed;inset:0;z-index:99999;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center');
@@ -94,7 +99,7 @@ function connect() {
     const b = $('button', 'margin-top:6px;padding:8px 22px;border:0;border-radius:8px;background:#ffc107;font-weight:bold;font-size:1rem', '搶紅包'); b.onclick = () => { b.disabled = true; api('/api/claim', { body: { id: d.id } }).then(() => { t.remove(); }).catch(er => { toast(er.message, '#6c757d'); t.remove(); }); }; t.appendChild(b); document.body.appendChild(t); setTimeout(() => t.remove(), 60000); });
   es.addEventListener('friends', () => loadFriends());
   es.addEventListener('dm', e => { const d = JSON.parse(e.data); if (chatWith && chatWith.id === d.from) loadChat(); else { toast(`💬 ${d.name}：${d.text.slice(0, 40)}`, '#0d6efd'); loadFriends(); } });
-  es.addEventListener('kick', e => blocked(JSON.parse(e.data).reason));
+  es.addEventListener('kick', e => { const d = JSON.parse(e.data); if (d.wipe) { clearAcc(); wipeLocal(); } blocked(d.reason); });
   es.onerror = () => { if (dead) return; es.close(); setTimeout(() => !dead && connect(), 3000); };
 }
 
@@ -213,6 +218,7 @@ async function boot() {
   catch (e) {
     if (/封鎖/.test(e.message)) return blocked(e.message);
     if (e.status === 0 || e.status >= 500 || e.status === 429) { waitMsg((e.status === 503 ? e.message : '伺服器啟動中或網路不穩，自動重試中…') ); await sleep(e.status === 503 ? 10000 : 3000); return boot(); }
+    if (e.status === 410 && e.data && e.data.deleted) { acc = null; clearAcc(); wipeLocal(); return loginScreen('這個帳號已被管理員刪除，本機的舊進度也已清除。'); }
     acc = null; clearAcc(); loginScreen(e.status === 404 ? e.message : '登入已失效，請輸入名稱與密碼重新登入');
   }
 }
