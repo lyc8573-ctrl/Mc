@@ -151,6 +151,42 @@ function friendsInit() {
 }
 
 ['generateQRTransfer', 'startQRScan', 'processScannedQRCode', 'quickPayFriend'].forEach(n => { window[n] = () => toast('已改為伺服器轉帳，請到好友中心使用「轉帳」', '#6c757d'); });
+
+// ================= 賽季與排行榜 =================
+let lbBoard = 'season', lbTimer = null, lbTick = null;
+function lbInit() {
+  const b = $('button', 'position:fixed;right:12px;bottom:92px;z-index:9001;width:44px;height:44px;border-radius:50%;border:none;background:#6f42c1;color:#fff;font-size:1.3rem;box-shadow:0 3px 10px rgba(0,0,0,.3)', '🏆');
+  b.onclick = openLb; document.body.appendChild(b);
+}
+function openLb() {
+  const o = full(); o.style.cssText += ';justify-content:flex-start;padding:0;gap:0;background:#f4f6f9;text-align:left;align-items:stretch;overflow-y:auto';
+  o.innerHTML = `<div style="background:#6f42c1;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:2"><b style="font-size:1.1rem">🏆 排行榜</b><button id="lbx" style="background:#fff3;border:0;color:#fff;padding:6px 14px;border-radius:8px;font-size:1rem">關閉</button></div>
+  <div id="lbt" style="display:flex;gap:6px;padding:10px 10px 4px;overflow-x:auto;flex-shrink:0"></div><div id="lbi" style="padding:6px 12px"></div><div id="lbl" style="padding:0 10px 90px"></div>
+  <div id="lbm" style="position:sticky;bottom:0;background:#fff;border-top:1px solid #ddd;padding:10px 16px;font-weight:bold;display:none"></div>`;
+  const close = () => { clearInterval(lbTimer); clearInterval(lbTick); o.remove(); }; o.querySelector('#lbx').onclick = close;
+  const tabs = [['season', '🏆 賽季榜'], ['wealth', '💰 財富榜'], ['rebirths', '🔄 重生榜'], ['cores', '💎 核心榜'], ['card', '💳 卡片榜']];
+  const drawTabs = () => { const t = o.querySelector('#lbt'); t.innerHTML = ''; tabs.forEach(([k, n]) => { const b = $('button', `border:0;border-radius:18px;padding:7px 14px;white-space:nowrap;font-size:.9rem;background:${k === lbBoard ? '#6f42c1' : '#fff'};color:${k === lbBoard ? '#fff' : '#555'};box-shadow:0 1px 3px rgba(0,0,0,.12)`, n); b.onclick = () => { lbBoard = k; drawTabs(); load(); }; t.appendChild(b); }); };
+  let data = null; const sc = d => (n) => ['rebirths', 'card'].includes(d.metric) ? String(n) : fm(n);
+  const left = e => { const s = Math.max(0, Math.floor((e - Date.now()) / 1000)), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `${d ? d + ' 天 ' : ''}${h} 小時 ${m} 分`; };
+  const draw = () => {
+    if (!data) return; const d = data, f = sc(d), info = o.querySelector('#lbi'), list = o.querySelector('#lbl'), me = o.querySelector('#lbm');
+    let h = '';
+    if (d.board === 'season') {
+      if (d.season) h += `<div style="background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)"><b>${esc(d.season.name)}</b><div style="font-size:.85rem;color:#555;margin-top:4px">排名依據：${esc(d.season.metricName)}<br>剩餘時間：<b id="lbc">${left(d.season.end)}</b><br>前 ${d.season.n} 名可獲得獎勵：第 1 名 ${esc(d.season.prize)}（第 2 名一半、第 3 名四分之一、其餘十分之一）</div></div>`;
+      else h += `<div style="background:#fff;border-radius:12px;padding:14px;text-align:center;color:#888">目前沒有進行中的賽季，敬請期待！</div>`;
+    }
+    if (d.last && d.board === 'season') h += `<div style="font-size:.8rem;color:#777;margin-top:8px">上一賽季「${esc(d.last.name)}」：${d.last.top.map((x, i) => ['👑', '🥈', '🥉'][i] + esc(x.name)).join('　')}</div>`;
+    if (d.hidden) h += `<div style="font-size:.8rem;color:#dc3545;margin-top:6px">你目前被管理員從排行榜隱藏</div>`;
+    info.innerHTML = h;
+    list.innerHTML = d.top.map(x => `<div style="display:flex;align-items:center;gap:8px;padding:10px;margin-top:6px;border-radius:10px;background:${x.me ? '#e8defb' : '#fff'};box-shadow:0 1px 3px rgba(0,0,0,.07)"><b style="width:34px;text-align:center;font-size:${x.rank <= 3 ? '1.3rem' : '1rem'}">${['🥇', '🥈', '🥉'][x.rank - 1] || x.rank}</b><span style="flex:1;overflow-wrap:anywhere">${x.crown ? x.crown + ' ' : ''}${esc(x.name)}${x.online ? ' <span style="color:#28a745;font-size:.7rem">●</span>' : ''}</span><b>${f(x.score)}</b></div>`).join('') || '<div style="text-align:center;color:#999;padding:30px">還沒有人上榜</div>';
+    me.style.display = 'block'; me.innerHTML = d.me ? `你的排名：第 <span style="color:#6f42c1;font-size:1.2rem">${d.me.rank}</span> 名 / ${d.total} 人　${f(d.me.score)}` : '你目前未上榜' + (d.board === 'season' && d.season ? '（遊玩後會自動加入賽季排名）' : '');
+  };
+  const load = async () => { try { data = await api('/api/leaderboard?board=' + lbBoard); draw(); } catch (e) { toast(e.message, '#dc3545'); } };
+  drawTabs(); load(); lbTimer = setInterval(load, 15000);
+  lbTick = setInterval(() => { const c = o.querySelector('#lbc'); if (c && data && data.season) c.textContent = left(data.season.end); }, 30000);
+  document.body.appendChild(o);
+}
+
 function menu() {
   const b = $('button', 'position:fixed;right:12px;bottom:40px;z-index:9001;width:44px;height:44px;border-radius:50%;border:none;background:#f39c12;color:#fff;font-size:1.3rem;box-shadow:0 3px 10px rgba(0,0,0,.3)', '🎁');
   b.onclick = () => { const o = full(); o.style.background = 'rgba(255,255,255,.97)';
@@ -167,7 +203,7 @@ function menu() {
 async function start() {
   try {
     const r = await api('/api/save'); rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } else await save();
-    unboot(); connect(); menu(); friendsInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
+    unboot(); connect(); menu(); friendsInit(); lbInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
     window.addEventListener('pagehide', () => navigator.sendBeacon && 0);
   } catch (e) { if (/封鎖/.test(e.message)) blocked(e.message); else if (e.status === 0 || e.status >= 500 || e.status === 429) { waitMsg((e.message || '伺服器連線中') + '，自動重試中…'); await sleep(3000); boot(); } else { acc = null; clearAcc(); loginScreen(e.message || '登入已失效，請重新登入'); } }
 }

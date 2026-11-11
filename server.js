@@ -8,18 +8,64 @@ if (ADMIN_PASSWORD === 'admin1234') console.warn('⚠ 正在使用預設後台�
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 let db = { players: {}, codes: {}, events: [], settings: { maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, xferMax: 0, xferDaily: 0, bucketHour: 1e11 }, log: [] };
+
+// ---------- GitHub 雲端備份（免費方案的硬碟會在重啟時清空，用私人 GitHub 倉庫保存資料）----------
+// 需要環境變數：GH_TOKEN（細粒度 Token，Contents 讀寫）、GH_REPO（如 帳號/mc-data）。選用：GH_PATH、GH_BRANCH、GH_PUSH_SEC（預設 120）
+const cp = require('child_process');
+const GH = { token: process.env.GH_TOKEN, repo: process.env.GH_REPO, path: process.env.GH_PATH || 'db.json', branch: process.env.GH_BRANCH || 'main', api: process.env.GH_API || 'https://api.github.com' };
+const GH_ON = !!(GH.token && GH.repo), GH_PUSH_SEC = Math.max(30, Number(process.env.GH_PUSH_SEC) || 120);
+const ghState = { last: 0, err: '', busy: false, pulled: '' };
+let ghDirty = false;
+async function ghPushImpl(token, repo, path, branch, text, api) { // 只用 fetch；也會被序列化後在子行程使用
+  const call = async (method, p, body) => { const r = await fetch(api + '/repos/' + repo + p, { method, headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'mc-server', 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(method + ' ' + p + ' → ' + r.status + ' ' + (j.message || '')); return j; };
+  const blob = await call('POST', '/git/blobs', { content: Buffer.from(text).toString('base64'), encoding: 'base64' });
+  const tree = await call('POST', '/git/trees', { tree: [{ path, mode: '100644', type: 'blob', sha: blob.sha }] });
+  const commit = await call('POST', '/git/commits', { message: 'backup ' + new Date().toISOString(), tree: tree.sha, parents: [] }); // 無父提交：只保留最新一份，倉庫不會越長越大
+  try { await call('PATCH', '/git/refs/heads/' + branch, { sha: commit.sha, force: true }); } catch (e) { await call('POST', '/git/refs', { ref: 'refs/heads/' + branch, sha: commit.sha }); }
+}
+const GH_PULL = `
+const fs = require('fs'); const [repo, path, branch, file, api] = process.argv.slice(1);
+const H = { Authorization: 'Bearer ' + process.env.GH_TOKEN, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'mc-server' };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+(async () => { let last = '';
+  for (let i = 0; i < 4; i++) { try {
+    const a = await fetch(api + '/repos/' + repo, { headers: Object.assign({ Accept: 'application/vnd.github+json' }, H) });
+    if (a.status === 404 || a.status === 401 || a.status === 403) { console.log('FATAL 無法存取倉庫 ' + repo + '（' + a.status + '）：請確認 GH_REPO 名稱與 Token 權限'); process.exit(3); }
+    if (!a.ok) throw new Error('repo ' + a.status);
+    const r = await fetch(api + '/repos/' + repo + '/contents/' + path + '?ref=' + branch, { headers: Object.assign({ Accept: 'application/vnd.github.raw+json' }, H) });
+    if (r.status === 404) { console.log('NOREMOTE'); return; }
+    if (!r.ok) throw new Error('contents ' + r.status);
+    const txt = await r.text(), rem = JSON.parse(txt); let loc = null; try { loc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+    const rs = (rem.meta && rem.meta.savedAt) || 0, ls = (loc && loc.meta && loc.meta.savedAt) || 0;
+    if (!loc || rs >= ls) { fs.writeFileSync(file, txt); console.log('PULLED ' + Object.keys(rem.players || {}).length); } else console.log('LOCAL_NEWER');
+    return; } catch (e) { last = e.message; await sleep(2000 * (i + 1)); } }
+  console.log('FATAL 讀取 GitHub 備份失敗：' + last); process.exit(2); })();`;
+if (GH_ON) {
+  try { const out = cp.execFileSync(process.execPath, ['-e', GH_PULL, GH.repo, GH.path, GH.branch, DB_FILE, GH.api], { env: process.env, timeout: 90000 }).toString().trim(); ghState.pulled = out; console.log('GitHub 備份：' + out); }
+  catch (e) { console.error(String((e.stdout || '') + (e.stderr || '') || e.message)); console.error('✖ 無法確認 GitHub 上的備份，為避免用空資料覆蓋，伺服器不啟動。請檢查 GH_TOKEN / GH_REPO。'); process.exit(1); }
+}
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
 db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
 db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, xferMax: 0, xferDaily: 0, bucketHour: 1e11 }, db.settings);
 db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++;
 console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
-const PERSIST_WARN = !!process.env.RENDER && !String(DATA_DIR).startsWith('/var/data');
-if (PERSIST_WARN) console.warn('⚠ 偵測到在 Render 上但沒有使用持久硬碟：重啟或休眠後所有玩家資料與帳號會消失！');
+const PERSIST_WARN = !!process.env.RENDER && !String(DATA_DIR).startsWith('/var/data') && !GH_ON;
+if (PERSIST_WARN) console.warn('⚠ 偵測到在 Render 上但沒有持久硬碟，也沒有設定 GitHub 備份（GH_TOKEN / GH_REPO）：重啟或休眠後所有玩家資料與帳號會消失！');
 let dirty = false;
 const persist = () => { if (!dirty) return; dirty = false; fs.writeFile(DB_FILE + '.tmp', JSON.stringify(db), e => { if (!e) fs.rename(DB_FILE + '.tmp', DB_FILE, () => {}); }); };
-setInterval(persist, 3000); const flushExit = () => { try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { console.error('存檔失敗', e); } process.exit(0); };
+async function ghPush(force) {
+  if (!GH_ON || ghState.busy) return; if (!force && !ghDirty) return; ghState.busy = true; ghDirty = false;
+  try { db.meta.savedAt = Date.now(); await ghPushImpl(GH.token, GH.repo, GH.path, GH.branch, JSON.stringify(db), GH.api); ghState.last = Date.now(); ghState.err = ''; }
+  catch (e) { ghDirty = true; ghState.err = e.message; console.error('GitHub 備份失敗：', e.message); }
+  ghState.busy = false;
+}
+setInterval(() => { if (GH_ON && ghDirty && Date.now() - ghState.last > GH_PUSH_SEC * 1000) ghPush(); }, 10000);
+setInterval(persist, 3000); const flushExit = () => {
+  try { db.meta.savedAt = Date.now(); const txt = JSON.stringify(db); fs.writeFileSync(DB_FILE + '.tmp', txt); fs.renameSync(DB_FILE + '.tmp', DB_FILE);
+    if (GH_ON) { const code = `const f = ${ghPushImpl.toString()}; const a = process.argv.slice(1); f(a[0], a[1], a[2], a[3], require('fs').readFileSync(0, 'utf8'), a[4]).then(() => process.exit(0), e => { console.error(e.message); process.exit(1); });`; cp.execFileSync(process.execPath, ['-e', code, GH.token, GH.repo, GH.path, GH.branch, GH.api], { input: txt, timeout: 20000, stdio: ['pipe', 'inherit', 'inherit'] }); console.log('已在關閉前備份到 GitHub'); } }
+  catch (e) { console.error('關閉前存檔/備份失敗', e.message); } process.exit(0); };
 process.on('SIGINT', flushExit); process.on('SIGTERM', flushExit);
-const touch = () => { dirty = true; };
+const touch = () => { dirty = true; ghDirty = true; };
 const uid = (n = 8) => crypto.randomBytes(n).toString('hex');
 const log = (m) => { db.log.unshift({ t: Date.now(), m }); db.log.length = Math.min(db.log.length, 500); touch(); };
 
@@ -306,6 +352,54 @@ function acceptFriend(a, b) {
   sendTo(b.id, 'announce', { text: `👥 你和 ${a.name} 成為好友了！`, style: 'info' }); sendTo(a.id, 'announce', { text: `👥 你和 ${b.name} 成為好友了！`, style: 'info' });
 }
 
+
+// ---------- 賽季與排行榜 ----------
+db.season = db.season || null; db.seasonHistory = db.seasonHistory || [];
+const METRICS = { rebirths: '重生次數', wealth: '總資產（現金+存款）', cores: '資本核心', gain: '資產成長（賽季最高資產 − 起始資產）' };
+const stOf = p => (p.save && p.save.state) || {};
+function scoreOf(p, metric) {
+  const st = stOf(p), w = wealthOf(p);
+  if (metric === 'rebirths') return (st.rebirths || 0) + Math.min(0.999, Math.log10(1 + w) / 400);
+  if (metric === 'card') return (st.maxCardOwnedLevel || 0) + Math.min(0.999, Math.log10(1 + w) / 400);
+  if (metric === 'cores') return st.capitalCores || 0;
+  if (metric === 'gain') { const S = db.season; if (!S) return 0; const base = S.base[p.id] !== undefined ? S.base[p.id] : (p.created > S.start ? 0 : w); return Math.max(0, Math.max(S.peak[p.id] || 0, w) - base); }
+  return w;
+}
+const crownOf = p => p.crown ? ({ 1: '👑', 2: '🥈', 3: '🥉' })[p.crown.rank] || '' : '';
+const seasonOn = () => db.season && !db.season.ended ? db.season : null;
+function ranking(board) {
+  const S = seasonOn(), metric = board === 'season' ? (S ? S.metric : 'wealth') : board;
+  let list = Object.values(db.players).filter(p => p.save && !isBanned(p) && !p.hideLb);
+  if (board === 'season') { if (!S) return []; list = list.filter(p => p.lastSeen >= S.start || online(p.id)); }
+  return list.map(p => ({ p, s: scoreOf(p, metric) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
+}
+const lbCache = {}; const lbClear = () => Object.keys(lbCache).forEach(k => delete lbCache[k]);
+const rankingCached = board => { const c = lbCache[board]; if (c && now() - c.t < 8000) return c.r; const r = ranking(board); lbCache[board] = { t: now(), r }; return r; };
+const REWARD_SCALE = i => [1, 0.5, 0.25][i] || 0.1;
+function seasonPub() { const S = seasonOn(); if (!S) return null; return { id: S.id, name: S.name, metric: S.metric, metricName: METRICS[S.metric], start: S.start, end: S.end, n: S.n, prize: describe(prizeCmd(S, 1)) }; }
+function startSeason(o) {
+  if (seasonOn()) throw '目前已有進行中的賽季，請先結算或取消';
+  if (!METRICS[o.metric]) throw '排名依據錯誤'; const days = Number(o.days); if (!(days > 0 && days <= 365)) throw '天數需介於 0～365';
+  const S = { id: uid(4), name: String(o.name || '賽季').slice(0, 30), metric: o.metric, start: now(), end: now() + days * 86400e3, days, n: Math.min(Math.max(parseInt(o.n) || 10, 1), 50), prize: o.prize, auto: !!o.auto, ended: false, base: {}, peak: {} };
+  prizeCmd(S, 1); // 驗證獎勵設定
+  if (S.metric === 'gain') Object.values(db.players).forEach(p => { if (p.save) S.base[p.id] = wealthOf(p); });
+  db.season = S; lbClear(); log(`開始賽季：${S.name}（${METRICS[S.metric]}，${days} 天）`);
+  broadcast('announce', { text: `🏆 新賽季開始：${S.name}（排名：${METRICS[S.metric]}，共 ${days} 天）`, style: 'event' }); touch(); return S;
+}
+function endSeason(settle) {
+  const S = seasonOn(); if (!S) throw '目前沒有進行中的賽季'; const r = settle ? ranking('season').slice(0, S.n) : []; S.ended = true; let top = [];
+  if (settle) {
+    Object.values(db.players).forEach(p => { delete p.crown; });
+    r.forEach((x, i) => { queue(x.p, prizeCmd(S, REWARD_SCALE(i), `🏆 ${S.name} 第 ${i + 1} 名獎勵`)); if (i < 3) x.p.crown = { rank: i + 1, season: S.name, t: now() }; });
+    top = r.slice(0, 10).map(x => ({ name: x.p.name, score: Math.floor(x.s) }));
+    broadcast('announce', { text: r.length ? `🏆 ${S.name} 結算！冠軍：${r[0].p.name}${r[1] ? '、亞軍：' + r[1].p.name : ''}${r[2] ? '、季軍：' + r[2].p.name : ''}` : `🏆 ${S.name} 結束，無人上榜`, style: 'event' });
+  } else broadcast('announce', { text: `🏆 ${S.name} 已取消`, style: 'info' });
+  db.seasonHistory.unshift({ id: S.id, name: S.name, metric: S.metric, start: S.start, end: now(), settled: !!settle, top }); db.seasonHistory.length = Math.min(db.seasonHistory.length, 30);
+  log(`${settle ? '結算' : '取消'}賽季：${S.name}`); lbClear(); touch();
+  if (settle && S.auto) { try { startSeason({ name: S.name, days: S.days, metric: S.metric, n: S.n, prize: S.prize, auto: true }); } catch (e) { log('自動開啟下一賽季失敗：' + e); } }
+}
+setInterval(() => { const S = seasonOn(); if (S && now() >= S.end) { try { endSeason(true); } catch (e) { console.error(e); } } }, 5000);
+
 // ---------- 工具 ----------
 const json = (res, code, obj, hdr) => { res.writeHead(code, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, hdr)); res.end(JSON.stringify(obj)); };
 const body = (req, max = 3e6) => new Promise((ok, no) => { let s = ''; req.on('data', d => { s += d; if (s.length > max) { req.destroy(); no('too big'); } }); req.on('end', () => { try { ok(s ? JSON.parse(s) : {}); } catch { ok({}); } }); });
@@ -364,7 +458,8 @@ async function api(req, res, url) {
       pl.lastSeen = now(); touch();
       if (reject) return json(res, 422, { error: '偵測到異常數據，已還原為伺服器進度' });
       if (pl.save && (!pl.snaps || !pl.snaps.length || now() - pl.snaps[0].t > 30 * 60000)) { pl.snaps = pl.snaps || []; pl.snaps.unshift({ t: now(), save: pl.save }); pl.snaps.length = Math.min(pl.snaps.length, 8); }
-      pl.save = s; pl.lastSaveAt = now(); return json(res, 200, { ok: true, rev: pl.rev || 0 });
+      pl.save = s; pl.lastSaveAt = now(); const SS = seasonOn(); if (SS && SS.metric === 'gain') SS.peak[pl.id] = Math.max(SS.peak[pl.id] || 0, (s.state.balance || 0) + (s.state.bankDeposit || 0));
+      return json(res, 200, { ok: true, rev: pl.rev || 0 });
     }
     if (p === '/api/ack' && m === 'POST') { const b = await body(req); pl.pending = pl.pending.filter(c => !(b.ids || []).includes(c.id)); (pl.recent || []).forEach(r => { if ((b.ids || []).includes(r.id)) { r.acked = true; r.t = now(); } }); touch(); return json(res, 200, { ok: true }); }
     if (p === '/api/redeem' && m === 'POST') {
@@ -374,6 +469,13 @@ async function api(req, res, url) {
       if (pl.redeemed.includes(code)) return json(res, 409, { error: '你已兌換過此代碼' });
       c.uses++; pl.redeemed.push(code); queue(pl, Object.assign(mkCmd(c.cmd), { msg: `🎁 兌換成功：${code}` })); log(`${pl.name} 兌換 ${code}`);
       return json(res, 200, { ok: true });
+    }
+    if (p === '/api/leaderboard' && m === 'GET') {
+      const board = url.searchParams.get('board') || 'season'; if (!['season', 'wealth', 'rebirths', 'cores', 'card'].includes(board)) return json(res, 400, { error: '未知榜單' });
+      const S = seasonOn(), metric = board === 'season' ? (S ? S.metric : 'wealth') : board, r = rankingCached(board), me = r.findIndex(x => x.p === pl), sc = x => (metric === 'rebirths' || metric === 'card') ? Math.floor(x) : Math.floor(x);
+      const last = db.seasonHistory.find(h => h.settled);
+      return json(res, 200, { board, metric, season: seasonPub(), total: r.length, hidden: !!pl.hideLb, last: last ? { name: last.name, top: last.top.slice(0, 3) } : null,
+        top: r.slice(0, 50).map((x, i) => ({ rank: i + 1, name: x.p.name, crown: crownOf(x.p), score: sc(x.s), online: online(x.p.id), me: x.p === pl })), me: me >= 0 ? { rank: me + 1, score: sc(r[me].s) } : null });
     }
     if (p === '/api/setpw' && m === 'POST') {
       const b = await body(req), np = String(b.pw || '');
@@ -417,16 +519,17 @@ async function api(req, res, url) {
     try {
       if (p === '/admin/api/overview') {
         const all = Object.values(db.players).map(summary);
-        return json(res, 200, { meta: db.meta, persistWarn: PERSIST_WARN, hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
+        return json(res, 200, { gh: { on: GH_ON, last: ghState.last, err: ghState.err, repo: GH.repo, pulled: ghState.pulled }, meta: db.meta, persistWarn: PERSIST_WARN, hist: db.hist, flagged: all.filter(x => x.strikes).length, total: all.length, online: all.filter(x => x.online).length, money: all.reduce((a, x) => a + x.balance, 0), settings: db.settings, events: db.events.filter(e => !e.ended).length, top: all.sort((a, b) => b.balance - a.balance).slice(0, 10) });
       }
       if (p === '/admin/api/players') { const q = (url.searchParams.get('q') || '').toLowerCase(); return json(res, 200, Object.values(db.players).filter(x => x.name.toLowerCase().includes(q)).map(summary).sort((a, b) => b.online - a.online || b.balance - a.balance)); }
       if ((r = p.match(/^\/admin\/api\/player\/(\w+)(?:\/(\w+))?$/))) {
         const t = db.players[r[1]]; if (!t) return json(res, 404, { error: '找不到玩家' }); const act = r[2];
         if (m === 'DELETE') { kick(t.id, '帳號已被刪除'); delete db.players[t.id]; log(`刪除玩家 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
-        if (!act) { const alts = Object.values(db.players).filter(x => x !== t).map(x => ({ id: x.id, name: x.name, banned: x.banned, by: (x.devs || []).some(d => (t.devs || []).includes(d)) ? '同裝置' : (x.ips || []).some(i => (t.ips || []).includes(i)) ? '同 IP' : '' })).filter(x => x.by); return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, note: t.note || '', hasPw: !!t.pwHash, muted: !!t.muted, friendCount: Object.keys(t.friends || {}).length, alts, ips: t.ips || [], devCount: (t.devs || []).length, snaps: (t.snaps || []).map(x => ({ t: x.t, balance: Math.floor((x.save.state || {}).balance || 0) })) })); }
+        if (!act) { const alts = Object.values(db.players).filter(x => x !== t).map(x => ({ id: x.id, name: x.name, banned: x.banned, by: (x.devs || []).some(d => (t.devs || []).includes(d)) ? '同裝置' : (x.ips || []).some(i => (t.ips || []).includes(i)) ? '同 IP' : '' })).filter(x => x.by); return json(res, 200, Object.assign(summary(t), { key: t.token, created: t.created, note: t.note || '', hasPw: !!t.pwHash, hideLb: !!t.hideLb, muted: !!t.muted, friendCount: Object.keys(t.friends || {}).length, alts, ips: t.ips || [], devCount: (t.devs || []).length, snaps: (t.snaps || []).map(x => ({ t: x.t, balance: Math.floor((x.save.state || {}).balance || 0) })) })); }
         if (act === 'cmd') { const c = mkCmd(b); queue(t, c); log(`對 ${t.name} 執行：${describe(c)}`); return json(res, 200, { ok: true, online: online(t.id) }); }
         if (act === 'ban') { if (b.banned) banPlayer(t, String(b.reason || '違規').slice(0, 60), Number(b.hours) || 0, b.ipHours === undefined ? 24 : Number(b.ipHours) || 0, b.alts !== false); else unban(t); return json(res, 200, { ok: true }); }
         if (act === 'resetpw') { const np = String(b.pw || ''); if (np.length < 4) throw '密碼至少 4 個字元'; setPw(t, np); log(`重設 ${t.name} 的密碼`); return json(res, 200, { ok: true }); }
+        if (act === 'hidelb') { t.hideLb = !!b.hide; lbClear(); log(`${t.hideLb ? '從排行榜隱藏' : '恢復排行榜顯示'} ${t.name}`); touch(); return json(res, 200, { ok: true }); }
         if (act === 'mute') { t.muted = !!b.muted; log(`${t.muted ? '禁言' : '解除禁言'} ${t.name}`); touch(); return json(res, 200, { ok: true }); }
         if (act === 'chats') { const out = []; Object.entries(db.chats).forEach(([k, arr]) => { if (k.split('_').includes(t.id)) arr.forEach(x => out.push({ t: x.t, from: (db.players[x.f] || {}).name || '?', to: (db.players[k.split('_').find(i => i !== x.f)] || {}).name || '?', m: x.m })); }); return json(res, 200, out.sort((a, c) => c.t - a.t).slice(0, 40)); }
         if (act === 'note') { t.note = String(b.note || '').slice(0, 300); log(`備註 ${t.name}`); touch(); return json(res, 200, { ok: true }); }
@@ -481,7 +584,10 @@ async function api(req, res, url) {
         else throw '未知操作';
         touch(); broadcast('market', mktFull()); return json(res, 200, { ok: true });
       }
+      if (p === '/admin/api/pushnow' && m === 'POST') { if (!GH_ON) throw '尚未設定 GH_TOKEN / GH_REPO'; await ghPush(true); if (ghState.err) throw '備份失敗：' + ghState.err; return json(res, 200, { ok: true, last: ghState.last }); }
       if (p === '/admin/api/xfers') return json(res, 200, db.xfers);
+      if (p === '/admin/api/season' && m === 'GET') { const S = seasonOn(); return json(res, 200, { season: S && Object.assign(seasonPub(), { auto: S.auto, days: S.days }), board: S ? ranking('season').slice(0, 20).map(x => ({ name: x.p.name, score: Math.floor(x.s) })) : [], history: db.seasonHistory }); }
+      if (p === '/admin/api/season' && m === 'POST') { if (b.action === 'start') startSeason(b); else if (b.action === 'end') endSeason(true); else if (b.action === 'cancel') endSeason(false); else throw '未知操作'; return json(res, 200, { ok: true }); }
       if (p === '/admin/api/log') return json(res, 200, db.log);
       if (p === '/admin/api/bans' && m === 'GET') { const f = o => Object.entries(o).filter(([, e]) => livE(e)).map(([key, e]) => Object.assign({ key }, e)); return json(res, 200, { players: Object.values(db.players).filter(isBanned).map(summary), devices: f(db.bans.devices), ips: f(db.bans.ips) }); }
       if (p === '/admin/api/bans/remove') { if (!['devices', 'ips'].includes(b.kind)) throw '類型錯誤'; delete db.bans[b.kind][b.key]; log(`移除${b.kind === 'ips' ? ' IP ' : '裝置'}封鎖`); touch(); return json(res, 200, { ok: true }); }
