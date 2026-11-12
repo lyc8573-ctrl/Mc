@@ -255,6 +255,7 @@ function structural(s) { // 回傳 {fatal, reasons}
   st.bankDeposit = st.bankDeposit || 0; st.bankLoan = st.bankLoan || 0; st.upgrades = st.upgrades || { click: 0, company: 0, discount: 0 }; st.inventory = st.inventory || {}; st.equippedBuffs = st.equippedBuffs || [];
   const r = [];
   if (!INT(st.rebirths, 300) || !INT(st.capitalCores) || !INT(st.currentCardLevel, 29) || !INT(st.maxCardOwnedLevel, 29) || !NUM(st.baseClick, 1e6)) return bad('進度數值異常');
+  st.btnOwned = st.btnOwned || 0; st.btnSel = st.btnSel || 0; if (!INT(st.btnOwned, 30) || !INT(st.btnSel, 30)) return bad('按鈕等級異常'); if (st.btnSel > st.btnOwned) r.push('使用中的按鈕高於已購買等級');
   if (st.currentCardLevel > st.maxCardOwnedLevel) r.push('目前卡片等級高於已擁有最高等級');
   for (const k of ['click', 'company', 'discount']) if (!INT(st.upgrades[k], 1e6)) return bad('天賦數值異常');
   if (typeof st.inventory !== 'object' || !Object.entries(st.inventory).every(([k, v]) => INT(+k, 299) && INT(v, 1e7))) return bad('背包資料異常');
@@ -276,7 +277,10 @@ function vet(p, s) {
   // 收入上限一律用「上一次已接受的存檔」推算，避免玩家用假等級撐高自己的上限
   const ou = Object.assign({ click: 0, company: 0, discount: 0 }, old.upgrades), oCards = old.currentCardLevel || 0, oReb = Math.min(old.rebirths || 0, 300);
   const mult = Math.floor((old.equippedBuffs || []).reduce((a, b) => a * ((b && b.effect) || 1), 1)) || 1;
-  const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oCards) * mult * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
+  const BTN_MULT = 4, btnPrice = k => Number('1e' + (3 + 2 * (k - 1))); // 主畫面按鈕：每級價格 ×100、點擊收益 ×4
+  const oBtn = Math.min(old.btnOwned || 0, 30), nBtn = Math.min(st.btnOwned || 0, 30); let btnCost = 0; for (let k = oBtn + 1; k <= nBtn; k++) btnCost += btnPrice(k);
+  const btnLvl = btnCost <= (old.balance || 0) + (old.bankDeposit || 0) + 1e7 ? Math.max(oBtn, nBtn) : oBtn;
+  const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oCards) * mult * Math.pow(BTN_MULT, btnLvl) * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
   let pas = 0; (p.save.companies || []).forEach((c, i) => pas += ((c && c.level) || 0) * Math.floor(Math.floor(10 * Math.pow(1.45, i)) * 0.75 * (1 + 0.375 * oCards) * (1 + ou.company)));
   const earn = (click * cps + pas * mult * ev.income) * dt * 3;
   const oldB = old.balance || 0, oldD = old.bankDeposit || 0, oldW = oldB + oldD;
@@ -305,9 +309,10 @@ function vet(p, s) {
   if (bought > cash) r.push(`股票數量暴增（+${bought} 股，現金不足）`);
   if (lv * 300 > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
   const cnt = x => Object.values(x.inventory || {}).reduce((a, b) => a + b, 0) + (x.equippedBuffs || []).length;
-  if (cnt(st) - cnt(old) > Math.floor(cash / 1e15) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
+  if (cnt(st) - cnt(old) > Math.floor(cash / 1e19) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
   if (st.rebirths - (old.rebirths || 0) > 2 + g.rebirth) r.push(`重生次數暴增（+${st.rebirths - (old.rebirths || 0)}）`);
+  if (btnCost > cash) r.push(`按鈕等級暴增（${oBtn} → ${nBtn}，現金不足）`);
   if (st.maxCardOwnedLevel > (old.maxCardOwnedLevel || 0) && st.maxCardOwnedLevel > gc && Math.floor(100 * Math.pow(10, st.maxCardOwnedLevel - 1) * Math.pow(0.9, st.upgrades.discount)) > cash) r.push(`卡片等級暴增（→ ${st.maxCardOwnedLevel}）`);
   return { reasons: off ? [] : r, hard };
 }

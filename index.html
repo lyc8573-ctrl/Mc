@@ -216,6 +216,7 @@
                     <div class="clicker-wrap" id="clicker-wrap">
                         <button class="click-btn" id="main-clicker">$</button>
                     </div>
+                    <div style="text-align:center;margin-top:12px;"><button class="btn" id="open-btn-shop" style="padding:8px 18px;">🔘 按鈕商店</button></div>
                 </div>
             </div>
 
@@ -312,10 +313,10 @@
                         <button class="btn gold" onclick="openInventory()">增益背包 / 合成</button>
                     </div>
                     <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                        <button class="btn" style="flex:1; min-width:70px;" onclick="requestGacha(1)">單抽 ($1000兆)</button>
+                        <button class="btn" style="flex:1; min-width:70px;" onclick="requestGacha(1)">單抽 ($1000京)</button>
                         <button class="btn" style="flex:1; min-width:70px; background:#8e44ad;" onclick="requestGacha(5)">5 連抽 ($50億)</button>
-                        <button class="btn" style="flex:1; min-width:70px; background:#f39c12;" onclick="requestGacha(10)">10 連抽 ($1京)</button>
-                        <button class="btn" style="flex:1; min-width:100px; background:linear-gradient(135deg,#e6005c,#ff00ff);" onclick="requestGacha(100)">100 連抽 ($10京)</button>
+                        <button class="btn" style="flex:1; min-width:70px; background:#f39c12;" onclick="requestGacha(10)">10 連抽 ($1垓)</button>
+                        <button class="btn" style="flex:1; min-width:100px; background:linear-gradient(135deg,#e6005c,#ff00ff);" onclick="requestGacha(100)">100 連抽 ($10垓)</button>
                     </div>
                 </div>
 
@@ -413,6 +414,12 @@
 <div id="card-catalog-overlay" class="overlay">
     <div id="catalog-scroll"></div>
     <div class="overlay-close" onclick="closeCatalog()">X</div>
+</div>
+
+<!-- 按鈕商店 Overlay -->
+<div id="btn-shop-overlay" class="overlay">
+    <div id="btn-shop-scroll" style="padding:50px 16px 60px;max-width:520px;margin:0 auto;"></div>
+    <div class="overlay-close" onclick="closeBtnShop()">X</div>
 </div>
 
 <!-- 重生商店 Overlay -->
@@ -568,7 +575,7 @@
 
     let state = {
         balance: 0, baseClick: 1, multiplier: 1, rebirths: 0, capitalCores: 0,
-        currentCardLevel: 0, maxCardOwnedLevel: 0, bankDeposit: 0, bankLoan: 0, 
+        currentCardLevel: 0, maxCardOwnedLevel: 0, bankDeposit: 0, bankLoan: 0, btnOwned: 0, btnSel: 0, 
         equippedBuffs: [], 
         inventory: {}, 
         friends: [],
@@ -855,7 +862,28 @@
 
     const getCardCost = (card) => Math.floor(card.baseCost * Math.pow(0.9, state.upgrades.discount));
     const getCompanyIncome = (comp) => Math.floor(comp.baseIncome * 0.75 * cards[state.currentCardLevel].compMulti * (1 + state.upgrades.company));
-    const getClickValue = () => Math.floor(state.baseClick * cards[state.currentCardLevel].multi * state.multiplier * (window.EVENT_CLICK_MULT||1) * Math.pow(2, state.rebirths) * (1 + state.upgrades.click));
+
+    // ===== 主畫面綠色按鈕：30 種可購買，價格每級 ×100，點擊收益每級 ×4（重生後重置）=====
+    const BTN_MULT = 4;
+    const BTN_NAMES = ['青銅','白銀','黃金','鉑金','翡翠','紅寶石','藍寶石','紫水晶','黑曜石','鑽石','烈焰','寒冰','雷霆','暴風','大地','星辰','月華','日曜','銀河','黑洞','量子','虛空','混沌','秩序','永恆','神話','傳說','創世','終焉','至尊'];
+    const BTN_SYMS = ['$','💲','🪙','💰','💎','🔴','🔵','🔮','⚫','💠','🔥','❄️','⚡','🌪️','🌍','⭐','🌙','☀️','🌌','🕳️','⚛️','🌀','🎭','⚖️','♾️','🐉','🦄','🌈','☠️','👑'];
+    const BUTTONS = [{ name: '基礎', sym: '$', price: 0, bg: '#28a745', shadow: 'rgba(40,167,69,0.4)' }].concat(BTN_NAMES.map((n, i) => {
+        const hue = (i * 12 + 20) % 360;
+        return { name: n, sym: BTN_SYMS[i], price: Number('1e' + (3 + 2 * i)), bg: `radial-gradient(circle at 30% 30%, hsl(${hue} 85% 68%), hsl(${hue} 75% 38%))`, shadow: `hsla(${hue},80%,45%,0.45)` };
+    }));
+    const CN_UNITS = ['', '萬', '億', '兆', '京', '垓', '秭', '穰', '溝', '澗', '正', '載', '極'];
+    const fmtCN = (n) => {
+        n = Number(n) || 0; if (n < 1e4) return String(Math.floor(n));
+        if (n >= 1e52) return n.toExponential(2).replace('e+', '×10^');
+        let u = 0, v = n; while (v >= 1e4 && u < CN_UNITS.length - 1) { v /= 1e4; u++; }
+        return (Math.round(v * 100) / 100).toString() + CN_UNITS[u];
+    };
+    window.applyClickerStyle = () => {
+        const el = document.getElementById('main-clicker'); if (!el) return;
+        const b = BUTTONS[Math.min(state.btnSel || 0, BUTTONS.length - 1)];
+        el.style.background = b.bg; el.style.boxShadow = `0 10px 30px ${b.shadow}`; el.textContent = b.sym;
+    };
+    const getClickValue = () => Math.floor(state.baseClick * cards[state.currentCardLevel].multi * state.multiplier * (window.EVENT_CLICK_MULT||1) * Math.pow(BTN_MULT, state.btnOwned || 0) * Math.pow(2, state.rebirths) * (1 + state.upgrades.click));
 
     function savePermanentLoan(loanVal) {
         localStorage.setItem('minimalCapital_PermanentLoan', loanVal.toString());
@@ -1333,6 +1361,7 @@
         if(!state.inventory) state.inventory = {};
         if(!state.equippedBuffs) state.equippedBuffs = [];
         if(!state.friends) state.friends = [];
+        state.btnOwned = Math.min(30, Math.max(0, Math.floor(Number(state.btnOwned) || 0))); state.btnSel = Math.min(state.btnOwned, Math.max(0, Math.floor(Number(state.btnSel) || 0)));
         // 跨版本相容：舊版／新版的股票或公司數量可能不同，只匯入雙方都有的項目，避免索引超出造成整份匯入失敗。
         if (Array.isArray(parsed.stocks)) {
             parsed.stocks.slice(0, stocks.length).forEach((owned, i) => {
@@ -1601,6 +1630,7 @@
     function recalcMultiplier() {
         state.equippedBuffs = state.equippedBuffs.map(b => buffs[b.id] || b); // 以固定倍率為準（修正舊存檔裡的隨機倍率）
         state.multiplier = Math.floor(state.equippedBuffs.reduce((acc, b) => acc * b.effect, 1));
+        try { applyClickerStyle(); } catch (e) {}
     }
 
     const renderBuffSlots = () => {
@@ -1734,7 +1764,7 @@
 
     window.requestGacha = (count) => {
         initAudio();
-        const singleCost = 1000000000000000; // 1000 兆
+        const singleCost = 10000000000000000000; // 1000 京（1e19）
         const totalCost = singleCost * count;
 
         if (state.balance < totalCost) {
@@ -1899,6 +1929,34 @@
             itemEl.appendChild(actionBtn); catalogScroll.appendChild(itemEl);
         });
     };
+
+
+    window.closeBtnShop = () => { document.getElementById('btn-shop-overlay').style.display = 'none'; };
+    const renderBtnShop = () => {
+        const box = document.getElementById('btn-shop-scroll');
+        box.innerHTML = '<h2 style="color:#fff;text-align:center;margin:0 0 4px;border:none;">🔘 按鈕商店</h2><div style="color:#aaa;text-align:center;font-size:.8rem;margin-bottom:14px;">每升一級：點擊收益 ×4，價格是上一級的 100 倍（重生後重置）</div>';
+        const owned_ = state.btnOwned || 0, sel_ = state.btnSel || 0;
+        BUTTONS.forEach((b, i) => {
+            const owned = i <= owned_, next = i === owned_ + 1, using = i === sel_;
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:12px;background:#222;border-radius:14px;padding:10px 12px;margin-bottom:8px;color:#fff;';
+            row.innerHTML = `<div style="width:54px;height:54px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.6rem;background:${owned ? b.bg : '#555'};opacity:${owned ? 1 : 0.55};box-shadow:0 4px 12px ${b.shadow};">${owned ? b.sym : '🔒'}</div>
+                <div style="flex:1;min-width:0;"><b>#${i} ${b.name}按鈕</b><div style="font-size:.78rem;color:#aaa;">點擊收益 ×${fmtCN(Math.pow(BTN_MULT, i))}</div><div style="font-size:.8rem;color:#f39c12;">${i === 0 ? '免費' : '$' + fmtCN(b.price)}</div></div>`;
+            const a = document.createElement('button'); a.className = 'btn'; a.style.flexShrink = '0';
+            if (owned) {
+                if (using) { a.textContent = '使用中'; a.disabled = true; }
+                else { a.textContent = '套用'; a.onclick = () => { soundClick(); state.btnSel = i; applyClickerStyle(); renderBtnShop(); updateUI(); }; }
+            } else if (next) {
+                a.textContent = '購買'; a.className = 'btn gold';
+                a.onclick = () => {
+                    if (Number(state.balance) >= b.price && spendGameMoney(b.price)) { soundBuy(); state.btnOwned = i; state.btnSel = i; applyClickerStyle(); renderBtnShop(); updateUI(); }
+                    else { soundError(); alert(`現金餘額不足！需要 $${formatMoney(b.price)}（${fmtCN(b.price)}）。`); }
+                };
+            } else { a.textContent = '未解鎖'; a.disabled = true; }
+            row.appendChild(a); box.appendChild(row);
+        });
+    };
+    document.getElementById('open-btn-shop').addEventListener('click', () => { initAudio(); document.getElementById('btn-shop-overlay').style.display = 'block'; renderBtnShop(); });
 
     let selectedStock = 0; const canvas = document.getElementById('stockChart'); const ctx = canvas.getContext('2d');
     const renderStocks = () => {
@@ -2155,7 +2213,7 @@
         let coresGained = Math.floor(state.balance / 1e16);
         if(coresGained >= 1) { 
             soundRebirth(); state.rebirths++; state.capitalCores += coresGained;
-            state.balance = 0; state.currentCardLevel = 0; state.maxCardOwnedLevel = 0;
+            state.balance = 0; state.currentCardLevel = 0; state.maxCardOwnedLevel = 0; state.btnOwned = 0; state.btnSel = 0; applyClickerStyle();
             state.equippedBuffs = []; state.inventory = {}; state.multiplier = 1; state.bankDeposit = 0;
             companies.forEach(c => {c.level = 0; c.cost = Math.floor(300*Math.pow(1.5, c.id));});
             stocks.forEach(s => s.owned = 0);

@@ -67,7 +67,7 @@ function apply(c) {
   else if (c.type === 'cores') state.capitalCores = Math.max(0, (state.capitalCores || 0) + c.value);
   else if (c.type === 'rebirth') state.rebirths = Math.max(0, (state.rebirths || 0) + c.value);
   else if (c.type === 'buff') c.ids.forEach(i => state.inventory[i] = (state.inventory[i] || 0) + 1);
-  else if (c.type === 'reset') { Object.assign(state, { balance: 0, rebirths: 0, capitalCores: 0, bankDeposit: 0, inventory: {}, equippedBuffs: [], multiplier: 1 }); companies.forEach((x, i) => { x.level = 0; x.cost = Math.floor(300 * Math.pow(1.5, i)); }); stocks.forEach(s => s.owned = 0); }
+  else if (c.type === 'reset') { Object.assign(state, { balance: 0, rebirths: 0, capitalCores: 0, bankDeposit: 0, inventory: {}, equippedBuffs: [], multiplier: 1, btnOwned: 0, btnSel: 0 }); companies.forEach((x, i) => { x.level = 0; x.cost = Math.floor(300 * Math.pow(1.5, i)); }); stocks.forEach(s => s.owned = 0); }
   state.balance = Math.floor(Math.max(0, state.balance)); recalcMultiplier(); refresh();
   toast(c.msg || ({ card: '💳 你的卡片已被管理員調整', money: '💰 收到管理員發放的金錢', buff: '✨ 收到 Buff 獎勵', cores: '收到資本核心', rebirth: '重生次數已調整', setmoney: '餘額已被管理員調整', reset: '進度已被管理員重置' })[c.type]);
   save().then(() => api('/api/ack', { body: { ids: [c.id] } })).catch(() => {});
