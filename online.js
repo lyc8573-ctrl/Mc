@@ -4,6 +4,7 @@ const $ = (t, css, h = '') => { const e = document.createElement(t); e.style.css
 const unboot = () => { const b = document.getElementById('boot'); if (b) b.remove(); };
 const DEV = localStorage.getItem('mc_dev') || (() => { const d = Array.from(crypto.getRandomValues(new Uint8Array(8)), x => x.toString(16).padStart(2, '0')).join(''); localStorage.setItem('mc_dev', d); return d; })();
 let rev = 0, xferBusy = false;
+(() => { const st = document.createElement('style'); st.id = 'mc-fab-style'; st.textContent = 'body:has(.overlay[style*="display: block"]) .mc-fab, body:has(.overlay[style*="display: flex"]) .mc-fab { display: none !important; }'; document.head.appendChild(st); })();
 const K = 'mc_account';
 const readCookie = () => { try { const m = /(?:^|;\s*)mc_acc=([^;]+)/.exec(document.cookie); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch { return null; } };
 const loadAcc = () => { try { const a = JSON.parse(localStorage.getItem(K) || 'null'); if (a && a.name && a.key) return a; } catch {} return readCookie(); };
@@ -161,7 +162,7 @@ function friendsInit() {
 let lbBoard = 'season', lbTimer = null, lbTick = null;
 function lbInit() {
   const b = $('button', 'position:fixed;right:12px;bottom:92px;z-index:9001;width:44px;height:44px;border-radius:50%;border:none;background:#6f42c1;color:#fff;font-size:1.3rem;box-shadow:0 3px 10px rgba(0,0,0,.3)', '🏆');
-  b.onclick = openLb; document.body.appendChild(b);
+  b.className = 'mc-fab'; b.onclick = openLb; document.body.appendChild(b);
 }
 function openLb() {
   const o = full(); o.style.cssText += ';justify-content:flex-start;padding:0;gap:0;background:#f4f6f9;text-align:left;align-items:stretch;overflow-y:auto';
@@ -194,7 +195,7 @@ function openLb() {
 
 function menu() {
   const b = $('button', 'position:fixed;right:12px;bottom:40px;z-index:9001;width:44px;height:44px;border-radius:50%;border:none;background:#f39c12;color:#fff;font-size:1.3rem;box-shadow:0 3px 10px rgba(0,0,0,.3)', '🎁');
-  b.onclick = () => { const o = full(); o.style.background = 'rgba(255,255,255,.97)';
+  b.className = 'mc-fab'; b.onclick = () => { const o = full(); o.style.background = 'rgba(255,255,255,.97)';
     o.innerHTML = `<h3>👤 ${acc.name}</h3><div style="font-size:.8rem;color:#666">登入金鑰（換裝置用，請勿外流）<br><b style="user-select:all">${acc.key}</b></div>
     <input id="cd" placeholder="輸入兌換碼" style="padding:10px;width:240px;border:1px solid #ccc;border-radius:8px"><button class="btn gold" id="rd">兌換</button>
     <button class="btn secondary" id="cp">${needPw ? '設定密碼' : '修改密碼'}</button><button class="btn danger" id="lo">登出</button><button class="btn secondary" id="cl">關閉</button>`;
