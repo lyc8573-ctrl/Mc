@@ -204,6 +204,103 @@
 .skin-locked::before { display: none !important; }
 .click-btn.skin:active { transform: scale(0.93); }
 </style>
+
+<style id="card-css">
+@keyframes foilmove { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes twinkle { 0%, 100% { opacity: .25; } 50% { opacity: .95; } }
+.credit-card { padding: 15px 18px 14px; border-radius: 16px; --rx: 0deg; --ry: 0deg; --mx: 30%; --my: 18%; --glowc: #ffffff;
+  border: 1px solid rgba(255,255,255,.38);
+  box-shadow: 0 14px 28px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.5), inset 0 -2px 8px rgba(0,0,0,.28);
+  transform: perspective(760px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform .22s ease-out, box-shadow .3s, background .3s; will-change: transform; }
+.credit-card:hover { transform: perspective(760px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-4px); }
+.credit-card::after { content: ''; position: absolute; inset: 5px; border-radius: 11px; border: 1px solid rgba(255,255,255,.2); pointer-events: none; z-index: 4; }
+.card-sheen { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.42), rgba(255,255,255,0) 46%); opacity: .75; }
+.card-foil { position: absolute; inset: 0; z-index: 2; pointer-events: none; display: none; mix-blend-mode: screen; }
+.foil-1 .card-foil { display: block; opacity: .4; background: linear-gradient(115deg, transparent 15%, rgba(255,60,170,.35) 32%, rgba(60,200,255,.35) 50%, rgba(255,235,60,.3) 68%, transparent 85%); background-size: 260% 260%; animation: foilmove 7s ease infinite; }
+.foil-2 .card-foil { display: block; opacity: .55; background: linear-gradient(115deg, transparent 10%, rgba(255,60,170,.45) 28%, rgba(60,200,255,.45) 48%, rgba(120,255,160,.4) 62%, rgba(255,235,60,.4) 78%, transparent 92%), radial-gradient(1.5px 1.5px at 18% 28%, #fff, transparent 60%), radial-gradient(1.5px 1.5px at 72% 22%, #fff, transparent 60%), radial-gradient(1.5px 1.5px at 56% 78%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 88% 62%, #fff, transparent 60%); background-size: 260% 260%, auto, auto, auto, auto; animation: foilmove 5s ease infinite; }
+.foil-3 { box-shadow: 0 14px 28px rgba(0,0,0,.3), 0 0 22px var(--glowc), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 8px rgba(0,0,0,.3); }
+.foil-3 .card-foil { display: block; opacity: .7; background: conic-gradient(from 0deg at 70% 30%, rgba(255,70,120,.5), rgba(255,200,60,.5), rgba(90,255,170,.5), rgba(70,170,255,.5), rgba(190,100,255,.5), rgba(255,70,120,.5)), radial-gradient(1.6px 1.6px at 20% 30%, #fff, transparent 60%), radial-gradient(1.6px 1.6px at 78% 20%, #fff, transparent 60%), radial-gradient(1.6px 1.6px at 40% 80%, #fff, transparent 60%), radial-gradient(1.4px 1.4px at 90% 70%, #fff, transparent 60%); animation: twinkle 3s ease-in-out infinite; }
+.card-content-top, .card-content-mid, .card-content-bottom { position: relative; z-index: 3; }
+.card-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.card-name { font-size: 1.12rem; line-height: 1.15; }
+.card-lv { flex-shrink: 0; font-size: .66rem; font-weight: 800; letter-spacing: .5px; padding: 2px 7px; border-radius: 10px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.35); text-shadow: none; }
+.card-ability { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.card-pill { font-size: .66rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.3); backdrop-filter: blur(2px); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.card-content-mid { display: flex; align-items: center; gap: 10px; }
+.card-chip { position: relative; width: 44px; height: 33px; border-radius: 7px; border: 1px solid #8a6410; background: linear-gradient(135deg, #fff3b0 0%, #e8c14a 45%, #b8861b 100%); box-shadow: inset 0 1px 1px rgba(255,255,255,.7), inset 0 -1px 2px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.35); overflow: hidden; }
+.card-chip svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.card-nfc { width: 21px; height: 21px; opacity: .85; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+.card-number { font-size: 1.08rem; letter-spacing: 2.2px; text-shadow: 0 1px 0 rgba(255,255,255,.35), 0 -1px 1px rgba(0,0,0,.55), 0 2px 5px rgba(0,0,0,.35); }
+.card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
+.card-hint { font-size: .68rem; opacity: .85; }
+.card-brand { display: flex; align-items: center; }
+.card-brand i { display: block; width: 19px; height: 19px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.75); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.card-brand i + i { margin-left: -8px; background: rgba(255,255,255,.28); }
+.card-light { color: #1b2733; }
+.card-light .card-name, .card-light .card-number { text-shadow: 0 1px 0 rgba(255,255,255,.55); }
+.card-light .card-pill, .card-light .card-lv { background: rgba(255,255,255,.4); border-color: rgba(0,0,0,.18); text-shadow: none; }
+.card-light .card-pattern { filter: invert(1); opacity: .2; }
+.card-light .card-brand i { background: rgba(0,0,0,.28); border-color: rgba(0,0,0,.35); }
+.card-light .card-brand i + i { background: rgba(0,0,0,.14); }
+.credit-card.locked .card-foil, .credit-card.locked .card-sheen { display: none; }
+</style>
+
+<style id="card-css">
+.credit-card .card-pattern { opacity: .14; }
+.credit-card .card-guilloche { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: .55; mix-blend-mode: soft-light;
+  background: repeating-radial-gradient(circle at 80% 58%, rgba(255,255,255,.55) 0 1px, transparent 1px 6px), repeating-linear-gradient(118deg, rgba(255,255,255,.22) 0 1px, transparent 1px 8px);
+  -webkit-mask-image: radial-gradient(circle at 80% 58%, #000 0, #000 30%, transparent 78%); mask-image: radial-gradient(circle at 80% 58%, #000 0, #000 30%, transparent 78%); }
+.credit-card .card-emblem { position: absolute; right: -8px; bottom: -4px; width: 132px; height: 132px; z-index: 1; opacity: .24; color: #fff; transform: rotate(-10deg); pointer-events: none; filter: drop-shadow(0 0 12px rgba(255,255,255,.55)); }
+.credit-card .card-emblem svg { width: 100%; height: 100%; display: block; }
+.credit-card.card-light .card-emblem { color: #34465a; opacity: .2; filter: drop-shadow(0 0 8px rgba(255,255,255,.7)); }
+.credit-card .card-lv { display: inline-flex; align-items: center; letter-spacing: .5px; }
+.credit-card .card-lv b { margin-left: 6px; padding-left: 6px; border-left: 1px solid rgba(255,255,255,.55); font-weight: 800; }
+.credit-card.card-light .card-lv b { border-left-color: rgba(0,0,0,.35); }
+.credit-card .card-number { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 2.6px; text-shadow: 0 1px 0 rgba(255,255,255,.45), 0 -1px 0 rgba(0,0,0,.5), 0 3px 7px rgba(0,0,0,.35); }
+.credit-card.card-light .card-number { text-shadow: 0 1px 0 rgba(255,255,255,.8), 0 -1px 0 rgba(0,0,0,.25); }
+.credit-card .card-chip { background: linear-gradient(135deg, #fff1a8 0%, #e6b83a 45%, #b8860b 100%); border: 1px solid #9a6f12; box-shadow: inset 0 1px 1px rgba(255,255,255,.7), inset 0 -2px 3px rgba(120,80,0,.35), 0 1px 2px rgba(0,0,0,.35); }
+.credit-card.foil-2 .card-name, .credit-card.foil-3 .card-name { background: linear-gradient(100deg, #ffffff 0%, #ffe9a8 35%, #ffffff 55%, #ffd36b 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+.credit-card.foil-3 { box-shadow: 0 0 0 1px rgba(255,255,255,.55), 0 0 22px var(--glowc), 0 14px 28px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 8px rgba(0,0,0,.3); }
+.credit-card .card-pill { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+</style>
+
+<style id="card-pro-css">
+.credit-card .card-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,0) 40%, rgba(0,0,0,0) 56%, rgba(0,0,0,.34)); }
+.credit-card.card-light .card-scrim { background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 40%, rgba(255,255,255,0) 60%, rgba(0,0,0,.10)); }
+.credit-card.card-light.foil-2 .card-name, .credit-card.card-light.foil-3 .card-name { background: none; -webkit-background-clip: initial; background-clip: initial; color: #1b2733; filter: none; text-shadow: 0 1px 0 rgba(255,255,255,.65); }
+.credit-card.card-light .card-pill { background: rgba(255,255,255,.55); border-color: rgba(0,0,0,.16); color: #1b2733; text-shadow: none; }
+.credit-card .card-emblem { opacity: .32; width: 142px; height: 142px; right: -6px; bottom: -8px; }
+.credit-card.card-light .card-emblem { opacity: .28; }
+.credit-card .card-emblem::before { content: ''; position: absolute; inset: 10%; border-radius: 50%; border: 2px solid currentColor; opacity: .5; }
+/* 材質紋理 */
+.credit-card .card-tex { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: .75; }
+.tex-metal { mix-blend-mode: overlay; background: repeating-linear-gradient(90deg, rgba(255,255,255,.2) 0 1px, rgba(0,0,0,.12) 1px 3px), linear-gradient(115deg, transparent 18%, rgba(255,255,255,.4) 36%, transparent 52%, rgba(255,255,255,.26) 70%, transparent 86%); }
+.tex-gem { mix-blend-mode: soft-light; opacity: .95; background: conic-gradient(from 20deg at 72% 42%, rgba(255,255,255,.6) 0 11%, transparent 11% 24%, rgba(0,0,0,.45) 24% 36%, transparent 36% 49%, rgba(255,255,255,.5) 49% 61%, transparent 61% 74%, rgba(0,0,0,.38) 74% 86%, transparent 86%); }
+.tex-tech { mix-blend-mode: overlay; background: linear-gradient(rgba(255,255,255,.32) 1px, transparent 1px) 0 0/16px 16px, linear-gradient(90deg, rgba(255,255,255,.32) 1px, transparent 1px) 0 0/16px 16px, linear-gradient(180deg, transparent 0 46%, rgba(255,255,255,.35) 50%, transparent 54% 100%); }
+.tex-wave { mix-blend-mode: overlay; background: repeating-radial-gradient(ellipse at 15% 130%, rgba(255,255,255,.4) 0 2px, transparent 2px 13px), repeating-radial-gradient(ellipse at 90% -30%, rgba(255,255,255,.28) 0 2px, transparent 2px 16px); }
+.tex-fire { background: radial-gradient(circle at 50% 125%, rgba(255,235,130,.65), transparent 58%), radial-gradient(circle at 12% 112%, rgba(255,110,40,.5), transparent 48%), radial-gradient(circle at 92% 108%, rgba(255,180,60,.45), transparent 44%); }
+.tex-stars { opacity: 1; background: radial-gradient(1.4px 1.4px at 12% 18%, #fff, transparent 60%), radial-gradient(1px 1px at 28% 58%, #fff, transparent 60%), radial-gradient(1.6px 1.6px at 44% 30%, #fff, transparent 60%), radial-gradient(1px 1px at 60% 74%, #fff, transparent 60%), radial-gradient(1.4px 1.4px at 76% 20%, #fff, transparent 60%), radial-gradient(1px 1px at 88% 52%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 20% 86%, #fff, transparent 60%), radial-gradient(1.2px 1.2px at 70% 90%, #fff, transparent 60%), radial-gradient(circle at 84% 18%, rgba(190,150,255,.38), transparent 46%), radial-gradient(circle at 12% 88%, rgba(80,170,255,.30), transparent 46%); }
+.tex-gem + *, .tex-metal + * { }
+/* 邊框：越稀有越華麗 */
+.credit-card .card-rim { position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; z-index: 5; display: none;
+  background: conic-gradient(from var(--a, 200deg), var(--rim1), var(--rim2), var(--rim1), var(--rim2), var(--rim1));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+.credit-card.foil-1 .card-rim { display: block; --rim1: rgba(255,255,255,.85); --rim2: rgba(255,255,255,.12); }
+.credit-card.foil-2 .card-rim { display: block; padding: 2.5px; --rim1: #fff3b0; --rim2: #b8860b; }
+.credit-card.foil-3 .card-rim { display: block; padding: 3px; animation: skinspin 4s linear infinite;
+  background: conic-gradient(from var(--a, 0deg), #ff5f6d, #ffc371, #f9f871, #7bed9f, #70a1ff, #a55eea, #ff5f6d); }
+/* 全像防偽貼紙 */
+.credit-card .card-seal { position: absolute; right: 20px; top: 74px; width: 30px; height: 30px; border-radius: 50%; z-index: 4; pointer-events: none; display: none;
+  background: conic-gradient(from 0deg, #ff5f6d, #ffc371, #f9f871, #7bed9f, #70a1ff, #a55eea, #ff5f6d); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 0 7px rgba(255,255,255,.85), 0 1px 4px rgba(0,0,0,.4); }
+.credit-card .card-seal::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95), rgba(255,255,255,0) 52%); }
+.credit-card.foil-1 .card-seal, .credit-card.foil-2 .card-seal, .credit-card.foil-3 .card-seal { display: block; }
+.credit-card.foil-3 .card-seal { animation: skinspin 6s linear infinite; background: conic-gradient(from var(--a, 0deg), #ff5f6d, #ffc371, #f9f871, #7bed9f, #70a1ff, #a55eea, #ff5f6d); }
+.credit-card.locked .card-rim, .credit-card.locked .card-seal { display: none; }
+/* 最高階卡片：呼吸光暈 */
+@keyframes cardbreath { 0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.55), 0 0 18px var(--glowc), 0 14px 28px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 8px rgba(0,0,0,.3); } 50% { box-shadow: 0 0 0 1px rgba(255,255,255,.7), 0 0 34px var(--glowc), 0 16px 32px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 8px rgba(0,0,0,.3); } }
+.credit-card.foil-3:not(.locked) { animation: cardbreath 3.2s ease-in-out infinite; }
+</style>
 </head>
 <body>
 <div id="boot" style="position:fixed;inset:0;z-index:100000;background:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:1.1rem;color:#555">載入中…</div>
@@ -1936,27 +2033,48 @@
         document.getElementById('gacha-animation-overlay').style.display = 'none';
     };
 
+    const cardMeta = cards.map(c => {
+        const hs = c.gradient.match(/#[0-9a-f]{6}/gi) || ['#888888'];
+        const lum = hs.reduce((a, x) => { const n = parseInt(x.slice(1), 16); return a + (0.2126 * (n >> 16) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255; }, 0) / hs.length;
+        return { light: lum > 0.6, glow: hs[Math.floor(hs.length / 2)] };
+    });
+    const cardCls = (card) => (cardMeta[card.level].light ? 'card-light ' : '') + (card.level >= 24 ? 'foil-3' : card.level >= 16 ? 'foil-2' : card.level >= 8 ? 'foil-1' : '');
+    const CHIP_SVG = '<svg viewBox="0 0 44 33" fill="none" stroke="#7a5510" stroke-width="1" opacity=".75"><path d="M0 11 H15 M0 22 H15 M29 11 H44 M29 22 H44 M15 0 V33 M29 0 V33 M15 16.5 H29"/><rect x="15" y="10" width="14" height="13" rx="3"/></svg>';
+    const NFC_SVG = '<svg class="card-nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 7 C10.5 10 10.5 14 8 17"/><path d="M12 4.5 C16 9 16 15 12 19.5"/><path d="M16 2 C21.5 8 21.5 16 16 22"/></svg>';
+    // 每張卡對應一個主題圖騰（沿用按鈕圖示庫），稀有度每 5 張一階
+    const CARD_ICON_IDX = [1,0,8,4,6,2,7,5,20,13,21,17,16,12,22,29,23,9,15,25,19,28,11,27,10,18,24,26,19,14];
+    const CARD_RARITY = (lv) => ['普通','稀有','史詩','傳說','神話','創世'][Math.floor(lv / 5)];
+    const emblemOf = (lv) => { try { return BTN_SYMS[CARD_ICON_IDX[lv]] || ''; } catch (e) { return ''; } };
+    const CARD_TEX = ['metal','metal','gem','gem','gem','gem','gem','fire','tech','wave','wave','fire','stars','tech','stars','metal','metal','gem','stars','fire','stars','wave','tech','wave','fire','stars','stars','fire','stars','stars'];
     const buildCardHtml = (card, isOwned) => {
         return `
-            <div class="card-pattern">${card.patternSvg}</div>
+            <div class="card-pattern">${card.patternSvg}</div><div class="card-guilloche"></div><div class="card-tex tex-${CARD_TEX[card.level]}"></div><div class="card-scrim"></div><div class="card-emblem">${emblemOf(card.level)}</div>
+            <div class="card-sheen"></div><div class="card-foil"></div>
             <div class="card-content-top">
-                <div class="card-name">${card.name}</div>
-                <div class="card-ability">${card.abilityDesc}</div>
+                <div class="card-row"><div class="card-name">${card.name}</div><div class="card-lv">LV.${card.level}<b>${CARD_RARITY(card.level)}</b></div></div>
+                <div class="card-ability"><span class="card-pill">點擊 +${card.multi}倍</span><span class="card-pill">企業 +${card.compMulti.toFixed(1)}倍</span></div>
             </div>
-            <div class="card-content-mid">
-                <div class="card-chip"></div>
-            </div>
+            <div class="card-content-mid"><div class="card-chip">${CHIP_SVG}</div>${NFC_SVG}</div>
             <div class="card-content-bottom">
                 <div class="card-number">${isOwned ? card.number : '**** **** **** ****'}</div>
-                <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 3px;">${isOwned ? '點擊開啟圖鑑' : '未解鎖'}</div>
+                <div class="card-foot"><span class="card-hint">${isOwned ? '點擊開啟圖鑑' : '未解鎖'}</span><div class="card-brand"><i></i><i></i></div></div>
             </div>
+            <div class="card-seal"></div><div class="card-rim"></div>
         `;
     };
+    document.addEventListener('pointermove', (e) => { // 卡片 3D 傾斜 + 光澤跟著手指/滑鼠移動
+        const c = e.target.closest && e.target.closest('.credit-card'); if (!c || c.classList.contains('locked')) return;
+        const r = c.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+        c.style.setProperty('--ry', ((px - 0.5) * 14).toFixed(1) + 'deg'); c.style.setProperty('--rx', (-(py - 0.5) * 14).toFixed(1) + 'deg');
+        c.style.setProperty('--mx', (px * 100).toFixed(0) + '%'); c.style.setProperty('--my', (py * 100).toFixed(0) + '%');
+    });
+    const resetTilt = (e) => { const c = e.target.closest && e.target.closest('.credit-card'); if (c && !c.contains(e.relatedTarget)) { c.style.setProperty('--rx', '0deg'); c.style.setProperty('--ry', '0deg'); c.style.setProperty('--mx', '30%'); c.style.setProperty('--my', '18%'); } };
+    document.addEventListener('pointerout', resetTilt); document.addEventListener('pointercancel', resetTilt);
 
     const renderCurrentCard = () => {
         const display = document.getElementById('current-card-display'); display.innerHTML = '';
         const card = cards[state.currentCardLevel]; const el = document.createElement('div');
-        el.className = 'credit-card owned'; el.style.background = card.gradient;
+        el.className = 'credit-card owned ' + cardCls(card); el.style.background = card.gradient; el.style.setProperty('--glowc', cardMeta[card.level].glow);
         el.innerHTML = buildCardHtml(card, true);
         display.appendChild(el);
     };
@@ -1971,7 +2089,7 @@
             const isOwned = index <= state.maxCardOwnedLevel, isNextToUpgrade = index === state.maxCardOwnedLevel + 1;
             const itemEl = document.createElement('div'); itemEl.className = 'catalog-item';
             const cardEl = document.createElement('div');
-            cardEl.className = `credit-card catalog-card ${isOwned ? 'unlocked' : 'locked'}`;
+            cardEl.className = `credit-card catalog-card ${isOwned ? 'unlocked' : 'locked'} ${cardCls(card)}`; cardEl.style.setProperty('--glowc', cardMeta[card.level].glow);
             if(isOwned) cardEl.style.background = card.gradient;
             cardEl.innerHTML = buildCardHtml(card, isOwned);
             itemEl.appendChild(cardEl);
@@ -2449,6 +2567,7 @@
     canvas.width = canvas.parentElement.clientWidth; appWrapper.scrollLeft = window.innerWidth; 
     renderBuffSlots(); renderCurrentCard(); renderCompanies(); renderStocks(); renderFriendList(); updateUI();
     window.addEventListener('resize', () => { canvas.width = canvas.parentElement.clientWidth; drawChart(); });
+    try { applyClickerStyle(); } catch (e) {}
     if(!localStorage.getItem('tutorialCompleted')) { document.getElementById('tutorial-overlay').style.display = 'flex'; document.getElementById('tutorial-text').innerHTML = tutorialTexts[0]; }
 </script>
 <script src="/online.js"></script>
