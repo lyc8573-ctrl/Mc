@@ -357,6 +357,11 @@
     
     <div id="active-area">
         <div id="app">
+            <!-- 0. KUN Pay 面板（內容由 online.js 產生） -->
+            <div class="panel" id="panel-kunpay" style="padding:0 0 80px;background:#f4f6f9;">
+                <div style="text-align:center;color:#999;padding:80px 20px;">KUN Pay 載入中…</div>
+            </div>
+
             <!-- 1. 企業面板 -->
             <div class="panel" id="panel-company">
                 <h2>企業與資產帝國</h2>
@@ -536,7 +541,7 @@
 </div>
 
 <div class="nav-dots">
-    <div class="dot"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div>
+    <div class="dot"></div><div class="dot"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div>
 </div>
 
 <!-- QR Code 展示 Overlay (收款端 / 進度轉出端) -->
@@ -2777,7 +2782,7 @@
 
     const tutorialTexts = [
         "歡迎來到《極簡資本》！<br><br>點擊下方的綠色大『$』按鈕來賺取第一桶金吧！",
-        "資產多樣化是關鍵！<br><br>向左滑動進入企業面板，向右滑動進入金融區、股市與祈願系統。",
+        "資產多樣化是關鍵！<br><br>向左滑動進入企業面板（再往左是 KUN Pay 錢包：掃碼轉帳、買／送優惠券），向右滑動進入金融區、股市與祈願系統。",
         "當你賺到 1 萬兆時可以進行『重生』獲得【資本核心】，購買永久天賦！"
     ];
     let currentTutorialStep = 0;
@@ -2789,7 +2794,7 @@
 
     loadGame(); 
     initP2P(); 
-    canvas.width = canvas.parentElement.clientWidth; appWrapper.scrollLeft = window.innerWidth; 
+    canvas.width = canvas.parentElement.clientWidth; appWrapper.scrollLeft = window.innerWidth * 2; 
     renderBuffSlots(); renderCurrentCard(); renderCompanies(); renderStocks(); renderFriendList(); updateUI();
     window.addEventListener('resize', () => { canvas.width = canvas.parentElement.clientWidth; drawChart(); });
     try { applyClickerStyle(); } catch (e) {}

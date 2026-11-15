@@ -99,6 +99,7 @@ function connect() {
   es.addEventListener('packet', e => { const d = JSON.parse(e.data); const t = $('div', 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:99997;background:#dc3545;color:#fff;padding:12px 16px;border-radius:12px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.35)', `🧧 ${d.name}<br><small>限量 ${d.left} 份，手快有！</small><br>`);
     const b = $('button', 'margin-top:6px;padding:8px 22px;border:0;border-radius:8px;background:#ffc107;font-weight:bold;font-size:1rem', '搶紅包'); b.onclick = () => { b.disabled = true; api('/api/claim', { body: { id: d.id } }).then(() => { t.remove(); }).catch(er => { toast(er.message, '#6c757d'); t.remove(); }); }; t.appendChild(b); document.body.appendChild(t); setTimeout(() => t.remove(), 60000); });
   es.addEventListener('friends', () => loadFriends());
+  es.addEventListener('kp', () => kpLoad()); es.addEventListener('events', () => kpRender());
   es.addEventListener('dm', e => { const d = JSON.parse(e.data); if (chatWith && chatWith.id === d.from) loadChat(); else { toast(`💬 ${d.name}：${d.text.slice(0, 40)}`, '#0d6efd'); loadFriends(); } });
   es.addEventListener('kick', e => { const d = JSON.parse(e.data); if (d.wipe) { clearAcc(); wipeLocal(); } blocked(d.reason); });
   es.onerror = () => { if (dead) return; es.close(); setTimeout(() => !dead && connect(), 3000); };
@@ -193,6 +194,163 @@ function openLb() {
   document.body.appendChild(o);
 }
 
+// ================= KUN Pay 錢包頁（企業頁左邊）=================
+(() => { const st = document.createElement('style'); st.textContent = `
+.kp-hero{background:linear-gradient(135deg,#2b2b2b,#000);color:#fff;padding:20px 18px 56px;border-radius:0 0 26px 26px}
+.kp-card{background:#fff;margin:-36px 14px 0;border-radius:16px;padding:14px 6px;box-shadow:0 4px 14px rgba(0,0,0,.1);display:grid;grid-template-columns:repeat(4,1fr);gap:14px 0;position:relative}
+.kp-act{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;font-size:.74rem;color:#333;cursor:pointer;padding:2px 0}
+.kp-act i{font-style:normal;width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:#eee;color:#111}
+.kp-sec{margin:20px 14px 0}.kp-sec h4{margin:0 0 8px;font-size:1rem;display:flex;justify-content:space-between;align-items:center;color:#222}
+.kp-ban{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}.kp-ban div{flex:0 0 210px;border-radius:14px;padding:12px;color:#fff;font-size:.85rem;line-height:1.45}
+.kp-cp{display:flex;background:#fff;border-radius:14px;margin-bottom:10px;box-shadow:0 1px 5px rgba(0,0,0,.08);overflow:hidden}
+.kp-ci{width:70px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--c);color:#fff;flex-shrink:0}
+.kp-cb{flex:1;padding:10px;min-width:0;border-left:2px dashed #ddd;color:#222}.kp-cb small{color:#777;display:block;margin-top:2px}.kp-pr{color:#e67e22;font-weight:bold;margin-top:4px}
+.kp-ca{display:flex;flex-direction:column;gap:6px;justify-content:center;padding:8px}
+.kp-b{border:0;border-radius:8px;padding:7px 10px;font-size:.8rem;color:#fff;background:#111;cursor:pointer;white-space:nowrap}.kp-b.g{background:#fd7e14}.kp-b.s{background:#6c757d}
+.kp-h{display:flex;gap:10px;align-items:center;background:#fff;border-radius:12px;padding:10px;margin-bottom:6px;color:#222}
+.kp-empty{color:#999;text-align:center;padding:16px;border:1px dashed #ddd;border-radius:12px;font-size:.88rem;background:#fff}`; document.head.appendChild(st); })();
+let KP = { shop: [], coupons: [], hist: [] }, kpBusy = false;
+const cn = n => { try { return fmtCN(n); } catch { return fm(n); } };
+const kb = n => (Number(n) >= 1e8 ? cn(n) : fm(n));
+const ICONS = {
+  scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M4 12h16"/>',
+  qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h3v3M20 14v.01M14 20h.01M17 20h3v-3"/>',
+  send: '<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 2 4.5 5"/>',
+  cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2.5l2.2 11h10.5l2-8H6.5"/>',
+  ticket: '<path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z"/><path d="M14 7v10" stroke-dasharray="2 2"/>',
+  gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8C10 8 8 7 8 5.5S10 3 12 8c2-5 4-3.5 4-2.5S14 8 12 8"/>',
+  receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  diamond: '<path d="M6 4h12l3 5-9 11L3 9z"/><path d="M3 9h18M9 4l3 16M15 4l-3 16"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
+  check: '<circle cx="12" cy="12" r="9.5"/><path d="M7.5 12.5l3 3 6-6.5"/>'
+};
+const ic = (n, sz = 24) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.2em;flex-shrink:0">${ICONS[n] || ICONS.receipt}</svg>`;
+const cpIc = k => /^cash/.test(k) ? 'cash' : /^core/.test(k) ? 'diamond' : 'sparkle';
+const ds = n => { try { return BigInt(Math.floor(n)).toString(); } catch { return String(Math.floor(n)); } };
+const numOf = s => Math.floor(Number(String(s || '').replace(/[,\s$]/g, '')));
+const kbtn = (t, f, bg = '#111', ex = '') => { const b = $('button', `border:0;border-radius:10px;padding:11px 14px;background:${bg};color:#fff;font-size:.95rem;cursor:pointer;${ex}`, t); b.onclick = f; return b; };
+const sheet = (title, onClose) => {
+  const o = full(); o.style.cssText += ';background:rgba(0,0,0,.5);justify-content:flex-end;padding:0;gap:0;align-items:center;z-index:99990';
+  const c = $('div', 'background:#fff;width:min(480px,100vw);max-height:90vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:16px 16px 22px;text-align:left;display:flex;flex-direction:column;gap:10px;color:#222');
+  const close = () => { try { onClose && onClose(); } catch {} o.remove(); };
+  c.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:1.1rem">${title}</b><button class="kp-x" style="border:0;background:#eee;border-radius:50%;width:30px;height:30px;font-size:1rem;cursor:pointer">✕</button></div>`;
+  c.querySelector('.kp-x').onclick = close; o.onclick = e => { if (e.target === o) close(); };
+  o.appendChild(c); document.body.appendChild(o); return { o, c, close };
+};
+const IN = 'padding:12px;font-size:1.15rem;border:1px solid #ccc;border-radius:10px;text-align:center;width:100%';
+const parseCode = s => {
+  s = String(s || '').trim(); const m = /^KUNPAY1\|([^|]*)\|?(\d*)$/.exec(s);
+  if (m) { let name = ''; try { name = decodeURIComponent(m[1]); } catch { return null; } const a = Number(m[2] || 0); return name ? { name, amount: Number.isFinite(a) ? a : 0 } : null; }
+  if (s && s.length <= 16 && !/^(MIGRATE:|https?:)/i.test(s)) return { name: s, amount: 0 };
+  return null;
+};
+const metaOf = k => KP.shop.find(s => s.k === k);
+const firstId = k => (KP.coupons.find(c => c.k === k) || {}).id;
+const kpGo = id => { const e = document.getElementById(id); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+async function kpLoad() { try { const r = await api('/api/kunpay'); KP = r; kpRender(); } catch {} }
+function kpBal() { const e = document.getElementById('kp-bal'); if (!e || typeof state === 'undefined') return; const n = state.balance; e.textContent = '$' + kb(n); const x = document.getElementById('kp-ex'); if (x) x.textContent = n >= 1e8 ? '$' + fm(n) : ''; }
+function kpRender() {
+  const root = document.getElementById('panel-kunpay'); if (!root || !acc) return;
+  const sc = root.scrollTop, t = Date.now() + off, grads = ['#6f42c1,#a55eea', '#ff7a18,#ffb347', '#0d6efd,#4facfe', '#e6005c,#ff6f91'];
+  const evDesc = e => ({ click: `點擊收益 ×${e.factor}`, income: `企業收益 ×${e.factor}`, all: `全收益 ×${e.factor}`, rain: '金錢雨發放中', droprain: '獎勵雨發放中', lottery: '抽獎活動', packet: '搶紅包', login: '登入禮', contest: '資產競賽', market: `股市行情 ×${e.factor}` })[e.type] || '限時活動';
+  const banners = ['<div style="background:linear-gradient(135deg,#2b2b2b,#000)"><b>KUN Pay</b><br>掃碼付款、轉帳給朋友、買券送好友</div>'].concat((evs || []).filter(e => e.end > t).slice(0, 6).map((e, i) => `<div style="background:linear-gradient(135deg,${grads[i % 4]})"><b>${esc(e.name)}</b><br>${evDesc(e)}${e.start > t ? '（即將開始）' : ''}</div>`)).join('');
+  const acts = [['scan', '掃碼付款', 'scan'], ['qr', '收款碼', 'recv'], ['send', '轉帳', 'xfer'], ['users', '好友', 'friends'], ['cart', '買優惠券', 'shop'], ['ticket', '我的優惠券', 'mine'], ['gift', '送優惠券', 'gift'], ['receipt', '交易紀錄', 'hist']];
+  const groups = {}; KP.coupons.forEach(c => (groups[c.k] = groups[c.k] || []).push(c));
+  const shopH = KP.shop.map(s => `<div class="kp-cp" style="--c:${s.color}"><div class="kp-ci">${ic(cpIc(s.k), 30)}</div><div class="kp-cb"><b>${esc(s.name)}</b><small>${esc(s.desc)}</small><div class="kp-pr">$${cn(s.price)}</div></div><div class="kp-ca"><button class="kp-b" data-a="buy" data-k="${s.k}">購買</button><button class="kp-b g" data-a="buyto" data-k="${s.k}">買來送朋友</button></div></div>`).join('') || '<div class="kp-empty">商店載入中…</div>';
+  const mineH = Object.entries(groups).map(([k, arr]) => { const s = metaOf(k); if (!s) return ''; const from = arr.find(x => x.from); return `<div class="kp-cp" style="--c:${s.color}"><div class="kp-ci">${ic(cpIc(s.k), 30)}</div><div class="kp-cb"><b>${esc(s.name)} ×${arr.length}</b><small>${esc(s.desc)}</small>${from ? `<small>來自 ${esc(from.from)} 的贈禮</small>` : ''}</div><div class="kp-ca"><button class="kp-b" data-a="use" data-k="${k}">使用</button><button class="kp-b g" data-a="giveto" data-k="${k}">送朋友</button></div></div>`; }).join('') || '<div class="kp-empty">你還沒有優惠券。到上方商店購買，或請朋友送你！</div>';
+  const HI = { pay: 'send', recv: 'cash', buy: 'cart', giftout: 'gift', giftin: 'gift', use: 'ticket' };
+  const histH = (KP.hist || []).slice(0, 20).map(h => `<div class="kp-h"><span style="color:#111;display:flex">${ic(HI[h.k] || 'receipt', 24)}</span><div style="flex:1;min-width:0"><div style="overflow-wrap:anywhere">${esc(h.text)}</div><small style="color:#999">${new Date(h.t).toLocaleString('zh-TW')}</small></div>${h.sign ? `<b style="color:${h.sign > 0 ? '#119b53' : '#d93636'};white-space:nowrap">${h.sign > 0 ? '+' : '-'}$${cn(h.amt)}</b>` : ''}</div>`).join('') || '<div class="kp-empty">還沒有 KUN Pay 交易</div>';
+  root.innerHTML = `<div class="kp-hero"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:1.25rem">KUN Pay</b><span style="font-size:.85rem;opacity:.9">${ic('user', 16)} ${esc(acc.name)}</span></div><div style="margin-top:14px;font-size:.85rem;opacity:.9">錢包餘額</div><div id="kp-bal" style="font-size:2.1rem;font-weight:900;overflow-wrap:anywhere"></div><div id="kp-ex" style="font-size:.72rem;opacity:.85;overflow-wrap:anywhere"></div></div>
+  <div class="kp-card">${acts.map(a => `<button class="kp-act" data-a="${a[2]}"><i>${ic(a[0], 26)}</i>${a[1]}</button>`).join('')}</div>
+  <div class="kp-sec"><h4><span style="display:flex;gap:6px;align-items:center">${ic('sparkle', 18)}活動優惠</span></h4><div class="kp-ban">${banners}</div></div>
+  <div class="kp-sec" id="kp-shop"><h4><span style="display:flex;gap:6px;align-items:center">${ic('cart', 18)}優惠券商店</span></h4>${shopH}</div>
+  <div class="kp-sec" id="kp-mine"><h4><span style="display:flex;gap:6px;align-items:center">${ic('ticket', 18)}我的優惠券</span> <button class="kp-b g" data-a="gift">送優惠券</button></h4>${mineH}</div>
+  <div class="kp-sec" id="kp-hist"><h4><span style="display:flex;gap:6px;align-items:center">${ic('receipt', 18)}交易紀錄</span></h4>${histH}</div>`;
+  kpBal(); root.scrollTop = sc;
+}
+async function pickFriend(title, cb) {
+  await loadFriends(); const s = sheet(title);
+  if (!FD.friends.length) s.c.appendChild($('div', 'color:#999;text-align:center;padding:18px', '還沒有好友。先到好友中心送出好友邀請吧！'));
+  FD.friends.slice().sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || (b.online ? 1 : 0) - (a.online ? 1 : 0)).forEach(f => {
+    const b = $('button', 'display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid #e8e8e8;background:#fff;border-radius:12px;padding:12px;font-size:1rem;text-align:left;cursor:pointer', `<span>${f.fav ? '⭐ ' : ''}${esc(f.nick || f.name)}${f.nick ? ` <small style="color:#999">(${esc(f.name)})</small>` : ''}</span><span style="color:${f.online ? '#28a745' : '#bbb'}">●</span>`);
+    b.onclick = () => { s.close(); cb(f); }; s.c.appendChild(b);
+  });
+}
+function kpDone(to, amt) {
+  const o = full(); o.style.cssText += ';background:linear-gradient(160deg,#2b2b2b,#000);color:#fff;z-index:99990';
+  o.innerHTML = `<div>${ic('check', 84)}</div><h2>付款成功</h2><div>已付款給 <b>${esc(to)}</b></div><div style="font-size:2.2rem;font-weight:900;overflow-wrap:anywhere;max-width:92vw">$${fm(amt)}</div><div style="opacity:.85">約 ${cn(amt)}</div>`;
+  o.appendChild(kbtn('完成', () => o.remove(), '#fff', 'color:#111;padding:12px 44px;font-weight:bold;margin-top:8px')); document.body.appendChild(o);
+}
+async function kpPay(name, amt) {
+  if (kpBusy) return; if (!(amt >= 1)) return toast('金額錯誤', '#dc3545'); if (amt > state.balance) return toast('你的現金不足', '#dc3545');
+  kpBusy = true; xferBusy = true;
+  try { await save().catch(() => {}); const r = await api('/api/kunpay/pay', { body: { to: name, amount: amt } }); state.balance = Math.max(0, state.balance - r.amount); rev = r.rev; refresh(); kpDone(r.to, r.amount); save().catch(() => {}); kpLoad(); }
+  catch (e) { toast(e.message, '#dc3545'); } finally { kpBusy = false; xferBusy = false; }
+}
+function kpPayDialog(name, amount) {
+  const s = sheet(`付款給 ${esc(name)}`);
+  s.c.insertAdjacentHTML('beforeend', `<div style="color:#666;font-size:.9rem">你的餘額：$${kb(state.balance)}${amount ? '　（收款方指定金額）' : ''}</div><input id="kp-amt" inputmode="numeric" placeholder="輸入金額" value="${amount ? ds(amount) : ''}" ${amount ? 'readonly' : ''} style="${IN}"><div id="kp-amt-s" style="text-align:center;color:#111;min-height:1.3em"></div>`);
+  const inp = s.c.querySelector('#kp-amt'), hint = s.c.querySelector('#kp-amt-s'); const show = () => { const n = numOf(inp.value); hint.textContent = n >= 1 ? '≈ $' + cn(n) : ''; }; inp.oninput = show; show();
+  s.c.appendChild(kbtn('確認付款', () => { const n = numOf(inp.value); if (!(n >= 1)) return toast('請輸入金額', '#dc3545'); s.close(); kpPay(name, n); }, '#111', 'padding:13px;font-size:1.05rem;font-weight:bold'));
+}
+function kpScan() {
+  let reader = null, done = false; const s = sheet('掃碼付款', () => { done = true; try { reader && reader.reset(); } catch {} });
+  s.c.insertAdjacentHTML('beforeend', '<div style="background:#000;border-radius:14px;overflow:hidden;height:220px"><video id="kp-vid" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div><div id="kp-st" style="text-align:center;color:#666;font-size:.9rem">對準對方的 KUN Pay 收款碼</div>');
+  const st = s.c.querySelector('#kp-st'), vid = s.c.querySelector('#kp-vid');
+  const got = txt => { if (done) return; const r = parseCode(txt); if (!r) { st.textContent = '這不是 KUN Pay 收款碼'; return; } s.close(); kpPayDialog(r.name, r.amount); };
+  if (typeof ZXing === 'undefined') st.textContent = '掃描元件載入失敗，請改用「貼上代碼」或上傳圖片';
+  else { try { reader = new ZXing.BrowserMultiFormatReader(); Promise.resolve(reader.decodeFromVideoDevice(undefined, vid, r => { if (r) got(r.getText()); })).catch(() => { st.textContent = '無法開啟相機，請改用「貼上代碼」或上傳圖片'; }); } catch { st.textContent = '無法開啟相機，請改用「貼上代碼」或上傳圖片'; } }
+  const fi = $('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.style.display = 'none';
+  fi.onchange = () => { const f = fi.files && fi.files[0]; if (!f) return; if (typeof ZXing === 'undefined') return toast('掃描元件未載入', '#dc3545'); new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(URL.createObjectURL(f)).then(r => got(r.getText())).catch(() => toast('圖片中找不到有效的 QR Code', '#dc3545')); };
+  const row = $('div', 'display:flex;gap:8px'); row.append(kbtn('上傳圖片', () => fi.click(), '#17a2b8', 'flex:1'), kbtn('貼上 / 輸入代碼', () => { const v = prompt('請貼上收款碼，或輸入對方玩家名稱：'); if (v) got(v); }, '#fd7e14', 'flex:1'), fi); s.c.appendChild(row);
+}
+function kpReceive() {
+  const s = sheet('我的收款碼'); let text = '';
+  s.c.insertAdjacentHTML('beforeend', `<div style="text-align:center;color:#666;font-size:.9rem">讓對方用 KUN Pay「掃碼付款」掃描。可指定收款金額。</div><input id="kp-ra" inputmode="numeric" placeholder="收款金額（留空＝讓對方自己輸入）" style="${IN}"><div id="kp-ras" style="text-align:center;color:#111;min-height:1.3em"></div><div id="kp-qr" style="display:flex;justify-content:center;padding:8px"></div><div style="text-align:center;font-weight:bold">${esc(acc.name)}</div>`);
+  const inp = s.c.querySelector('#kp-ra'), box = s.c.querySelector('#kp-qr'), hint = s.c.querySelector('#kp-ras');
+  const mk = () => { const n = numOf(inp.value), amt = n >= 1 ? n : 0; hint.textContent = amt ? '收款金額 $' + cn(amt) : ''; text = `KUNPAY1|${encodeURIComponent(acc.name)}|${amt ? ds(amt) : ''}`; box.innerHTML = ''; try { new QRCode(box, { text, width: 210, height: 210, correctLevel: QRCode.CorrectLevel.M }); } catch { box.textContent = text; } };
+  let tm; inp.oninput = () => { clearTimeout(tm); tm = setTimeout(mk, 250); }; mk();
+  s.c.appendChild(kbtn('複製收款代碼', () => { try { navigator.clipboard.writeText(text).then(() => toast('已複製收款代碼')).catch(() => prompt('請手動複製：', text)); } catch { prompt('請手動複製：', text); } }, '#17a2b8'));
+}
+async function kpTransfer() {
+  await loadFriends(); const s = sheet('轉帳');
+  s.c.insertAdjacentHTML('beforeend', `<div style="color:#666;font-size:.9rem">你的餘額：$${kb(state.balance)}　選擇好友，或輸入任何玩家名稱</div><div id="kp-fr" style="display:flex;gap:6px;flex-wrap:wrap"></div><input id="kp-tn" maxlength="16" placeholder="收款人玩家名稱" style="${IN}"><input id="kp-ta" inputmode="numeric" placeholder="金額" style="${IN}"><div id="kp-tas" style="text-align:center;color:#111;min-height:1.3em"></div>`);
+  const tn = s.c.querySelector('#kp-tn'), ta = s.c.querySelector('#kp-ta'), hint = s.c.querySelector('#kp-tas');
+  FD.friends.forEach(f => { const b = $('button', 'border:1px solid #cfe8d6;background:#eee;border-radius:16px;padding:6px 12px;font-size:.85rem;cursor:pointer', (f.fav ? '⭐ ' : '') + esc(f.nick || f.name)); b.onclick = () => { tn.value = f.name; }; s.c.querySelector('#kp-fr').appendChild(b); });
+  ta.oninput = () => { const n = numOf(ta.value); hint.textContent = n >= 1 ? '≈ $' + cn(n) : ''; };
+  s.c.appendChild(kbtn('確認轉帳', () => { const name = tn.value.trim(), n = numOf(ta.value); if (!name) return toast('請輸入收款人', '#dc3545'); if (!(n >= 1)) return toast('請輸入金額', '#dc3545'); if (!confirm(`確定轉 $${fm(n)} 給 ${name}？`)) return; s.close(); kpPay(name, n); }, '#111', 'padding:13px;font-size:1.05rem;font-weight:bold'));
+}
+async function kpBuy(k, to, toName) {
+  const s = metaOf(k); if (!s || kpBusy) return; if (s.price > state.balance) return toast('現金不足，無法購買', '#dc3545');
+  if (!confirm(`花費 $${fm(s.price)} 購買「${s.name}」${to ? `並送給 ${toName}` : ''}？`)) return;
+  kpBusy = true; xferBusy = true;
+  try { await save().catch(() => {}); const r = await api('/api/kunpay/buy', { body: { k, to } }); state.balance = Math.max(0, state.balance - r.price); rev = r.rev; refresh(); toast(to ? `🎁 已送出「${s.name}」給 ${toName}` : `🛒 已購買「${s.name}」`); save().catch(() => {}); await kpLoad(); }
+  catch (e) { toast(e.message, '#dc3545'); } finally { kpBusy = false; xferBusy = false; }
+}
+function kpUse(k) { const s = metaOf(k), id = firstId(k); if (!s || !id) return; if (!confirm(`使用「${s.name}」？\n${s.desc}`)) return; api('/api/kunpay/use', { body: { cid: id } }).then(kpLoad).catch(e => { toast(e.message, '#dc3545'); kpLoad(); }); }
+function kpGiveCoupon(k) {
+  const s = metaOf(k), id = firstId(k); if (!s || !id) return;
+  pickFriend(`把「${esc(s.name)}」送給誰？`, f => api('/api/kunpay/gift', { body: { cid: id, to: f.id } }).then(() => { toast(`🎁 已送給 ${f.nick || f.name}`); kpLoad(); }).catch(e => { toast(e.message, '#dc3545'); kpLoad(); }));
+}
+function kpGiftMenu() {
+  if (!KP.coupons.length) { toast('你還沒有優惠券，先買一張，或直接「買來送朋友」', '#6c757d'); return kpGo('kp-shop'); }
+  const s = sheet('選擇要送出的優惠券'), g = {}; KP.coupons.forEach(c => g[c.k] = (g[c.k] || 0) + 1);
+  Object.entries(g).forEach(([k, n]) => { const m = metaOf(k); if (!m) return; const b = $('button', `display:flex;align-items:center;gap:10px;border:1px solid #e8e8e8;background:#fff;border-radius:12px;padding:10px;font-size:1rem;text-align:left;cursor:pointer`, `<span style="color:#111;display:flex">${ic(cpIc(k), 26)}</span><span style="flex:1">${esc(m.name)}</span><b>×${n}</b>`); b.onclick = () => { s.close(); kpGiveCoupon(k); }; s.c.appendChild(b); });
+}
+function kpAct(a, k) {
+  const m = { scan: kpScan, recv: kpReceive, xfer: kpTransfer, friends: () => { document.getElementById('app').scrollLeft = window.innerWidth * 4; }, gift: kpGiftMenu, shop: () => kpGo('kp-shop'), mine: () => kpGo('kp-mine'), hist: () => kpGo('kp-hist'),
+    buy: () => kpBuy(k), buyto: () => pickFriend('買來送給誰？', f => kpBuy(k, f.id, f.nick || f.name)), use: () => kpUse(k), giveto: () => kpGiveCoupon(k) };
+  (m[a] || (() => {}))();
+}
+function kpInit() {
+  const root = document.getElementById('panel-kunpay'); if (!root) return;
+  root.onclick = e => { const b = e.target.closest && e.target.closest('[data-a]'); if (b) kpAct(b.dataset.a, b.dataset.k); };
+  kpRender(); kpLoad(); setInterval(kpBal, 1000); setInterval(() => !dead && kpLoad(), 30000);
+}
+
 function menu() {
   const b = $('button', 'position:fixed;right:12px;bottom:40px;z-index:9001;width:44px;height:44px;border-radius:50%;border:none;background:#f39c12;color:#fff;font-size:1.3rem;box-shadow:0 3px 10px rgba(0,0,0,.3)', '🎁');
   b.className = 'mc-fab'; b.onclick = () => { const o = full(); o.style.background = 'rgba(255,255,255,.97)';
@@ -209,7 +367,7 @@ function menu() {
 async function start() {
   try {
     const r = await api('/api/save'); rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } else await save();
-    unboot(); connect(); menu(); friendsInit(); lbInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
+    unboot(); connect(); menu(); friendsInit(); lbInit(); kpInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
     window.addEventListener('pagehide', () => navigator.sendBeacon && 0);
   } catch (e) { if (/封鎖/.test(e.message)) blocked(e.message); else if (e.status === 0 || e.status >= 500 || e.status === 429) { waitMsg((e.message || '伺服器連線中') + '，自動重試中…'); await sleep(3000); boot(); } else { acc = null; clearAcc(); loginScreen(e.message || '登入已失效，請重新登入'); } }
 }

@@ -404,6 +404,7 @@ async function friendApi(req, res, pl, p, m) {
     st.balance -= amt; pl.rev = (pl.rev || 0) + 1; pl.lastXfer = now(); pl.debits = (pl.debits || []).concat({ t: now(), amt }).slice(-20); pl.sentLog.push({ t: now(), amt });
     queue(t, mkCmd({ type: 'money', value: amt, msg: `💸 ${pl.name} 轉給你 $${amt.toLocaleString('en-US')}` }));
     db.xfers.unshift({ t: now(), from: pl.name, to: t.name, amt }); db.xfers.length = Math.min(db.xfers.length, 300);
+    kpLog(pl, 'pay', `轉帳給 ${t.name}`, amt, -1); kpLog(t, 'recv', `${pl.name} 轉帳給你`, amt, 1); sendTo(t.id, 'kp', {});
     log(`轉帳 ${pl.name} → ${t.name}：$${amt}`); touch(); return J(200, { ok: true, rev: pl.rev, amount: amt });
   }
   return J(404, { error: 'not found' });
@@ -470,6 +471,88 @@ const adminTokens = new Map(); const fails = new Map();
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css' };
 const playerByToken = t => Object.values(db.players).find(p => p.token === t);
 const summary = p => { const s = (p.save && p.save.state) || {}; return { id: p.id, name: p.name, online: online(p.id), balance: Math.floor(s.balance || 0), bank: Math.floor(s.bankDeposit || 0), loan: Math.floor(s.bankLoan || 0), rebirths: s.rebirths || 0, cores: s.capitalCores || 0, buffs: Object.values(s.inventory || {}).reduce((a, b) => a + b, 0), lastSeen: p.lastSeen, banned: p.banned, banReason: p.banReason, pending: p.pending.length, strikes: p.strikes || 0, flags: p.flags || [] }; };
+
+// ---------- KUN Pay：掃碼轉帳、優惠券（伺服器驗證，優惠券只存在伺服器端，玩家無法偽造）----------
+const COUPONS = {
+  cash1: { name: '現金禮券 1 億', icon: '💴', color: '#28a745', desc: '兌換 $1 億現金，適合送朋友', price: 1e8, cmd: { type: 'money', value: 1e8 } },
+  cash2: { name: '現金禮券 1 兆', icon: '💴', color: '#1e9e4a', desc: '兌換 $1 兆現金，適合送朋友', price: 1e12, cmd: { type: 'money', value: 1e12 } },
+  cash3: { name: '現金禮券 1 京', icon: '💰', color: '#16853c', desc: '兌換 $1 京現金，適合送朋友', price: 1e16, cmd: { type: 'money', value: 1e16 } },
+  cash4: { name: '現金禮券 1 垓', icon: '💰', color: '#0f6b2f', desc: '兌換 $1 垓現金，適合送朋友', price: 1e20, cmd: { type: 'money', value: 1e20 } },
+  core1: { name: '資本核心券', icon: '💎', color: '#f39c12', desc: '兌換 1 顆資本核心（不用重生）', price: 5e16, cmd: { type: 'cores', value: 1 } },
+  core5: { name: '資本核心券 x5', icon: '💎', color: '#e67e22', desc: '兌換 5 顆資本核心（不用重生）', price: 2.4e17, cmd: { type: 'cores', value: 5 } },
+  buff1: { name: '稀有 Buff 券', icon: '✨', color: '#3498db', desc: '兌換 1 個隨機【稀有】Buff', price: 2e19, cmd: { type: 'buff', rarity: 1, count: 1 } },
+  buff2: { name: '史詩 Buff 券', icon: '🔮', color: '#9b59b6', desc: '兌換 1 個隨機【史詩】Buff', price: 7e19, cmd: { type: 'buff', rarity: 2, count: 1 } },
+  buff3: { name: '傳說 Buff 券', icon: '🌟', color: '#f39c12', desc: '兌換 1 個隨機【傳說】Buff', price: 3e20, cmd: { type: 'buff', rarity: 3, count: 1 } },
+  buff4: { name: '神話 Buff 券', icon: '🔥', color: '#e74c3c', desc: '兌換 1 個隨機【神話】Buff', price: 1.5e21, cmd: { type: 'buff', rarity: 4, count: 1 } }
+};
+const couponShop = () => Object.entries(COUPONS).map(([k, c]) => ({ k, name: c.name, icon: c.icon, color: c.color, desc: c.desc, price: c.price }));
+const kpLog = (p, k, text, amt, sign) => { (p.kp = p.kp || []).unshift({ t: now(), k, text, amt: amt || 0, sign: sign || 0 }); p.kp.length = Math.min(p.kp.length, 60); touch(); };
+function kpSpend(pl, amt) { // 伺服器先扣款並提升存檔版本（舊版本存檔會被拒收），玩家端依回應同步扣款
+  const st = pl.save && pl.save.state; if (!st || !(st.balance >= amt)) return false;
+  st.balance -= amt; pl.rev = (pl.rev || 0) + 1; pl.debits = (pl.debits || []).concat({ t: now(), amt }).slice(-20); return true;
+}
+function kpGive(t, k, from) { t.coupons = t.coupons || []; if (t.coupons.length >= 200) return false; t.coupons.push({ id: uid(5), k, t: now(), from: from || '' }); return true; }
+function xferCore(pl, t, amt) { // 掃碼付款 / 轉帳給任何玩家；回傳 [HTTP 狀態碼, 內容]
+  const S = db.settings; fr(pl);
+  if (pl.muted) return [403, { error: '你已被禁言，無法轉帳' }];
+  if (!t) return [404, { error: '找不到收款人' }];
+  if (t === pl) return [400, { error: '不能轉帳給自己' }];
+  if (isBanned(t)) return [403, { error: '對方帳號異常，無法轉帳' }];
+  if (!(amt >= 1) || !Number.isFinite(amt)) return [400, { error: '金額錯誤' }];
+  const f = pl.friends[t.id], since = f ? f.since : (pl.created || 0);
+  if (S.xferMinFriendMin > 0 && now() - since < S.xferMinFriendMin * 60000) return [403, { error: f ? `成為好友滿 ${S.xferMinFriendMin} 分鐘後才能轉帳` : `帳號建立滿 ${S.xferMinFriendMin} 分鐘後才能轉帳給非好友` }];
+  if (S.xferMax > 0 && amt > S.xferMax) return [400, { error: `單筆轉帳上限為 $${S.xferMax.toLocaleString('en-US')}` }];
+  pl.sentLog = (pl.sentLog || []).filter(x => now() - x.t < 86400000);
+  if (S.xferDaily > 0 && pl.sentLog.reduce((a, x) => a + x.amt, 0) + amt > S.xferDaily) return [400, { error: `24 小時內轉出總額上限為 $${S.xferDaily.toLocaleString('en-US')}` }];
+  if (now() - (pl.lastXfer || 0) < 3000) return [429, { error: '轉帳太頻繁，請稍後再試' }];
+  if (!kpSpend(pl, amt)) return [400, { error: '餘額不足（以伺服器最新存檔為準，請稍等幾秒再試）' }];
+  pl.lastXfer = now(); pl.sentLog.push({ t: now(), amt });
+  queue(t, mkCmd({ type: 'money', value: amt, msg: `💸 KUN Pay 收款：${pl.name} 付給你 $${amt.toLocaleString('en-US')}` }));
+  db.xfers.unshift({ t: now(), from: pl.name, to: t.name, amt }); db.xfers.length = Math.min(db.xfers.length, 300);
+  kpLog(pl, 'pay', `付款給 ${t.name}`, amt, -1); kpLog(t, 'recv', `${pl.name} 付款給你`, amt, 1); sendTo(t.id, 'kp', {});
+  log(`KUN Pay ${pl.name} → ${t.name}：$${amt}`); touch();
+  return [200, { ok: true, rev: pl.rev, amount: amt, to: t.name }];
+}
+async function kunpayApi(req, res, pl, p, m) {
+  const J = (c, o) => json(res, c, o); fr(pl); pl.coupons = pl.coupons || [];
+  if (p === '/api/kunpay' && m === 'GET') return J(200, { shop: couponShop(), coupons: pl.coupons.filter(c => COUPONS[c.k]).map(c => ({ id: c.id, k: c.k, t: c.t, from: c.from || '' })), hist: (pl.kp || []).slice(0, 40) });
+  if (m !== 'POST') return J(404, { error: 'not found' });
+  const b = await body(req);
+  if (p === '/api/kunpay/pay') {
+    const name = String(b.to || '').trim(), t = Object.values(db.players).find(x => x.name === name), r = xferCore(pl, t, Math.floor(Number(b.amount)));
+    return J(r[0], r[1]);
+  }
+  if (p === '/api/kunpay/buy') {
+    const d = COUPONS[b.k]; if (!d) return J(404, { error: '沒有這種優惠券' });
+    if (pl.muted && b.to) return J(403, { error: '你已被禁言，無法送禮' });
+    if (now() - (pl.lastKp || 0) < 800) return J(429, { error: '操作太快了' });
+    let t = pl;
+    if (b.to) { t = db.players[b.to]; if (!t || !pl.friends[b.to]) return J(403, { error: '只能送給好友' }); if (isBanned(t)) return J(403, { error: '對方帳號異常' }); }
+    if ((t.coupons || []).length >= 200) return J(400, { error: t === pl ? '你的優惠券已滿（200 張）' : '對方的優惠券已滿' });
+    if (!kpSpend(pl, d.price)) return J(400, { error: '餘額不足（以伺服器最新存檔為準，請稍等幾秒再試）' });
+    pl.lastKp = now(); kpGive(t, b.k, t === pl ? '' : pl.name);
+    if (t === pl) kpLog(pl, 'buy', `購買「${d.name}」`, d.price, -1);
+    else { kpLog(pl, 'buy', `購買「${d.name}」送給 ${t.name}`, d.price, -1); kpLog(t, 'giftin', `收到 ${pl.name} 送的「${d.name}」`, 0, 0); sendTo(t.id, 'announce', { text: `🎁 ${pl.name} 送你一張「${d.name}」！到 KUN Pay 查看`, style: 'event' }); sendTo(t.id, 'kp', {}); }
+    touch(); return J(200, { ok: true, rev: pl.rev, price: d.price });
+  }
+  if (p === '/api/kunpay/use') {
+    const i = pl.coupons.findIndex(c => c.id === b.cid); if (i < 0) return J(404, { error: '找不到這張優惠券' });
+    const c = pl.coupons[i], d = COUPONS[c.k]; pl.coupons.splice(i, 1);
+    if (!d) { touch(); return J(404, { error: '這種優惠券已下架' }); }
+    queue(pl, mkCmd(Object.assign({ msg: `🎟 使用優惠券：${d.name}` }, d.cmd))); kpLog(pl, 'use', `使用「${d.name}」`, 0, 0); touch(); return J(200, { ok: true });
+  }
+  if (p === '/api/kunpay/gift') {
+    if (pl.muted) return J(403, { error: '你已被禁言，無法送禮' });
+    const t = db.players[b.to]; if (!t || !pl.friends[b.to]) return J(403, { error: '只能送給好友' }); if (isBanned(t)) return J(403, { error: '對方帳號異常' });
+    const i = pl.coupons.findIndex(c => c.id === b.cid); if (i < 0) return J(404, { error: '找不到這張優惠券' });
+    const c = pl.coupons[i], d = COUPONS[c.k]; if (!d) return J(404, { error: '這種優惠券已下架' });
+    if ((t.coupons || []).length >= 200) return J(400, { error: '對方的優惠券已滿' });
+    pl.coupons.splice(i, 1); kpGive(t, c.k, pl.name);
+    kpLog(pl, 'giftout', `把「${d.name}」送給 ${t.name}`, 0, 0); kpLog(t, 'giftin', `收到 ${pl.name} 送的「${d.name}」`, 0, 0);
+    sendTo(t.id, 'announce', { text: `🎁 ${pl.name} 送你一張「${d.name}」！到 KUN Pay 查看`, style: 'event' }); sendTo(t.id, 'kp', {}); touch(); return J(200, { ok: true });
+  }
+  return J(404, { error: 'not found' });
+}
 
 async function api(req, res, url) {
   const p = url.pathname, m = req.method;
@@ -547,6 +630,7 @@ async function api(req, res, url) {
       if (pl.pwHash && !checkPw(pl, String(b.old || ''))) return json(res, 401, { error: '舊密碼錯誤' });
       setPw(pl, np); log(`${pl.name} 設定/修改密碼`); return json(res, 200, { ok: true });
     }
+    if (p.startsWith('/api/kunpay')) return kunpayApi(req, res, pl, p, m);
     if (p.startsWith('/api/friends') || p === '/api/chat') return friendApi(req, res, pl, p, m);
     if (p === '/api/claim' && m === 'POST') {
       const b = await body(req), e = activeEvents().find(x => x.id === b.id && x.type === 'packet');
