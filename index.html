@@ -301,6 +301,49 @@
 @keyframes cardbreath { 0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.55), 0 0 18px var(--glowc), 0 14px 28px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 8px rgba(0,0,0,.3); } 50% { box-shadow: 0 0 0 1px rgba(255,255,255,.7), 0 0 34px var(--glowc), 0 16px 32px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 8px rgba(0,0,0,.3); } }
 .credit-card.foil-3:not(.locked) { animation: cardbreath 3.2s ease-in-out infinite; }
 </style>
+
+<style id="card-system-css">
+.card-stars { position: absolute; left: 112px; top: 76px; display: grid; grid-template-columns: repeat(5, 11px); gap: 2px; z-index: 4; pointer-events: none; }
+.card-stars svg, .cx-st svg, .cd-stars svg { width: 11px; height: 11px; fill: rgba(255,255,255,.16); stroke: rgba(255,255,255,.4); stroke-width: .5; }
+.card-stars svg.on, .cx-st svg.on, .cd-stars svg.on { fill: #ffd54a; stroke: #fff7c2; filter: drop-shadow(0 0 2px #ffb300); }
+.credit-card.card-light .card-stars svg { fill: rgba(0,0,0,.12); stroke: rgba(0,0,0,.35); }
+.credit-card.card-light .card-stars svg.on { fill: #f2a100; stroke: #fff; }
+@keyframes auraPulse { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+.card-aura { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 6; box-shadow: inset 0 0 16px rgba(255,255,255,.6), inset 0 0 42px rgba(255,215,90,.5); animation: auraPulse 2.4s ease-in-out infinite; }
+.credit-card.foil-4 .card-name { background: linear-gradient(100deg, #ffffff 0%, #ffe9a8 35%, #ffffff 55%, #ffd36b 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.credit-card.card-light.foil-4 .card-name { background: none; -webkit-background-clip: initial; background-clip: initial; color: #1b2733; filter: none; text-shadow: 0 1px 0 rgba(255,255,255,.65); }
+.credit-card.foil-4 .card-rim { display: block; padding: 3.5px; animation: skinspin 2.6s linear infinite; background: conic-gradient(from var(--a, 0deg), #fff, #ff5f6d, #ffd60a, #7bed9f, #00d4ff, #a55eea, #fff); }
+.credit-card.foil-4 .card-seal { display: block; animation: skinspin 5s linear infinite; background: conic-gradient(from var(--a, 0deg), #fff, #ff5f6d, #ffd60a, #7bed9f, #00d4ff, #a55eea, #fff); }
+.credit-card.foil-4:not(.locked) { animation: cardbreath 2.4s ease-in-out infinite; }
+.credit-card.hidden-card .card-rim { background: conic-gradient(from var(--a, 0deg), #ffe27a, #8a1c1c, #ffe27a, #2b0a0a, #ffe27a); }
+.credit-card.hidden-card .card-seal { background: conic-gradient(from var(--a, 0deg), #ffe27a, #8a1c1c, #ffe27a, #2b0a0a, #ffe27a); }
+.credit-card.hidden-card { color: #ffe9b0; }
+.cx-sum { background: #1f1f26; border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.cx-bar { height: 10px; background: #34343e; border-radius: 6px; margin: 8px 0; overflow: hidden; }
+.cx-bar i { display: block; height: 100%; background: linear-gradient(90deg, #7bed9f, #ffd60a, #ff5f6d); }
+.cx-msw { display: flex; flex-wrap: wrap; gap: 6px; }
+.cx-ms { font-size: .72rem; padding: 3px 8px; border-radius: 10px; background: #34343e; color: #98a; }
+.cx-ms.done { background: #ffd54a; color: #4a3500; font-weight: bold; }
+.cx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cx-tile { position: relative; border-radius: 14px; padding: 10px; min-height: 92px; color: #fff; cursor: pointer; border: 1px solid rgba(255,255,255,.25); box-shadow: 0 4px 12px rgba(0,0,0,.35); overflow: hidden; }
+.cx-tile.cx-light { color: #1b2733; }
+.cx-tile.cx-locked { filter: grayscale(.7); opacity: .75; }
+.cx-tile.cx-hidden { border-color: #d4af37; }
+.cx-tile.cx-awake { box-shadow: 0 0 0 2px #ffd54a, 0 0 14px rgba(255,213,74,.7); }
+.cx-n { font-weight: 800; font-size: .95rem; text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.cx-light .cx-n { text-shadow: none; }
+.cx-r { font-size: .7rem; opacity: .85; margin-top: 2px; }
+.cx-st { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; margin-top: 8px; }
+.cx-st svg { width: 100%; height: auto; }
+.cx-h { font-size: .7rem; color: #e6c66a; margin-top: 8px; line-height: 1.3; }
+.cd-panel { background: #1f1f26; border-radius: 14px; padding: 12px; margin-bottom: 10px; color: #fff; }
+.cd-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.cd-stars { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin-top: 8px; }
+.cd-stars svg { width: 100%; height: auto; }
+.cd-sk { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: .84rem; color: #889; }
+.cd-sk span.on { color: #7bed9f; font-weight: bold; }
+#skill-btn:disabled { opacity: .7; }
+</style>
 </head>
 <body>
 <div id="boot" style="position:fixed;inset:0;z-index:100000;background:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:1.1rem;color:#555">載入中…</div>
@@ -345,7 +388,7 @@
                     <div class="clicker-wrap" id="clicker-wrap">
                         <button class="click-btn" id="main-clicker">$</button>
                     </div>
-                    <div style="text-align:center;margin-top:12px;"><button class="btn" id="open-btn-shop" style="padding:8px 18px;">按鈕商店</button></div>
+                    <div id="main-actions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px;padding:0 58px;"><button class="btn" id="open-btn-shop" style="padding:8px 16px;">按鈕商店</button><button class="btn" id="open-codex" style="padding:8px 16px;">卡片圖鑑</button><button class="btn gold" id="skill-btn" style="padding:8px 16px;display:none;">技能</button></div>
                 </div>
             </div>
 
@@ -545,6 +588,10 @@
     <div class="overlay-close" onclick="closeCatalog()">X</div>
 </div>
 
+<!-- 卡片圖鑑 / 卡片詳情 Overlay -->
+<div id="card-codex-overlay" class="overlay"><div id="codex-scroll" style="padding:50px 14px 60px;max-width:560px;margin:0 auto;"></div><div class="overlay-close" onclick="closeCodex()">X</div></div>
+<div id="card-detail-overlay" class="overlay" style="z-index:120;"><div id="card-detail-scroll" style="padding:50px 14px 60px;max-width:420px;margin:0 auto;"></div><div class="overlay-close" onclick="closeCardDetail()">X</div></div>
+
 <!-- 按鈕商店 Overlay -->
 <div id="btn-shop-overlay" class="overlay">
     <div id="btn-shop-scroll" style="padding:50px 16px 60px;max-width:520px;margin:0 auto;"></div>
@@ -704,7 +751,7 @@
 
     let state = {
         balance: 0, baseClick: 1, multiplier: 1, rebirths: 0, capitalCores: 0,
-        currentCardLevel: 0, maxCardOwnedLevel: 0, bankDeposit: 0, bankLoan: 0, btnOwned: 0, btnSel: 0, 
+        currentCardLevel: 0, maxCardOwnedLevel: 0, bankDeposit: 0, bankLoan: 0, btnOwned: 0, btnSel: 0, cardStars: [], cardAwake: [], codex: [], stats: { clicks: 0 }, 
         equippedBuffs: [], 
         inventory: {}, 
         friends: [],
@@ -900,7 +947,11 @@
         "linear-gradient(135deg, #cc2b5e, #753a88)", "linear-gradient(135deg, #ee9ca7, #ffdde1)",
         "linear-gradient(135deg, #200122, #6f0000)", "linear-gradient(135deg, #1f4037, #99f2c8)",
         "linear-gradient(135deg, #a8c0ff, #3f2b96)", "linear-gradient(135deg, #f12711, #f5af19)",
-        "linear-gradient(135deg, #000000, #434343)", "linear-gradient(135deg, #ff007f, #7f00ff, #00ffff)"
+        "linear-gradient(135deg, #000000, #434343)", "linear-gradient(135deg, #ff007f, #7f00ff, #00ffff)",
+        "linear-gradient(135deg, #0b1026, #4a1f8f, #00d4ff)", "linear-gradient(135deg, #1a0033, #b30086, #ffb347)",
+        "linear-gradient(135deg, #001f3f, #0074d9, #7fdbff, #e8f7ff)", "linear-gradient(135deg, #200122, #c31432, #f9d423)",
+        "linear-gradient(135deg, #000000, #3a0ca3, #f72585, #ffd60a)",
+        "linear-gradient(135deg, #0d0d0d, #1b1b2f, #8d6e1f)", "linear-gradient(135deg, #0a0a0a, #5b0e2d, #e0b84c)", "linear-gradient(135deg, #050505, #3d0000, #d4af37)"
     ];
 
     const cardSvgPatterns = [
@@ -933,7 +984,15 @@
         `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><path d="M150 40 C 100 40, 60 90, 150 150 C 240 90, 200 40, 150 40 Z" fill="none" stroke="white" stroke-width="3"/></svg>`,
         `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><polygon points="150,15 285,165 15,165" fill="none" stroke="white" stroke-width="2"/><polygon points="150,165 285,15 15,15" fill="none" stroke="white" stroke-width="2"/></svg>`,
         `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><circle cx="150" cy="90" r="75" fill="none" stroke="white" stroke-width="3"/><line x1="150" y1="15" x2="150" y2="165" stroke="white" stroke-width="2"/></svg>`,
-        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><circle cx="150" cy="90" r="80" fill="none" stroke="white" stroke-width="2"/><polygon points="150,20 210,140 90,140" fill="none" stroke="white" stroke-width="2"/><polygon points="150,160 210,40 90,40" fill="none" stroke="white" stroke-width="2"/></svg>`
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><circle cx="150" cy="90" r="80" fill="none" stroke="white" stroke-width="2"/><polygon points="150,20 210,140 90,140" fill="none" stroke="white" stroke-width="2"/><polygon points="150,160 210,40 90,40" fill="none" stroke="white" stroke-width="2"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><circle cx="150" cy="90" r="80" fill="none" stroke="white" stroke-width="1.5"/><circle cx="150" cy="90" r="55" fill="none" stroke="white" stroke-width="1.5" stroke-dasharray="3,6"/><circle cx="150" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/><path d="M150 0V180M0 90H300" stroke="white" stroke-width="1"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><path d="M150 90 m0 0 a12 12 0 1 1 24 0 a24 24 0 1 1 -48 0 a36 36 0 1 1 72 0 a48 48 0 1 1 -96 0 a60 60 0 1 1 120 0" fill="none" stroke="white" stroke-width="2"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><polygon points="150,10 235,160 65,160" fill="none" stroke="white" stroke-width="2"/><polygon points="150,170 65,20 235,20" fill="none" stroke="white" stroke-width="2"/><circle cx="150" cy="90" r="22" fill="none" stroke="white" stroke-width="2"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><path d="M90 180V80a60 60 0 0 1 120 0V180" fill="none" stroke="white" stroke-width="3"/><path d="M110 180V85a40 40 0 0 1 80 0V180" fill="none" stroke="white" stroke-width="2"/><path d="M130 180V90a20 20 0 0 1 40 0V180" fill="none" stroke="white" stroke-width="1.5"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><polygon points="150,15 218,52 218,128 150,165 82,128 82,52" fill="none" stroke="white" stroke-width="2"/><polygon points="150,45 192,68 192,112 150,135 108,112 108,68" fill="none" stroke="white" stroke-width="1.5"/><path d="M150 15V165M82 52L218 128M218 52L82 128" stroke="white" stroke-width="1"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><circle cx="150" cy="90" r="70" fill="none" stroke="white" stroke-width="2"/><path d="M150 90V40M150 90L190 110" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M150 20V32M150 148V160M80 90H92M208 90H220" stroke="white" stroke-width="2"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><circle cx="132" cy="72" r="30" fill="none" stroke="white" stroke-width="2"/><circle cx="168" cy="72" r="30" fill="none" stroke="white" stroke-width="2"/><circle cx="132" cy="108" r="30" fill="none" stroke="white" stroke-width="2"/><circle cx="168" cy="108" r="30" fill="none" stroke="white" stroke-width="2"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><polyline points="70,140 85,60 118,100 150,40 182,100 215,60 230,140 70,140" fill="none" stroke="white" stroke-width="2.5" stroke-linejoin="round"/><path d="M70 152H230" stroke="white" stroke-width="3"/></svg>`
     ];
 
     const cardNames = [
@@ -942,17 +1001,20 @@
         "深海沉香卡", "烈陽霸者卡", "月華永恆卡", "賽博霓虹卡", "虛空暗物質卡",
         "黃金王者卡", "白金聖裁卡", "鑽石永恆卡", "星核裂變卡", "超新星爆發卡",
         "黑洞重力卡", "時空交響卡", "維度崩裂卡", "阿卡西記錄卡", "混沌初始卡",
-        "銀河主宰卡", "宇宙心靈卡", "不朽神性卡", "萬物終焉卡", "創世神域卡"
+        "銀河主宰卡", "宇宙心靈卡", "不朽神性卡", "萬物終焉卡", "創世神域卡",
+        "彼岸星界卡", "天命輪轉卡", "因果律卡", "無界之門卡", "萬象歸一卡",
+        "時序旅者卡", "幸運女神卡", "永劫之王卡"
     ];
 
     const cards = cardNames.map((name, i) => {
         // 卡片成長幅度削弱 25%，保留第 1 張卡的基本倍率
-        let clickMulti = 1 + (i * 0.75);
-        let compMulti = 1 + (i * 0.375);
+        const Lv = i >= 35 ? [33, 36, 40][i - 35] : i;
+        let clickMulti = 1 + (Lv * 0.75);
+        let compMulti = 1 + (Lv * 0.375);
         return {
             level: i, name: name,
             number: `4532 ${Math.floor(1000+Math.random()*9000)} ${Math.floor(1000+Math.random()*9000)} ${Math.floor(1000+Math.random()*9000)}`,
-            baseCost: i === 0 ? 0 : Math.floor(100 * Math.pow(10, i-1)),
+            baseCost: (i === 0 || i >= 35) ? 0 : Math.floor(100 * Math.pow(10, i-1)), hidden: i >= 35,
             abilityDesc: `點擊加成 +${clickMulti}倍 | 企業加成 +${compMulti.toFixed(1)}倍`,
             multi: clickMulti, compMulti: compMulti,
             patternSvg: cardSvgPatterns[i],
@@ -990,7 +1052,7 @@
     });
 
     const getCardCost = (card) => Math.floor(card.baseCost * Math.pow(0.9, state.upgrades.discount));
-    const getCompanyIncome = (comp) => Math.floor(comp.baseIncome * 0.75 * cards[state.currentCardLevel].compMulti * (1 + state.upgrades.company));
+    const getCompanyIncome = (comp) => Math.floor(comp.baseIncome * 0.75 * cardCompMulti() * (1 + state.upgrades.company));
 
     // ===== 主畫面綠色按鈕：30 種可購買，價格每級 ×100，點擊收益每級 ×4（重生後重置）=====
     const BTN_MULT = 4;
@@ -1051,7 +1113,7 @@
         if (el.dataset.skin === String(i)) return; el.dataset.skin = String(i);
         el.className = 'click-btn skin ' + b.cls; el.setAttribute('style', b.vars); el.innerHTML = '<span class="sym">' + b.sym + '</span>';
     };
-    const getClickValue = () => Math.floor(state.baseClick * cards[state.currentCardLevel].multi * state.multiplier * (window.EVENT_CLICK_MULT||1) * Math.pow(BTN_MULT, state.btnOwned || 0) * Math.pow(2, state.rebirths) * (1 + state.upgrades.click));
+    const getClickValue = () => Math.floor(state.baseClick * cardClickMulti() * state.multiplier * (window.EVENT_CLICK_MULT||1) * Math.pow(BTN_MULT, state.btnOwned || 0) * Math.pow(2, state.rebirths) * (1 + state.upgrades.click));
 
     function savePermanentLoan(loanVal) {
         localStorage.setItem('minimalCapital_PermanentLoan', loanVal.toString());
@@ -1081,9 +1143,29 @@
         updateUI();
     });
 
+    // 大數字自動縮小字體：先縮小字體讓整串金額塞得進畫面；縮到太小（< 14px）就自動改用中文單位（萬、億、兆、京、垓…）
+    const fitBox = (el, minPx, fallback) => {
+        el.style.whiteSpace = 'nowrap'; el.style.fontSize = '';
+        const base = parseFloat(getComputedStyle(el).fontSize), avail = el.clientWidth - 16;
+        let w = el.scrollWidth; if (w <= avail || avail <= 0) return;
+        let px = Math.floor(base * avail / w);
+        if (px < minPx && fallback) { fallback(); w = el.scrollWidth; px = w > avail ? Math.floor(base * avail / w) : base; }
+        el.style.fontSize = Math.max(px, 9) + 'px';
+    };
+    const renderBalanceText = () => {
+        const span = document.getElementById('display-balance'), clkSpan = document.getElementById('display-click-val');
+        const balTxt = showExactBalance ? formatMoney(state.balance) : formatCompactBalance(state.balance), clkTxt = formatMoney(getClickValue());
+        const key = balTxt + '|' + clkTxt + '|' + window.innerWidth + '|' + showExactBalance;
+        if (renderBalanceText.key === key) return; renderBalanceText.key = key;
+        span.innerText = balTxt; clkSpan.innerText = clkTxt;
+        fitBox(span.parentElement, 15, () => { span.innerText = fmtCN(state.balance); });
+        fitBox(clkSpan.parentElement, 11, () => { clkSpan.innerText = fmtCN(getClickValue()); });
+    };
+    window.addEventListener('resize', () => { renderBalanceText.key = ''; updateUI(); });
+
     const updateUI = () => {
-        document.getElementById('display-balance').innerText = showExactBalance ? formatMoney(state.balance) : formatCompactBalance(state.balance);
-        document.getElementById('display-click-val').innerText = formatMoney(getClickValue());
+        try { cardTick(); } catch (e) {}
+        renderBalanceText();
         document.getElementById('deposit-val').innerText = formatMoney(state.bankDeposit);
         document.getElementById('loan-val').innerText = formatMoney(state.bankLoan);
         document.getElementById('rebirth-count').innerText = state.rebirths;
@@ -1530,6 +1612,7 @@
         if(!state.equippedBuffs) state.equippedBuffs = [];
         if(!state.friends) state.friends = [];
         state.btnOwned = Math.min(30, Math.max(0, Math.floor(Number(state.btnOwned) || 0))); state.btnSel = Math.min(state.btnOwned, Math.max(0, Math.floor(Number(state.btnSel) || 0)));
+        try { ensureCardState(); } catch (e) {}
         // 跨版本相容：舊版／新版的股票或公司數量可能不同，只匯入雙方都有的項目，避免索引超出造成整份匯入失敗。
         if (Array.isArray(parsed.stocks)) {
             parsed.stocks.slice(0, stocks.length).forEach((owned, i) => {
@@ -1789,9 +1872,9 @@
 
     document.getElementById('main-clicker').addEventListener('click', () => { 
         initAudio(); soundClick(); 
-        const earned = getClickValue();
-        state.balance += earned;
-        showGainAnimation(earned, false);
+        const roll = rollClick(), earned = roll.v;
+        state.balance += earned; state.stats.clicks = (state.stats.clicks | 0) + 1;
+        showGainAnimation(earned, false); if (roll.crit) critFlash();
         updateUI(); 
     });
 
@@ -2038,20 +2121,22 @@
         const lum = hs.reduce((a, x) => { const n = parseInt(x.slice(1), 16); return a + (0.2126 * (n >> 16) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255; }, 0) / hs.length;
         return { light: lum > 0.6, glow: hs[Math.floor(hs.length / 2)] };
     });
-    const cardCls = (card) => (cardMeta[card.level].light ? 'card-light ' : '') + (card.level >= 24 ? 'foil-3' : card.level >= 16 ? 'foil-2' : card.level >= 8 ? 'foil-1' : '');
+    const cardCls = (card) => (cardMeta[card.level].light ? 'card-light ' : '') + (card.level >= 30 ? 'foil-4 ' + (card.level >= 35 ? 'hidden-card' : '') : card.level >= 24 ? 'foil-3' : card.level >= 16 ? 'foil-2' : card.level >= 8 ? 'foil-1' : '');
     const CHIP_SVG = '<svg viewBox="0 0 44 33" fill="none" stroke="#7a5510" stroke-width="1" opacity=".75"><path d="M0 11 H15 M0 22 H15 M29 11 H44 M29 22 H44 M15 0 V33 M29 0 V33 M15 16.5 H29"/><rect x="15" y="10" width="14" height="13" rx="3"/></svg>';
     const NFC_SVG = '<svg class="card-nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 7 C10.5 10 10.5 14 8 17"/><path d="M12 4.5 C16 9 16 15 12 19.5"/><path d="M16 2 C21.5 8 21.5 16 16 22"/></svg>';
     // 每張卡對應一個主題圖騰（沿用按鈕圖示庫），稀有度每 5 張一階
-    const CARD_ICON_IDX = [1,0,8,4,6,2,7,5,20,13,21,17,16,12,22,29,23,9,15,25,19,28,11,27,10,18,24,26,19,14];
-    const CARD_RARITY = (lv) => ['普通','稀有','史詩','傳說','神話','創世'][Math.floor(lv / 5)];
+    const CARD_ICON_IDX = [1,0,8,4,6,2,7,5,20,13,21,17,16,12,22,29,23,9,15,25,19,28,11,27,10,18,24,26,19,14,19,24,22,21,27,28,15,29];
+    const CARD_RARITY = (lv) => lv >= 35 ? '隱藏神話' : ['普通','稀有','史詩','傳說','神話','創世','超越'][Math.floor(lv / 5)];
     const emblemOf = (lv) => { try { return BTN_SYMS[CARD_ICON_IDX[lv]] || ''; } catch (e) { return ''; } };
-    const CARD_TEX = ['metal','metal','gem','gem','gem','gem','gem','fire','tech','wave','wave','fire','stars','tech','stars','metal','metal','gem','stars','fire','stars','wave','tech','wave','fire','stars','stars','fire','stars','stars'];
+    const CARD_TEX = ['metal','metal','gem','gem','gem','gem','gem','fire','tech','wave','wave','fire','stars','tech','stars','metal','metal','gem','stars','fire','stars','wave','tech','wave','fire','stars','stars','fire','stars','stars','stars','stars','tech','fire','stars','stars','stars','fire'];
     const buildCardHtml = (card, isOwned) => {
+        const sN = isOwned ? starsOf(card.level) : 0, aw = isOwned && awakeOf(card.level);
+        const starRow = isOwned ? `<div class="card-stars">${Array.from({ length: 10 }, (_, k) => starSvg(k < sN)).join('')}</div>` : '';
         return `
             <div class="card-pattern">${card.patternSvg}</div><div class="card-guilloche"></div><div class="card-tex tex-${CARD_TEX[card.level]}"></div><div class="card-scrim"></div><div class="card-emblem">${emblemOf(card.level)}</div>
             <div class="card-sheen"></div><div class="card-foil"></div>
             <div class="card-content-top">
-                <div class="card-row"><div class="card-name">${card.name}</div><div class="card-lv">LV.${card.level}<b>${CARD_RARITY(card.level)}</b></div></div>
+                <div class="card-row"><div class="card-name">${card.name}${aw ? '・覺醒' : ''}</div><div class="card-lv">LV.${card.level}<b>${CARD_RARITY(card.level)}</b></div></div>
                 <div class="card-ability"><span class="card-pill">點擊 +${card.multi}倍</span><span class="card-pill">企業 +${card.compMulti.toFixed(1)}倍</span></div>
             </div>
             <div class="card-content-mid"><div class="card-chip">${CHIP_SVG}</div>${NFC_SVG}</div>
@@ -2059,7 +2144,7 @@
                 <div class="card-number">${isOwned ? card.number : '**** **** **** ****'}</div>
                 <div class="card-foot"><span class="card-hint">${isOwned ? '點擊開啟圖鑑' : '未解鎖'}</span><div class="card-brand"><i></i><i></i></div></div>
             </div>
-            <div class="card-seal"></div><div class="card-rim"></div>
+            <div class="card-seal"></div><div class="card-rim"></div>${starRow}${aw ? '<div class="card-aura"></div>' : ''}
         `;
     };
     document.addEventListener('pointermove', (e) => { // 卡片 3D 傾斜 + 光澤跟著手指/滑鼠移動
@@ -2070,6 +2155,144 @@
     });
     const resetTilt = (e) => { const c = e.target.closest && e.target.closest('.credit-card'); if (c && !c.contains(e.relatedTarget)) { c.style.setProperty('--rx', '0deg'); c.style.setProperty('--ry', '0deg'); c.style.setProperty('--mx', '30%'); c.style.setProperty('--my', '18%'); } };
     document.addEventListener('pointerout', resetTilt); document.addEventListener('pointercancel', resetTilt);
+
+
+    // ===== 卡片系統大更新：升星 / 覺醒 / 隱藏神話卡 / 專屬技能 / 圖鑑 / 超越階級 =====
+    const NORMAL_CARDS = 35, TOTAL_CARDS = 38, HIDDEN_L = [33, 36, 40];
+    const cardL = (i) => (i >= NORMAL_CARDS ? HIDDEN_L[i - NORMAL_CARDS] : i);
+    const SKILL_NAMES = ['初心不改','啟航之風','獵手直覺','翡翠祝福','天際視野','琥珀凝時','星雲共鳴','烈焰誓言','量子疊加','極光庇護','深海回響','霸者威壓','月華輪迴','霓虹過載','暗物質引力','王者加冕','聖裁審判','永恆切割','核心裂變','超新星閃耀','重力奇點','時空漣漪','維度穿梭','全知記錄','混沌擾動','銀河洪流','心靈共振','不朽加護','終焉倒數','創世之光','彼岸之門','天命所歸','因果逆轉','無界領域','萬象歸一','時光回溯','命運眷顧','王者降臨'];
+    const SKILL_KINDS = ['crit', 'passive', 'click', 'all'];
+    const HIDDEN_DEF = [
+        { hint: '輪迴三次，時光便會回應你。', cond: () => state.rebirths >= 3, text: '累計重生 3 次' },
+        { hint: '十萬次敲擊，命運女神會聽見。', cond: () => (state.stats.clicks | 0) >= 100000, text: '累計點擊 100,000 次' },
+        { hint: '集齊世間所有卡片之人，將見到王。', cond: () => state.codex.slice(0, NORMAL_CARDS).every(Boolean), text: '集齊全部 35 張一般卡片' }
+    ];
+    const starSvg = (on) => `<svg viewBox="0 0 10 10" class="${on ? 'on' : ''}"><polygon points="5,0.6 6.4,3.6 9.6,3.9 7.2,6.1 7.9,9.3 5,7.6 2.1,9.3 2.8,6.1 0.4,3.9 3.6,3.6"/></svg>`;
+    const ensureCardState = () => {
+        const fix = (k, max) => { const a = Array.isArray(state[k]) ? state[k] : []; state[k] = Array.from({ length: TOTAL_CARDS }, (_, i) => Math.min(max, Math.max(0, Math.floor(Number(a[i]) || 0)))); };
+        fix('cardStars', 10); fix('cardAwake', 1); fix('codex', 1);
+        state.stats = Object.assign({ clicks: 0 }, state.stats); state.stats.clicks = Math.max(0, Math.floor(Number(state.stats.clicks) || 0));
+        state.maxCardOwnedLevel = Math.min(NORMAL_CARDS - 1, Math.max(0, state.maxCardOwnedLevel | 0));
+        for (let i = 0; i < TOTAL_CARDS; i++) if (state.cardAwake[i] && state.cardStars[i] < 10) state.cardAwake[i] = 0;
+        for (let i = 0; i <= state.maxCardOwnedLevel; i++) state.codex[i] = 1;
+        if (state.currentCardLevel >= NORMAL_CARDS ? !state.codex[state.currentCardLevel] : state.currentCardLevel > state.maxCardOwnedLevel) state.currentCardLevel = Math.min(state.currentCardLevel, state.maxCardOwnedLevel);
+    };
+    const starsOf = (i) => Math.min(10, Math.max(0, ((state.cardStars || [])[i]) | 0));
+    const awakeOf = (i) => ((state.cardAwake || [])[i] ? 1 : 0);
+    const ownedNow = (i) => (i >= NORMAL_CARDS ? !!(state.codex || [])[i] : i <= state.maxCardOwnedLevel);
+    const collCount = () => (state.codex || []).reduce((a, b) => a + (b ? 1 : 0), 0);
+    const COLL_MS = [[10, 0.05], [20, 0.10], [30, 0.15], [35, 0.25], [38, 0.50]];
+    const collMult = () => { const n = collCount(); return 1 + 0.01 * n + COLL_MS.reduce((a, [k, v]) => a + (n >= k ? v : 0), 0); };
+    const cardPrice = (i) => { const L = cardL(i); return L === 0 ? 1000 : 100 * Math.pow(10, L - 1); };
+    const starCost = (i, s) => cardPrice(i) * Math.pow(2.5, s + 1);
+    const awakenCost = (i) => 5 + cardL(i);
+    const skillInfo = (i) => {
+        const L = cardL(i), aw = awakeOf(i), kind = i === 35 ? 'all' : i === 36 ? 'crit' : i === 37 ? 'all' : SKILL_KINDS[i % 4];
+        const p = (0.05 + 0.02 * L) * (aw ? 2 : 1), chance = Math.min(0.6, (0.05 + 0.005 * L) * (aw ? 1.5 : 1)), cmult = 3 + 0.05 * L;
+        return { kind, p, chance, cmult, on: starsOf(i) >= 5, name: SKILL_NAMES[i],
+            clickF: kind === 'click' ? 1 + p : kind === 'all' ? 1 + 0.6 * p : 1, passF: kind === 'passive' ? 1 + p : kind === 'all' ? 1 + 0.6 * p : 1,
+            burstClick: kind === 'click' ? 4 : kind === 'all' ? 2.5 : 1, burstPass: kind === 'passive' ? 4 : kind === 'all' ? 2.5 : 1 };
+    };
+    const skillDesc = (i) => { const s = skillInfo(i); return s.kind === 'crit' ? `點擊有 ${(s.chance * 100).toFixed(1)}% 機率暴擊，收益 ×${s.cmult.toFixed(2)}` : s.kind === 'passive' ? `企業收益 +${Math.round(s.p * 100)}%` : s.kind === 'click' ? `點擊收益 +${Math.round(s.p * 100)}%` : `點擊與企業收益 +${Math.round(s.p * 60)}%`; };
+    const burstDesc = (i) => { const k = skillInfo(i).kind; return k === 'crit' ? '10 秒內每次點擊必定暴擊' : k === 'passive' ? '10 秒內企業收益 ×4' : k === 'click' ? '10 秒內點擊收益 ×4' : '10 秒內點擊與企業收益 ×2.5'; };
+    const burst = { until: 0, cd: 0 };
+    const burstOn = () => Date.now() < burst.until;
+    const cardClickMulti = () => {
+        const i = state.currentCardLevel, s = skillInfo(i); let f = cards[i].multi * (1 + 0.15 * starsOf(i)) * (awakeOf(i) ? 1.5 : 1) * collMult();
+        if (s.on) f *= s.clickF; if (burstOn() && awakeOf(i)) f *= s.burstClick; return f;
+    };
+    const cardCompMulti = () => {
+        const i = state.currentCardLevel, s = skillInfo(i); let f = cards[i].compMulti * (1 + 0.15 * starsOf(i)) * (awakeOf(i) ? 1.5 : 1) * collMult();
+        if (s.on) f *= s.passF; if (burstOn() && awakeOf(i)) f *= s.burstPass; return f;
+    };
+    const rollClick = () => {
+        const i = state.currentCardLevel, s = skillInfo(i); let v = getClickValue(), crit = false;
+        if (s.kind === 'crit' && s.on && ((burstOn() && awakeOf(i)) || Math.random() < s.chance)) { v = Math.floor(v * s.cmult); crit = true; }
+        return { v, crit };
+    };
+    const critFlash = () => { const el = document.getElementById('main-clicker'); if (!el) return; el.animate([{ filter: 'brightness(2)' }, { filter: 'brightness(1)' }], { duration: 220 }); };
+    const cardToast = (msg) => {
+        const t = document.createElement('div'); t.textContent = msg;
+        t.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:200000;background:linear-gradient(135deg,#2b1055,#7597de);color:#fff;padding:12px 20px;border-radius:14px;font-weight:bold;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:90vw;text-align:center;';
+        document.body.appendChild(t); setTimeout(() => t.remove(), 4200);
+    };
+    const cardTick = () => {
+        if (!Array.isArray(state.cardStars) || state.cardStars.length !== TOTAL_CARDS || !Array.isArray(state.codex)) ensureCardState();
+        for (let i = 0; i <= state.maxCardOwnedLevel; i++) state.codex[i] = 1;
+        HIDDEN_DEF.forEach((d, k) => { const id = NORMAL_CARDS + k; if (!state.codex[id] && d.cond()) { state.codex[id] = 1; try { soundBuy(); } catch (e) {} cardToast(`解鎖隱藏神話卡：${cards[id].name}！`); } });
+    };
+    window.activateSkill = () => {
+        const i = state.currentCardLevel; if (!awakeOf(i)) return; const now = Date.now(); if (now < burst.cd) return;
+        burst.until = now + 10000; burst.cd = now + 60000; try { soundBuy(); } catch (e) {} cardToast(`發動技能：${SKILL_NAMES[i]}`); renderSkillBtn(); updateUI();
+        setTimeout(() => { updateUI(); renderSkillBtn(); }, 10100);
+    };
+    const renderSkillBtn = () => {
+        const b = document.getElementById('skill-btn'); if (!b) return; const i = state.currentCardLevel;
+        if (!awakeOf(i)) { b.style.display = 'none'; return; } b.style.display = ''; const now = Date.now();
+        if (now < burst.until) { b.textContent = `發動中 ${Math.ceil((burst.until - now) / 1000)} 秒`; b.disabled = true; }
+        else if (now < burst.cd) { b.textContent = `冷卻 ${Math.ceil((burst.cd - now) / 1000)} 秒`; b.disabled = true; }
+        else { b.textContent = `發動：${SKILL_NAMES[i]}`; b.disabled = false; }
+    };
+    setInterval(() => { try { renderSkillBtn(); } catch (e) {} }, 500);
+    document.getElementById('skill-btn').addEventListener('click', () => { initAudio(); activateSkill(); });
+
+    // ----- 圖鑑 -----
+    const rarName = (i) => CARD_RARITY(i);
+    window.closeCodex = () => { document.getElementById('card-codex-overlay').style.display = 'none'; };
+    window.openCodex = () => { initAudio(); document.getElementById('card-codex-overlay').style.display = 'block'; renderCodex(); };
+    const renderCodex = () => {
+        const box = document.getElementById('codex-scroll'), n = collCount(), mult = collMult();
+        const msHtml = COLL_MS.map(([k, v]) => `<span class="cx-ms ${n >= k ? 'done' : ''}">${k} 張 +${Math.round(v * 100)}%</span>`).join('');
+        box.innerHTML = `<h2 style="color:#fff;text-align:center;margin:0 0 6px;border:none;">卡片圖鑑</h2>
+            <div class="cx-sum"><div style="display:flex;justify-content:space-between;color:#fff;font-weight:bold;"><span>收集進度 ${n} / ${TOTAL_CARDS}</span><span>全收益 ×${mult.toFixed(2)}</span></div>
+            <div class="cx-bar"><i style="width:${(n / TOTAL_CARDS * 100).toFixed(1)}%"></i></div><div class="cx-msw">${msHtml}</div>
+            <div style="color:#98a;font-size:.74rem;margin-top:6px;">每收集 1 張 +1% 點擊與企業收益，達成里程碑再額外加成。收集、星級與覺醒在重生後仍會保留。</div></div><div id="cx-grid" class="cx-grid"></div>`;
+        const grid = box.querySelector('#cx-grid');
+        cards.forEach((card, i) => {
+            const got = !!state.codex[i], hidden = i >= NORMAL_CARDS, aw = awakeOf(i), t = document.createElement('div');
+            t.className = 'cx-tile' + (got ? '' : ' cx-locked') + (hidden ? ' cx-hidden' : '') + (aw ? ' cx-awake' : '') + (got && cardMeta[i].light ? ' cx-light' : '');
+            t.style.background = got ? card.gradient : (hidden ? 'linear-gradient(135deg,#0b0b0e,#1a1a22)' : '#2a2a31');
+            if (got) t.innerHTML = `<div class="cx-n">${card.name}${aw ? '・覺醒' : ''}</div><div class="cx-r">LV.${i}｜${rarName(i)}</div><div class="cx-st">${Array.from({ length: 10 }, (_, k) => starSvg(k < starsOf(i))).join('')}</div>`;
+            else if (hidden) t.innerHTML = `<div class="cx-n">？？？</div><div class="cx-r">隱藏神話卡</div><div class="cx-h">${HIDDEN_DEF[i - NORMAL_CARDS].hint}</div>`;
+            else t.innerHTML = `<div class="cx-n">未收集</div><div class="cx-r">LV.${i}｜${rarName(i)}</div>`;
+            t.onclick = () => { if (got) openCardDetail(i); else cardToast(hidden ? '達成隱藏條件後解鎖' : '在卡片商店購買後收集'); };
+            grid.appendChild(t);
+        });
+    };
+    window.closeCardDetail = () => { document.getElementById('card-detail-overlay').style.display = 'none'; renderCodex(); };
+    const openCardDetail = (i) => { document.getElementById('card-detail-overlay').style.display = 'block'; renderCardDetail(i); };
+    const renderCardDetail = (i) => {
+        const box = document.getElementById('card-detail-scroll'), card = cards[i], s = starsOf(i), aw = awakeOf(i), own = ownedNow(i), sk = skillInfo(i), hidden = i >= NORMAL_CARDS;
+        const cardEl = document.createElement('div'); cardEl.className = `credit-card owned ${cardCls(card)}`; cardEl.style.background = card.gradient; cardEl.style.setProperty('--glowc', cardMeta[i].glow); cardEl.style.margin = '0 auto'; cardEl.innerHTML = buildCardHtml(card, true);
+        const clickX = (card.multi * (1 + 0.15 * s) * (aw ? 1.5 : 1)).toFixed(2), compX = (card.compMulti * (1 + 0.15 * s) * (aw ? 1.5 : 1)).toFixed(2);
+        const upCost = starCost(i, s), canUp = own && s < 10, canAw = own && s >= 10 && !aw;
+        box.innerHTML = `<div id="cd-card"></div><div class="cd-panel"><div class="cd-row"><b>${card.name}${aw ? '・覺醒' : ''}</b><span>LV.${i}｜${rarName(i)}</span></div>
+            <div class="cd-row"><span>點擊倍率 ×${clickX}</span><span>企業倍率 ×${compX}</span></div>
+            ${hidden ? `<div style="color:#ffd27a;font-size:.8rem;margin-top:4px;">解鎖條件：${HIDDEN_DEF[i - NORMAL_CARDS].text}</div>` : ''}
+            ${own ? '' : `<div style="color:#ff9b9b;font-size:.82rem;margin-top:6px;">本輪尚未解鎖此卡，請先到卡片商店購買才能升星／覺醒／裝備。</div>`}</div>
+            <div class="cd-panel"><div class="cd-row"><b>星級 ${s} / 10</b><span style="color:#aab;font-size:.8rem;">每星 +15% 該卡倍率</span></div><div class="cd-stars">${Array.from({ length: 10 }, (_, k) => starSvg(k < s)).join('')}</div>
+            <button class="btn gold" id="cd-up" style="width:100%;margin-top:8px;">${s >= 10 ? '已滿星' : `升星 $${fmtCN(upCost)}`}</button></div>
+            <div class="cd-panel"><div class="cd-row"><b>覺醒</b><span style="color:#aab;font-size:.8rem;">${aw ? '已覺醒：倍率 ×1.5、技能強化' : `需 10 星＋${awakenCost(i)} 資本核心（目前 ${state.capitalCores | 0}）`}</span></div>
+            <button class="btn" id="cd-aw" style="width:100%;margin-top:8px;background:linear-gradient(135deg,#6a11cb,#2575fc);color:#fff;">${aw ? '已覺醒' : '覺醒'}</button></div>
+            <div class="cd-panel"><div class="cd-row"><b>專屬技能：${sk.name}</b></div>
+            <div class="cd-sk"><span class="${s >= 5 ? 'on' : ''}">被動（★5 解鎖）：${skillDesc(i)}</span><span class="${aw ? 'on' : ''}">主動（覺醒解鎖）：${burstDesc(i)}（持續 10 秒，冷卻 60 秒）</span></div></div>
+            <button class="btn" id="cd-eq" style="width:100%;margin-top:6px;">${i === state.currentCardLevel ? '使用中' : '裝備此卡'}</button>`;
+        box.querySelector('#cd-card').appendChild(cardEl); box.querySelector('#cd-card').style.cssText = 'display:flex;justify-content:center;margin-bottom:12px;';
+        const up = box.querySelector('#cd-up'), awb = box.querySelector('#cd-aw'), eq = box.querySelector('#cd-eq');
+        up.disabled = !canUp; awb.disabled = !canAw; eq.disabled = !own || i === state.currentCardLevel;
+        up.onclick = () => {
+            if (Number(state.balance) < upCost) { soundError(); alert(`現金餘額不足！升星需要 $${formatMoney(upCost)}（${fmtCN(upCost)}）。`); return; }
+            state.cardStars[i] = s + 1; spendGameMoney(upCost); soundBuy(); if (s + 1 === 5) cardToast(`${card.name} 被動技能解鎖：${sk.name}`); if (s + 1 === 10) cardToast(`${card.name} 已滿星，可以覺醒了！`);
+            renderCurrentCard(); updateUI(); renderCardDetail(i);
+        };
+        awb.onclick = () => {
+            const c = awakenCost(i); if ((state.capitalCores | 0) < c) { soundError(); alert(`資本核心不足！覺醒需要 ${c} 顆（目前 ${state.capitalCores | 0}）。`); return; }
+            state.cardAwake[i] = 1; state.capitalCores -= c; saveGame(false); soundBuy(); cardToast(`${card.name} 覺醒成功！解鎖主動技能「${sk.name}」`);
+            renderCurrentCard(); updateUI(); renderCardDetail(i);
+        };
+        eq.onclick = () => { soundClick(); state.currentCardLevel = i; renderCurrentCard(); updateUI(); renderCardDetail(i); };
+    };
+    document.getElementById('open-codex').addEventListener('click', () => openCodex());
 
     const renderCurrentCard = () => {
         const display = document.getElementById('current-card-display'); display.innerHTML = '';
@@ -2085,7 +2308,9 @@
 
     const renderCardCatalog = () => {
         const catalogScroll = document.getElementById('catalog-scroll'); catalogScroll.innerHTML = '';
+        const cxBtn = document.createElement('button'); cxBtn.className = 'btn gold'; cxBtn.style.cssText = 'display:block;margin:0 auto 18px;padding:10px 26px;font-size:1rem;'; cxBtn.textContent = '開啟卡片圖鑑（升星・覺醒・技能）'; cxBtn.onclick = () => { closeCatalog(); openCodex(); }; catalogScroll.appendChild(cxBtn);
         cards.forEach((card, index) => {
+            if (card.hidden) return;
             const isOwned = index <= state.maxCardOwnedLevel, isNextToUpgrade = index === state.maxCardOwnedLevel + 1;
             const itemEl = document.createElement('div'); itemEl.className = 'catalog-item';
             const cardEl = document.createElement('div');
@@ -2569,6 +2794,30 @@
     window.addEventListener('resize', () => { canvas.width = canvas.parentElement.clientWidth; drawChart(); });
     try { applyClickerStyle(); } catch (e) {}
     if(!localStorage.getItem('tutorialCompleted')) { document.getElementById('tutorial-overlay').style.display = 'flex'; document.getElementById('tutorial-text').innerHTML = tutorialTexts[0]; }
+</script>
+<script>
+/* 大數字自動縮小字體：主畫面現金與每次點擊，超長數字會縮小，縮到底還放不下就自動換行 */
+(function () {
+  function setup(wrapSel, valId, minPx) {
+    var wrap = document.querySelector(wrapSel), val = document.getElementById(valId); if (!wrap || !val) return;
+    var base = parseFloat(getComputedStyle(wrap).fontSize) || 16, busy = false;
+    function fit() {
+      if (busy) return; busy = true;
+      wrap.style.whiteSpace = 'nowrap'; wrap.style.wordBreak = ''; wrap.style.lineHeight = ''; wrap.style.fontSize = base + 'px';
+      wrap.style.display = 'inline-block'; var need = wrap.offsetWidth; wrap.style.display = ''; var avail = wrap.parentElement.clientWidth - 28;
+      if (need > avail) {
+        var s = Math.floor(base * avail / need * 10) / 10;
+        if (s >= minPx) wrap.style.fontSize = s + 'px';
+        else { wrap.style.fontSize = minPx + 'px'; wrap.style.whiteSpace = 'normal'; wrap.style.wordBreak = 'break-all'; wrap.style.lineHeight = '1.15'; }
+      }
+      busy = false;
+    }
+    new MutationObserver(fit).observe(val, { childList: true, characterData: true, subtree: true });
+    window.addEventListener('resize', fit); fit();
+  }
+  setup('#balance-header .balance', 'display-balance', 17);
+  setup('#balance-header .click-info', 'display-click-val', 11);
+})();
 </script>
 <script src="/online.js"></script>
 </body>

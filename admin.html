@@ -13,7 +13,7 @@ button.r{background:#dc3545}button.y{background:#fd7e14}button.g{background:#6c7
 <div id="app" style="display:none"><header><b>🛠 極簡資本 後台</b>
 <button data-t="ov">總覽</button><button data-t="pl">玩家</button><button data-t="bn">封鎖</button><button data-t="mk">股市</button><button data-t="sn">賽季</button><button data-t="ev">活動</button><button data-t="gf">發放/公告</button><button data-t="cd">兌換碼</button><button data-t="st">設定/日誌</button></header><main id="m"></main></div>
 <script>
-const CARDS=["白銀初心卡", "青銅啟航卡", "黑曜獵手卡", "翡翠光輝卡", "藍寶石天際卡", "琥珀流光卡", "紫晶星雲卡", "紅蓮誓約卡", "鈦空量子卡", "極光幻境卡", "深海沉香卡", "烈陽霸者卡", "月華永恆卡", "賽博霓虹卡", "虛空暗物質卡", "黃金王者卡", "白金聖裁卡", "鑽石永恆卡", "星核裂變卡", "超新星爆發卡", "黑洞重力卡", "時空交響卡", "維度崩裂卡", "阿卡西記錄卡", "混沌初始卡", "銀河主宰卡", "宇宙心靈卡", "不朽神性卡", "萬物終焉卡", "創世神域卡"];
+const CARDS=["白銀初心卡", "青銅啟航卡", "黑曜獵手卡", "翡翠光輝卡", "藍寶石天際卡", "琥珀流光卡", "紫晶星雲卡", "紅蓮誓約卡", "鈦空量子卡", "極光幻境卡", "深海沉香卡", "烈陽霸者卡", "月華永恆卡", "賽博霓虹卡", "虛空暗物質卡", "黃金王者卡", "白金聖裁卡", "鑽石永恆卡", "星核裂變卡", "超新星爆發卡", "黑洞重力卡", "時空交響卡", "維度崩裂卡", "阿卡西記錄卡", "混沌初始卡", "銀河主宰卡", "宇宙心靈卡", "不朽神性卡", "萬物終焉卡", "創世神域卡", "彼岸星界卡", "天命輪轉卡", "因果律卡", "無界之門卡", "萬象歸一卡"];
 let T=sessionStorage.adm||'',timer,PL=[];const $=s=>document.querySelector(s),v=id=>document.getElementById(id).value;
 const fmt=n=>Number(n).toLocaleString('zh-TW'),ago=t=>t?new Date(t).toLocaleString('zh-TW'):'-';
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

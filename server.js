@@ -84,7 +84,7 @@ const pushEvents = () => broadcast('events', { now: now(), events: pubEvents() }
 const RANGE = [[0, 150], [150, 230], [230, 275], [275, 293], [293, 299], [299, 300]];
 function mkCmd(b) {
   const c = { id: uid(6), type: b.type, msg: String(b.msg || '').slice(0, 80) };
-  if (b.type === 'card') { c.value = parseInt(b.value); if (!(c.value >= 0 && c.value <= 29)) throw '卡片等級需為 0~29'; }
+  if (b.type === 'card') { c.value = parseInt(b.value); if (!(c.value >= 0 && c.value <= 34)) throw '卡片等級需為 0~34'; }
   else if (['money', 'setmoney', 'cores', 'rebirth'].includes(b.type)) { c.value = Number(b.value); if (!Number.isFinite(c.value)) throw 'value 不是數字'; if (c.type === 'setmoney' && c.value < 0) throw '金額不可為負'; }
   else if (b.type === 'buff') {
     const n = Math.min(Math.max(parseInt(b.count) || 1, 1), 500);
@@ -254,9 +254,13 @@ function structural(s) { // 回傳 {fatal, reasons}
   if (!Array.isArray(s.companies || []) || (s.companies || []).length > 30 || !(s.companies || []).every(c => c && INT(c.level, 5000))) return bad('公司資料異常');
   st.bankDeposit = st.bankDeposit || 0; st.bankLoan = st.bankLoan || 0; st.upgrades = st.upgrades || { click: 0, company: 0, discount: 0 }; st.inventory = st.inventory || {}; st.equippedBuffs = st.equippedBuffs || [];
   const r = [];
-  if (!INT(st.rebirths, 300) || !INT(st.capitalCores) || !INT(st.currentCardLevel, 29) || !INT(st.maxCardOwnedLevel, 29) || !NUM(st.baseClick, 1e6)) return bad('進度數值異常');
+  if (!INT(st.rebirths, 300) || !INT(st.capitalCores) || !INT(st.currentCardLevel, 37) || !INT(st.maxCardOwnedLevel, 34) || !NUM(st.baseClick, 1e6)) return bad('進度數值異常');
   st.btnOwned = st.btnOwned || 0; st.btnSel = st.btnSel || 0; if (!INT(st.btnOwned, 30) || !INT(st.btnSel, 30)) return bad('按鈕等級異常'); if (st.btnSel > st.btnOwned) r.push('使用中的按鈕高於已購買等級');
-  if (st.currentCardLevel > st.maxCardOwnedLevel) r.push('目前卡片等級高於已擁有最高等級');
+  const fix38 = (k, max) => { const a = st[k]; if (a === undefined) { st[k] = Array(38).fill(0); return true; } if (!Array.isArray(a) || a.length > 38 || !a.every(x => INT(x, max))) return false; st[k] = Array.from({ length: 38 }, (_, i) => a[i] || 0); return true; };
+  if (!fix38('cardStars', 10) || !fix38('cardAwake', 1) || !fix38('codex', 1)) return bad('卡片資料異常');
+  if (st.stats === undefined) st.stats = { clicks: 0 }; if (!st.stats || !INT(st.stats.clicks, 1e12)) return bad('統計資料異常');
+  if (st.currentCardLevel < 35 ? st.currentCardLevel > st.maxCardOwnedLevel : !st.codex[st.currentCardLevel]) r.push('目前卡片等級高於已擁有最高等級');
+  if (st.cardAwake.some((a, i) => a && st.cardStars[i] < 10)) r.push('覺醒卡星級不足 10 星');
   for (const k of ['click', 'company', 'discount']) if (!INT(st.upgrades[k], 1e6)) return bad('天賦數值異常');
   if (typeof st.inventory !== 'object' || !Object.entries(st.inventory).every(([k, v]) => INT(+k, 299) && INT(v, 1e7))) return bad('背包資料異常');
   if (!Array.isArray(st.equippedBuffs) || st.equippedBuffs.length > 5) r.push('裝備 Buff 欄位數異常');
@@ -280,9 +284,15 @@ function vet(p, s) {
   const BTN_MULT = 4, btnPrice = k => Number('1e' + (3 + 2 * (k - 1))); // 主畫面按鈕：每級價格 ×100、點擊收益 ×4
   const oBtn = Math.min(old.btnOwned || 0, 30), nBtn = Math.min(st.btnOwned || 0, 30); let btnCost = 0; for (let k = oBtn + 1; k <= nBtn; k++) btnCost += btnPrice(k);
   const btnLvl = btnCost <= (old.balance || 0) + (old.bankDeposit || 0) + 1e7 ? Math.max(oBtn, nBtn) : oBtn;
-  const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oCards) * mult * Math.pow(BTN_MULT, btnLvl) * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
-  let pas = 0; (p.save.companies || []).forEach((c, i) => pas += ((c && c.level) || 0) * Math.floor(Math.floor(10 * Math.pow(1.45, i)) * 0.75 * (1 + 0.375 * oCards) * (1 + ou.company)));
-  const earn = (click * cps + pas * mult * ev.income) * dt * 3;
+  // 卡片系統（升星／覺醒／圖鑑加成／專屬技能）造成的收入倍率上限，皆用上一次存檔推算
+  const oL = oCards >= 35 ? [33, 36, 40][oCards - 35] : oCards, oSt = Math.min(10, ((old.cardStars || [])[oCards] | 0) + 1), oAw = ((old.cardAwake || [])[oCards] || oSt >= 10) ? 1.5 : 1;
+  const oN = Math.min(38, ((old.codex || []).reduce((a, b) => a + (b ? 1 : 0), 0)) + 1), collF = 1 + 0.01 * oN + [[10, .05], [20, .1], [30, .15], [35, .25], [38, .5]].reduce((a, [k, v]) => a + (oN >= k ? v : 0), 0);
+  const oKind = oCards === 35 ? 'all' : oCards === 36 ? 'crit' : oCards === 37 ? 'all' : ['crit', 'passive', 'click', 'all'][oCards % 4], oSp = (0.05 + 0.02 * oL) * 2;
+  const skillF = oSt >= 5 ? (oKind === 'crit' ? 5 : 1 + oSp) : 1, burstF = oAw > 1 ? 4 : 1;
+  const cardFac = (1 + 0.15 * oSt) * oAw * collF * skillF * burstF;
+  const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oL) * mult * Math.pow(BTN_MULT, btnLvl) * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
+  let pas = 0; (p.save.companies || []).forEach((c, i) => pas += ((c && c.level) || 0) * Math.floor(Math.floor(10 * Math.pow(1.45, i)) * 0.75 * (1 + 0.375 * oL) * (1 + ou.company)));
+  const earn = (click * cps + pas * mult * ev.income) * cardFac * dt * 3;
   const oldB = old.balance || 0, oldD = old.bankDeposit || 0, oldW = oldB + oldD;
   const g = { money: 0, buffs: 0, cores: 0, rebirth: 0 };
   (p.recent || []).forEach(x => { if (!x.acked || t - x.t < 120000) for (const k in g) g[k] += x[k]; });
@@ -312,6 +322,15 @@ function vet(p, s) {
   if (cnt(st) - cnt(old) > Math.floor(cash / 1e19) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
   if (st.rebirths - (old.rebirths || 0) > 2 + g.rebirth) r.push(`重生次數暴增（+${st.rebirths - (old.rebirths || 0)}）`);
+  // 卡片升星／覺醒／圖鑑旗標／累計點擊
+  const cL = i => i >= 35 ? [33, 36, 40][i - 35] : i, cPrice = i => cL(i) === 0 ? 1000 : 100 * Math.pow(10, cL(i) - 1);
+  let starSum = 0, awakeCost = 0;
+  for (let i = 0; i < 38; i++) { const o = (old.cardStars || [])[i] | 0, n = st.cardStars[i]; for (let q = o; q < n; q++) starSum += cPrice(i) * Math.pow(2.5, q + 1); if (st.cardAwake[i] && !((old.cardAwake || [])[i])) awakeCost += 5 + cL(i); }
+  if (starSum > cash) r.push('卡片星級暴增（現金不足）');
+  const coreGain = Math.floor((oldB + earn + g.money) / 1e16) + g.cores;
+  if (awakeCost > 0 && st.capitalCores > (old.capitalCores || 0) + coreGain - awakeCost) r.push('卡片覺醒未扣除資本核心');
+  for (let i = 0; i < 38; i++) if (st.codex[i] && !((old.codex || [])[i])) { const ok = i < 35 ? i <= st.maxCardOwnedLevel : [st.rebirths >= 3, st.stats.clicks >= 1e5, st.codex.slice(0, 35).every(Boolean)][i - 35]; if (!ok) r.push(`圖鑑旗標不合法（#${i}）`); }
+  if (st.stats.clicks - ((old.stats || {}).clicks || 0) > cps * dt * 3 + 1000) r.push('累計點擊數暴增');
   if (btnCost > cash) r.push(`按鈕等級暴增（${oBtn} → ${nBtn}，現金不足）`);
   if (st.maxCardOwnedLevel > (old.maxCardOwnedLevel || 0) && st.maxCardOwnedLevel > gc && Math.floor(100 * Math.pow(10, st.maxCardOwnedLevel - 1) * Math.pow(0.9, st.upgrades.discount)) > cash) r.push(`卡片等級暴增（→ ${st.maxCardOwnedLevel}）`);
   return { reasons: off ? [] : r, hard };
