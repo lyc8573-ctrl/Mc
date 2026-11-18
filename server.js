@@ -49,6 +49,7 @@ db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db
 db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, xferMax: 0, xferDaily: 0, bucketHour: 1e11 }, db.settings);
 db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++; db.deleted = db.deleted || {};
 console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
+let preRestore = null; try { preRestore = fs.readFileSync(path.join(DATA_DIR, 'pre-restore.json'), 'utf8'); } catch {}
 const PERSIST_WARN = !!process.env.RENDER && !String(DATA_DIR).startsWith('/var/data') && !GH_ON;
 if (PERSIST_WARN) console.warn('⚠ 偵測到在 Render 上但沒有持久硬碟，也沒有設定 GitHub 備份（GH_TOKEN / GH_REPO）：重啟或休眠後所有玩家資料與帳號會消失！');
 let dirty = false;
@@ -404,7 +405,6 @@ async function friendApi(req, res, pl, p, m) {
     st.balance -= amt; pl.rev = (pl.rev || 0) + 1; pl.lastXfer = now(); pl.debits = (pl.debits || []).concat({ t: now(), amt }).slice(-20); pl.sentLog.push({ t: now(), amt });
     queue(t, mkCmd({ type: 'money', value: amt, msg: `💸 ${pl.name} 轉給你 $${amt.toLocaleString('en-US')}` }));
     db.xfers.unshift({ t: now(), from: pl.name, to: t.name, amt }); db.xfers.length = Math.min(db.xfers.length, 300);
-    kpLog(pl, 'pay', `轉帳給 ${t.name}`, amt, -1); kpLog(t, 'recv', `${pl.name} 轉帳給你`, amt, 1); sendTo(t.id, 'kp', {});
     log(`轉帳 ${pl.name} → ${t.name}：$${amt}`); touch(); return J(200, { ok: true, rev: pl.rev, amount: amt });
   }
   return J(404, { error: 'not found' });
@@ -471,88 +471,6 @@ const adminTokens = new Map(); const fails = new Map();
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css' };
 const playerByToken = t => Object.values(db.players).find(p => p.token === t);
 const summary = p => { const s = (p.save && p.save.state) || {}; return { id: p.id, name: p.name, online: online(p.id), balance: Math.floor(s.balance || 0), bank: Math.floor(s.bankDeposit || 0), loan: Math.floor(s.bankLoan || 0), rebirths: s.rebirths || 0, cores: s.capitalCores || 0, buffs: Object.values(s.inventory || {}).reduce((a, b) => a + b, 0), lastSeen: p.lastSeen, banned: p.banned, banReason: p.banReason, pending: p.pending.length, strikes: p.strikes || 0, flags: p.flags || [] }; };
-
-// ---------- KUN Pay：掃碼轉帳、優惠券（伺服器驗證，優惠券只存在伺服器端，玩家無法偽造）----------
-const COUPONS = {
-  cash1: { name: '現金禮券 1 億', icon: '💴', color: '#28a745', desc: '兌換 $1 億現金，適合送朋友', price: 1e8, cmd: { type: 'money', value: 1e8 } },
-  cash2: { name: '現金禮券 1 兆', icon: '💴', color: '#1e9e4a', desc: '兌換 $1 兆現金，適合送朋友', price: 1e12, cmd: { type: 'money', value: 1e12 } },
-  cash3: { name: '現金禮券 1 京', icon: '💰', color: '#16853c', desc: '兌換 $1 京現金，適合送朋友', price: 1e16, cmd: { type: 'money', value: 1e16 } },
-  cash4: { name: '現金禮券 1 垓', icon: '💰', color: '#0f6b2f', desc: '兌換 $1 垓現金，適合送朋友', price: 1e20, cmd: { type: 'money', value: 1e20 } },
-  core1: { name: '資本核心券', icon: '💎', color: '#f39c12', desc: '兌換 1 顆資本核心（不用重生）', price: 5e16, cmd: { type: 'cores', value: 1 } },
-  core5: { name: '資本核心券 x5', icon: '💎', color: '#e67e22', desc: '兌換 5 顆資本核心（不用重生）', price: 2.4e17, cmd: { type: 'cores', value: 5 } },
-  buff1: { name: '稀有 Buff 券', icon: '✨', color: '#3498db', desc: '兌換 1 個隨機【稀有】Buff', price: 2e19, cmd: { type: 'buff', rarity: 1, count: 1 } },
-  buff2: { name: '史詩 Buff 券', icon: '🔮', color: '#9b59b6', desc: '兌換 1 個隨機【史詩】Buff', price: 7e19, cmd: { type: 'buff', rarity: 2, count: 1 } },
-  buff3: { name: '傳說 Buff 券', icon: '🌟', color: '#f39c12', desc: '兌換 1 個隨機【傳說】Buff', price: 3e20, cmd: { type: 'buff', rarity: 3, count: 1 } },
-  buff4: { name: '神話 Buff 券', icon: '🔥', color: '#e74c3c', desc: '兌換 1 個隨機【神話】Buff', price: 1.5e21, cmd: { type: 'buff', rarity: 4, count: 1 } }
-};
-const couponShop = () => Object.entries(COUPONS).map(([k, c]) => ({ k, name: c.name, icon: c.icon, color: c.color, desc: c.desc, price: c.price }));
-const kpLog = (p, k, text, amt, sign) => { (p.kp = p.kp || []).unshift({ t: now(), k, text, amt: amt || 0, sign: sign || 0 }); p.kp.length = Math.min(p.kp.length, 60); touch(); };
-function kpSpend(pl, amt) { // 伺服器先扣款並提升存檔版本（舊版本存檔會被拒收），玩家端依回應同步扣款
-  const st = pl.save && pl.save.state; if (!st || !(st.balance >= amt)) return false;
-  st.balance -= amt; pl.rev = (pl.rev || 0) + 1; pl.debits = (pl.debits || []).concat({ t: now(), amt }).slice(-20); return true;
-}
-function kpGive(t, k, from) { t.coupons = t.coupons || []; if (t.coupons.length >= 200) return false; t.coupons.push({ id: uid(5), k, t: now(), from: from || '' }); return true; }
-function xferCore(pl, t, amt) { // 掃碼付款 / 轉帳給任何玩家；回傳 [HTTP 狀態碼, 內容]
-  const S = db.settings; fr(pl);
-  if (pl.muted) return [403, { error: '你已被禁言，無法轉帳' }];
-  if (!t) return [404, { error: '找不到收款人' }];
-  if (t === pl) return [400, { error: '不能轉帳給自己' }];
-  if (isBanned(t)) return [403, { error: '對方帳號異常，無法轉帳' }];
-  if (!(amt >= 1) || !Number.isFinite(amt)) return [400, { error: '金額錯誤' }];
-  const f = pl.friends[t.id], since = f ? f.since : (pl.created || 0);
-  if (S.xferMinFriendMin > 0 && now() - since < S.xferMinFriendMin * 60000) return [403, { error: f ? `成為好友滿 ${S.xferMinFriendMin} 分鐘後才能轉帳` : `帳號建立滿 ${S.xferMinFriendMin} 分鐘後才能轉帳給非好友` }];
-  if (S.xferMax > 0 && amt > S.xferMax) return [400, { error: `單筆轉帳上限為 $${S.xferMax.toLocaleString('en-US')}` }];
-  pl.sentLog = (pl.sentLog || []).filter(x => now() - x.t < 86400000);
-  if (S.xferDaily > 0 && pl.sentLog.reduce((a, x) => a + x.amt, 0) + amt > S.xferDaily) return [400, { error: `24 小時內轉出總額上限為 $${S.xferDaily.toLocaleString('en-US')}` }];
-  if (now() - (pl.lastXfer || 0) < 3000) return [429, { error: '轉帳太頻繁，請稍後再試' }];
-  if (!kpSpend(pl, amt)) return [400, { error: '餘額不足（以伺服器最新存檔為準，請稍等幾秒再試）' }];
-  pl.lastXfer = now(); pl.sentLog.push({ t: now(), amt });
-  queue(t, mkCmd({ type: 'money', value: amt, msg: `💸 KUN Pay 收款：${pl.name} 付給你 $${amt.toLocaleString('en-US')}` }));
-  db.xfers.unshift({ t: now(), from: pl.name, to: t.name, amt }); db.xfers.length = Math.min(db.xfers.length, 300);
-  kpLog(pl, 'pay', `付款給 ${t.name}`, amt, -1); kpLog(t, 'recv', `${pl.name} 付款給你`, amt, 1); sendTo(t.id, 'kp', {});
-  log(`KUN Pay ${pl.name} → ${t.name}：$${amt}`); touch();
-  return [200, { ok: true, rev: pl.rev, amount: amt, to: t.name }];
-}
-async function kunpayApi(req, res, pl, p, m) {
-  const J = (c, o) => json(res, c, o); fr(pl); pl.coupons = pl.coupons || [];
-  if (p === '/api/kunpay' && m === 'GET') return J(200, { shop: couponShop(), coupons: pl.coupons.filter(c => COUPONS[c.k]).map(c => ({ id: c.id, k: c.k, t: c.t, from: c.from || '' })), hist: (pl.kp || []).slice(0, 40) });
-  if (m !== 'POST') return J(404, { error: 'not found' });
-  const b = await body(req);
-  if (p === '/api/kunpay/pay') {
-    const name = String(b.to || '').trim(), t = Object.values(db.players).find(x => x.name === name), r = xferCore(pl, t, Math.floor(Number(b.amount)));
-    return J(r[0], r[1]);
-  }
-  if (p === '/api/kunpay/buy') {
-    const d = COUPONS[b.k]; if (!d) return J(404, { error: '沒有這種優惠券' });
-    if (pl.muted && b.to) return J(403, { error: '你已被禁言，無法送禮' });
-    if (now() - (pl.lastKp || 0) < 800) return J(429, { error: '操作太快了' });
-    let t = pl;
-    if (b.to) { t = db.players[b.to]; if (!t || !pl.friends[b.to]) return J(403, { error: '只能送給好友' }); if (isBanned(t)) return J(403, { error: '對方帳號異常' }); }
-    if ((t.coupons || []).length >= 200) return J(400, { error: t === pl ? '你的優惠券已滿（200 張）' : '對方的優惠券已滿' });
-    if (!kpSpend(pl, d.price)) return J(400, { error: '餘額不足（以伺服器最新存檔為準，請稍等幾秒再試）' });
-    pl.lastKp = now(); kpGive(t, b.k, t === pl ? '' : pl.name);
-    if (t === pl) kpLog(pl, 'buy', `購買「${d.name}」`, d.price, -1);
-    else { kpLog(pl, 'buy', `購買「${d.name}」送給 ${t.name}`, d.price, -1); kpLog(t, 'giftin', `收到 ${pl.name} 送的「${d.name}」`, 0, 0); sendTo(t.id, 'announce', { text: `🎁 ${pl.name} 送你一張「${d.name}」！到 KUN Pay 查看`, style: 'event' }); sendTo(t.id, 'kp', {}); }
-    touch(); return J(200, { ok: true, rev: pl.rev, price: d.price });
-  }
-  if (p === '/api/kunpay/use') {
-    const i = pl.coupons.findIndex(c => c.id === b.cid); if (i < 0) return J(404, { error: '找不到這張優惠券' });
-    const c = pl.coupons[i], d = COUPONS[c.k]; pl.coupons.splice(i, 1);
-    if (!d) { touch(); return J(404, { error: '這種優惠券已下架' }); }
-    queue(pl, mkCmd(Object.assign({ msg: `🎟 使用優惠券：${d.name}` }, d.cmd))); kpLog(pl, 'use', `使用「${d.name}」`, 0, 0); touch(); return J(200, { ok: true });
-  }
-  if (p === '/api/kunpay/gift') {
-    if (pl.muted) return J(403, { error: '你已被禁言，無法送禮' });
-    const t = db.players[b.to]; if (!t || !pl.friends[b.to]) return J(403, { error: '只能送給好友' }); if (isBanned(t)) return J(403, { error: '對方帳號異常' });
-    const i = pl.coupons.findIndex(c => c.id === b.cid); if (i < 0) return J(404, { error: '找不到這張優惠券' });
-    const c = pl.coupons[i], d = COUPONS[c.k]; if (!d) return J(404, { error: '這種優惠券已下架' });
-    if ((t.coupons || []).length >= 200) return J(400, { error: '對方的優惠券已滿' });
-    pl.coupons.splice(i, 1); kpGive(t, c.k, pl.name);
-    kpLog(pl, 'giftout', `把「${d.name}」送給 ${t.name}`, 0, 0); kpLog(t, 'giftin', `收到 ${pl.name} 送的「${d.name}」`, 0, 0);
-    sendTo(t.id, 'announce', { text: `🎁 ${pl.name} 送你一張「${d.name}」！到 KUN Pay 查看`, style: 'event' }); sendTo(t.id, 'kp', {}); touch(); return J(200, { ok: true });
-  }
-  return J(404, { error: 'not found' });
-}
 
 async function api(req, res, url) {
   const p = url.pathname, m = req.method;
@@ -630,7 +548,6 @@ async function api(req, res, url) {
       if (pl.pwHash && !checkPw(pl, String(b.old || ''))) return json(res, 401, { error: '舊密碼錯誤' });
       setPw(pl, np); log(`${pl.name} 設定/修改密碼`); return json(res, 200, { ok: true });
     }
-    if (p.startsWith('/api/kunpay')) return kunpayApi(req, res, pl, p, m);
     if (p.startsWith('/api/friends') || p === '/api/chat') return friendApi(req, res, pl, p, m);
     if (p === '/api/claim' && m === 'POST') {
       const b = await body(req), e = activeEvents().find(x => x.id === b.id && x.type === 'packet');
@@ -744,8 +661,39 @@ async function api(req, res, url) {
       if (p === '/admin/api/autoann' && m === 'GET') return json(res, 200, db.autoAnn);
       if (p === '/admin/api/autoann' && m === 'POST') { const text = String(b.text || '').slice(0, 200), every = Math.max(1, Number(b.every) || 10); if (!text) throw '內容空白'; db.autoAnn.push({ id: uid(4), text, style: b.style || 'info', every, next: now() + every * 60000 }); log(`建立定時公告：${text}（每 ${every} 分鐘）`); touch(); return json(res, 200, { ok: true }); }
       if ((r = p.match(/^\/admin\/api\/autoann\/(\w+)$/)) && m === 'DELETE') { db.autoAnn = db.autoAnn.filter(x => x.id !== r[1]); touch(); return json(res, 200, { ok: true }); }
-      if (p === '/admin/api/restore' && m === 'POST') { const d = b.db; if (!d || typeof d.players !== 'object') throw '備份檔格式錯誤'; const keep = db.market; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); db.market = keep; conns.forEach((_, id) => kick(id, '伺服器還原資料，請重新登入')); log('還原備份'); touch(); return json(res, 200, { ok: true, players: Object.keys(db.players).length }); }
-      if (p === '/admin/api/backup') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="backup.json"' }); return res.end(JSON.stringify(db)); }
+      if (p === '/admin/api/restore' && m === 'POST') {
+        const d = b.db; if (!d || typeof d.players !== 'object' || Array.isArray(d.players)) throw '備份檔格式錯誤（找不到玩家資料）';
+        delete d._format; delete d._exportedAt; const mode = ['replace', 'missing', 'overwrite'].includes(b.mode) ? b.mode : 'replace';
+        const snap = JSON.stringify(db); preRestore = snap; try { fs.writeFileSync(path.join(DATA_DIR, 'pre-restore.json'), snap); } catch {}
+        const rep = { mode, added: 0, overwritten: 0, skipped: [] };
+        if (mode === 'replace') { const keep = db.market; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); db.market = keep; rep.added = Object.keys(db.players).length; }
+        else {
+          const names = new Map(Object.values(db.players).map(x => [x.name, x.id]));
+          for (const [id, pl] of Object.entries(d.players)) {
+            if (!pl || typeof pl !== 'object') continue; pl.id = pl.id || id;
+            const clash = names.get(pl.name); if (clash && clash !== id) { rep.skipped.push(pl.name); continue; }
+            if (!db.players[id]) { db.players[id] = pl; rep.added++; } else if (mode === 'overwrite') { db.players[id] = pl; rep.overwritten++; }
+          }
+          for (const [k, v] of Object.entries(d.codes || {})) if (mode === 'overwrite' || !db.codes[k]) db.codes[k] = v;
+          for (const kind of ['devices', 'ips']) for (const [k, v] of Object.entries((d.bans || {})[kind] || {})) if (!db.bans[kind][k]) db.bans[kind][k] = v;
+          for (const [k, v] of Object.entries(d.deleted || {})) if (!db.deleted[k]) db.deleted[k] = v;
+          for (const e of d.events || []) if (!db.events.some(x => x.id === e.id)) db.events.push(e);
+          for (const h of d.seasonHistory || []) if (!db.seasonHistory.some(x => x.id === h.id)) db.seasonHistory.push(h);
+          if (!seasonOn() && d.season && !d.season.ended) db.season = d.season;
+          for (const [k, v] of Object.entries(d.chats || {})) if (!db.chats[k]) db.chats[k] = v;
+          for (const [k, v] of Object.entries(d.unread || {})) if (db.unread[k] === undefined) db.unread[k] = v;
+        }
+        Object.values(db.players).forEach(pl => { pl.pending = pl.pending || []; pl.redeemed = pl.redeemed || []; pl.devs = pl.devs || []; pl.ips = pl.ips || []; fr(pl); });
+        cleanOrphans(false); lbClear(); [...conns.keys()].forEach(id => kick(id, '伺服器匯入備份，請重新登入'));
+        log(`匯入備份（${mode === 'replace' ? '完全取代' : mode === 'missing' ? '補回遺失玩家' : '以備份覆蓋'}）：新增 ${rep.added}、覆蓋 ${rep.overwritten}、略過同名 ${rep.skipped.length}`); touch();
+        return json(res, 200, Object.assign({ ok: true, players: Object.keys(db.players).length }, rep));
+      }
+      if (p === '/admin/api/restore/undo' && m === 'POST') {
+        if (!preRestore) throw '沒有可撤銷的匯入'; const keep = db.market; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, JSON.parse(preRestore)); db.market = keep; preRestore = null; try { fs.unlinkSync(path.join(DATA_DIR, 'pre-restore.json')); } catch {}
+        [...conns.keys()].forEach(id => kick(id, '伺服器還原資料，請重新登入')); lbClear(); log('撤銷上次匯入，已還原為匯入前的資料'); touch(); return json(res, 200, { ok: true, players: Object.keys(db.players).length });
+      }
+      if (p === '/admin/api/restore/status') return json(res, 200, { canUndo: !!preRestore });
+      if (p === '/admin/api/backup') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="mc-backup-${new Date().toISOString().slice(0, 10)}.txt"` }); return res.end(JSON.stringify(Object.assign({ _format: 'mc-backup-1', _exportedAt: now() }, db))); }
     } catch (e) { return json(res, 400, { error: String(e) }); }
   }
   json(res, 404, { error: 'not found' });

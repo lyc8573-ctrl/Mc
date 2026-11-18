@@ -344,6 +344,109 @@
 .cd-sk span.on { color: #7bed9f; font-weight: bold; }
 #skill-btn:disabled { opacity: .7; }
 </style>
+
+<style id="kunpay-css">
+#panel-kunpay { background: #f2f2f7; padding: 18px 16px 24px; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang TC", sans-serif; }
+.kp-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; }
+.kp-sub { font-size: .78rem; color: #8e8e93; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.kp-title { margin: 0; font-size: 2.1rem; font-weight: 800; color: #000; border: none; padding: 0; text-align: left; }
+.kp-hbtns { display: flex; gap: 10px; }
+.kp-ic { width: 36px; height: 36px; border-radius: 50%; border: none; background: #e5e5ea; color: #007aff; font-size: 1.5rem; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.kp-cash { position: relative; border-radius: 16px; padding: 16px 16px 14px; color: #fff; background: linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 55%, #0a84ff 140%); box-shadow: 0 8px 22px rgba(0,0,0,.28); cursor: pointer; overflow: hidden; }
+.kp-cash::after { content: ''; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.18), transparent 65%); }
+.kp-cash.big { cursor: default; margin: 12px 16px; }
+.kp-row { display: flex; justify-content: space-between; align-items: center; font-size: 1rem; }
+.kp-k { width: 26px; height: 26px; border-radius: 8px; background: #fff; color: #000; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: .9rem; }
+.kp-cashbal { font-size: 2.3rem; font-weight: 700; margin: 14px 0 12px; white-space: nowrap; letter-spacing: -.5px; }
+.kp-cash-act { display: flex; gap: 8px; position: relative; z-index: 2; }
+.kp-cash-act button { flex: 1; border: none; border-radius: 18px; padding: 9px 0; background: rgba(255,255,255,.18); color: #fff; font-weight: 600; font-size: .9rem; cursor: pointer; backdrop-filter: blur(6px); }
+.kp-sec { display: flex; justify-content: space-between; align-items: center; margin: 22px 4px 8px; font-size: 1.15rem; font-weight: 700; color: #000; }
+.kp-sec small { color: #8e8e93; font-weight: 500; font-size: .8rem; }
+.kp-more { border: none; background: none; color: #007aff; font-size: .9rem; cursor: pointer; padding: 0; }
+.kp-more.red { color: #ff3b30; }
+.kp-stack { position: relative; }
+.kp-slot { height: 58px; position: relative; cursor: pointer; }
+.kp-slot.last { height: auto; }
+.kp-wc { position: relative; width: 100%; aspect-ratio: 1.586 / 1; border-radius: 14px; padding: 12px 14px; color: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,.18), 0 3px 10px rgba(0,0,0,.2); display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; border: 1px solid rgba(255,255,255,.35); }
+.kp-wc::before { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, rgba(255,255,255,.28), rgba(255,255,255,0) 45%, rgba(0,0,0,.18)); pointer-events: none; }
+.kp-wc.light { color: #1b2733; }
+.kp-wc-top { display: flex; justify-content: space-between; align-items: center; font-size: 1rem; position: relative; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.kp-wc.light .kp-wc-top { text-shadow: none; }
+.kp-wc-top em { font-style: normal; font-size: .68rem; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,.35); color: #fff; }
+.kp-wc-chip { width: 38px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #f5d676, #b88a1c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); position: relative; }
+.kp-wc-bot { display: flex; justify-content: space-between; align-items: center; font-family: ui-monospace, Menlo, monospace; letter-spacing: .12em; position: relative; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.kp-wc.light .kp-wc-bot { text-shadow: none; }
+.kp-brandc { display: inline-flex; } .kp-brandc i { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.75); } .kp-brandc i + i { margin-left: -9px; background: rgba(255,255,255,.45); }
+.kp-group { background: #fff; border-radius: 14px; padding: 4px 14px; overflow: hidden; }
+.kp-day { padding: 12px 0 4px; font-size: .78rem; font-weight: 700; color: #8e8e93; }
+.kp-tx, .kp-friend { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: .5px solid #e5e5ea; }
+.kp-friend { cursor: pointer; padding: 10px 0; }
+.kp-tx:last-child, .kp-friend:last-child { border-bottom: none; }
+.kp-av { border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.kp-tx-m { flex: 1; min-width: 0; display: flex; flex-direction: column; } .kp-tx-m b { font-size: .95rem; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .kp-tx-m span { font-size: .75rem; color: #8e8e93; }
+.kp-tx-a { text-align: right; display: flex; flex-direction: column; } .kp-tx-a b { font-size: .95rem; color: #000; } .kp-tx-a.in b { color: #30b05a; } .kp-tx-a span { font-size: .72rem; color: #8e8e93; }
+.kp-empty { text-align: center; color: #8e8e93; padding: 22px 8px; font-size: .9rem; }
+.kp-chev { color: #c7c7cc; font-size: 1.3rem; }
+.kp-fs { position: fixed; inset: 0; z-index: 110; background: #f2f2f7; overflow-y: auto; display: none; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", sans-serif; padding-bottom: 40px; }
+.kp-fs-head { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; align-items: center; padding: 14px 14px 10px; background: rgba(242,242,247,.92); backdrop-filter: blur(10px); font-size: 1.02rem; }
+.kp-back { border: none; background: none; color: #007aff; font-size: 1rem; cursor: pointer; width: 60px; text-align: left; padding: 0; }
+.kp-bigcard { display: flex; justify-content: center; padding: 10px 0 14px; }
+.kp-acts { display: flex; flex-direction: column; gap: 8px; padding: 0 16px; }
+.kp-btn { border: none; border-radius: 12px; padding: 13px; font-size: 1rem; font-weight: 600; background: #007aff; color: #fff; cursor: pointer; } .kp-btn.ghost { background: #e5e5ea; color: #007aff; } .kp-btn.dis { background: #d1d1d6; color: #8e8e93; }
+.kp-fs .kp-sec, .kp-fs .kp-group { margin-left: 16px; margin-right: 16px; }
+.kp-info > div, .kp-setlist > label, .kp-pickrow { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: .5px solid #e5e5ea; font-size: .95rem; }
+.kp-info > div:last-child, .kp-setlist > :last-child, .kp-pickrow:last-child { border-bottom: none; }
+.kp-info span, .kp-setlist span, .kp-pickrow span { color: #3c3c43; } .kp-info b, .kp-pickrow b { color: #8e8e93; font-weight: 500; }
+.kp-pickrow { cursor: pointer; } .kp-pickrow.red span { color: #ff3b30; }
+.kp-setlist input[type=checkbox] { width: 46px; height: 28px; appearance: none; -webkit-appearance: none; background: #e5e5ea; border-radius: 16px; position: relative; transition: background .2s; outline: none; }
+.kp-setlist input[type=checkbox]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.3); transition: left .2s; }
+.kp-setlist input[type=checkbox]:checked { background: #34c759; } .kp-setlist input[type=checkbox]:checked::after { left: 20px; }
+.kp-foot { margin: 6px 20px 0; font-size: .75rem; color: #8e8e93; }
+.kp-search { padding: 4px 16px 10px; } .kp-search input { width: 100%; box-sizing: border-box; border: none; border-radius: 10px; background: #e3e3e8; padding: 10px 12px; font-size: 1rem; }
+.kp-to { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; font-size: 1rem; }
+.kp-amt { text-align: center; font-size: 3.2rem; font-weight: 700; margin: 14px 12px 0; white-space: nowrap; color: #000; }
+.kp-amt-sub { text-align: center; color: #8e8e93; font-size: .82rem; min-height: 18px; margin-bottom: 10px; }
+.kp-chips { display: flex; justify-content: center; gap: 8px; margin-bottom: 10px; } .kp-chips button { border: none; background: #e5e5ea; color: #007aff; border-radius: 16px; padding: 7px 13px; font-weight: 600; cursor: pointer; }
+.kp-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 22px; } .kp-pad button { border: none; background: #fff; border-radius: 12px; padding: 14px 0; font-size: 1.5rem; font-weight: 500; color: #000; cursor: pointer; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
+.kp-pad button:active { background: #d9d9de; }
+.kp-go { display: block; width: calc(100% - 44px); margin: 14px 22px 0; border: none; border-radius: 26px; padding: 15px; background: #007aff; color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; } .kp-go.dis { background: #c7c7cc; }
+/* 付款面板 */
+#paysheet-wrap { position: fixed; inset: 0; z-index: 100000; display: none; }
+#paysheet-dim { position: absolute; inset: 0; background: rgba(0,0,0,0); transition: background .28s; }
+#paysheet-wrap.open #paysheet-dim { background: rgba(0,0,0,.45); }
+#paysheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow-y: auto; background: #f2f2f7; border-radius: 22px 22px 0 0; padding: 8px 16px calc(22px + env(safe-area-inset-bottom)); transform: translateY(105%); transition: transform .3s cubic-bezier(.2,.8,.2,1); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", sans-serif; color: #000; box-shadow: 0 -6px 30px rgba(0,0,0,.25); }
+#paysheet-wrap.open #paysheet { transform: translateY(0); }
+.ps-handle { width: 40px; height: 5px; border-radius: 3px; background: #c7c7cc; margin: 4px auto 10px; }
+.ps-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.ps-logo { display: flex; align-items: center; gap: 5px; font-weight: 800; font-size: 1.2rem; } .ps-logo i { font-style: normal; width: 22px; height: 22px; border-radius: 6px; background: #000; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; }
+.ps-x { border: none; background: none; color: #007aff; font-size: 1rem; cursor: pointer; }
+.ps-mer { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.ps-mi { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #34c759, #0a84ff); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem; flex-shrink: 0; }
+.ps-mm { flex: 1; min-width: 0; } .ps-mt { font-weight: 700; } .ps-ms { font-size: .78rem; color: #8e8e93; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-ma { font-size: 1.35rem; font-weight: 800; white-space: nowrap; }
+.ps-rows { background: #fff; border-radius: 14px; padding: 0 12px; margin-bottom: 12px; }
+.ps-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: .5px solid #e5e5ea; font-size: .92rem; } .ps-row:last-child { border-bottom: none; } .ps-row > span:first-child { color: #8e8e93; } .ps-row > b { margin-left: auto; font-weight: 600; text-align: right; }
+.ps-pick, .ps-opt { cursor: pointer; } .ps-mini { width: 46px; height: 30px; border-radius: 6px; flex-shrink: 0; display: inline-block; box-shadow: 0 1px 4px rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.5); }
+.ps-cn { display: flex; flex-direction: column; flex: 1; min-width: 0; } .ps-cn b { font-size: .95rem; } .ps-cn span { font-size: .75rem; color: #8e8e93; } .ps-row > span:first-child.ps-chev, .ps-chev { color: #007aff; font-size: .85rem; } .ps-tick { color: #007aff; font-weight: 800; }
+.ps-picklist { max-height: 46vh; overflow-y: auto; }
+.ps-bottom { text-align: center; padding: 6px 0 2px; min-height: 168px; }
+.ps-hint { padding: 10px 0 12px; } .ps-fid { width: 54px; height: 54px; margin: 0 auto 6px; color: #007aff; } .ps-fid svg { width: 100%; height: 100%; }
+.ps-ht { font-size: 1.05rem; font-weight: 700; } .ps-hs { font-size: .75rem; color: #8e8e93; margin-top: 3px; }
+.ps-btn { width: 100%; border: none; border-radius: 14px; padding: 15px; font-size: 1.05rem; font-weight: 700; background: #000; color: #fff; cursor: pointer; } .ps-btn.ps-ghost { background: #e5e5ea; color: #007aff; }
+.ps-scan { padding: 16px 0 8px; } .ps-fid.scanning { animation: psScan 1s ease-in-out; } .ps-scan-t { margin-top: 8px; font-weight: 600; color: #3c3c43; } .ps-scan-t.ok { color: #30b05a; }
+@keyframes psScan { 0% { opacity: .3; transform: scale(.9); } 40% { opacity: 1; transform: scale(1.05); } 70% { opacity: .5; } 100% { opacity: 1; transform: scale(1); } }
+.ps-check { width: 62px; height: 62px; } .ps-check circle { fill: none; stroke: #34c759; stroke-width: 3; stroke-dasharray: 145; stroke-dashoffset: 145; animation: psDraw .45s ease-out forwards; } .ps-check path { fill: none; stroke: #34c759; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: psDraw .3s .35s ease-out forwards; }
+@keyframes psDraw { to { stroke-dashoffset: 0; } }
+#ps-side { position: fixed; right: 0; top: 12%; width: 40px; height: 100px; z-index: 100001; display: none; touch-action: manipulation; }
+#paysheet-wrap.open #ps-side { display: block; }
+#paysheet-wrap.pickmode #ps-side { display: none; }
+#ps-side i { position: absolute; right: 0; top: 10px; width: 7px; height: 90px; border-radius: 4px 0 0 4px; background: linear-gradient(90deg, #8e8e93, #d1d1d6); box-shadow: 0 0 0 2px rgba(0,122,255,.0); animation: psPulse 1.6s ease-in-out infinite; }
+@keyframes psPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,122,255,.0); } 50% { box-shadow: -4px 0 14px 4px rgba(0,122,255,.75); } }
+.kp-banner { position: fixed; top: 10px; left: 50%; transform: translate(-50%, -140%); z-index: 100002; width: min(94vw, 420px); background: rgba(250,250,252,.96); backdrop-filter: blur(14px); border-radius: 20px; padding: 11px 14px; display: flex; gap: 11px; box-shadow: 0 10px 34px rgba(0,0,0,.3); transition: transform .4s cubic-bezier(.2,.9,.3,1); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", sans-serif; color: #000; font-size: .88rem; }
+.kp-banner.show { transform: translate(-50%, 0); }
+.kp-bi { width: 38px; height: 38px; border-radius: 10px; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; flex-shrink: 0; }
+.kp-bt { flex: 1; min-width: 0; } .kp-bh { display: flex; justify-content: space-between; } .kp-bh span { color: #8e8e93; font-size: .75rem; } .kp-bamt { font-weight: 700; } .kp-bamt.in { color: #30b05a; }
+</style>
 </head>
 <body>
 <div id="boot" style="position:fixed;inset:0;z-index:100000;background:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:1.1rem;color:#555">載入中…</div>
@@ -357,11 +460,11 @@
     
     <div id="active-area">
         <div id="app">
-            <!-- 0. KUN Pay 面板（內容由 online.js 產生） -->
-            <div class="panel" id="panel-kunpay" style="padding:0 0 80px;background:#f4f6f9;">
-                <div style="text-align:center;color:#999;padding:80px 20px;">KUN Pay 載入中…</div>
+            <!-- 0. KUN Pay 錢包 -->
+            <div class="panel" id="panel-kunpay">
+                <div class="kp-head"><div><div class="kp-sub">KUN Pay</div><h1 class="kp-title">錢包</h1></div><div class="kp-hbtns"><button class="kp-ic" id="kp-add" aria-label="加入卡片">+</button><button class="kp-ic" id="kp-set" aria-label="設定"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div></div>
+                <div id="kp-body"></div>
             </div>
-
             <!-- 1. 企業面板 -->
             <div class="panel" id="panel-company">
                 <h2>企業與資產帝國</h2>
@@ -592,6 +695,12 @@
     <div id="catalog-scroll"></div>
     <div class="overlay-close" onclick="closeCatalog()">X</div>
 </div>
+
+<!-- KUN Pay：付款面板（Apple Pay 風格）與全螢幕頁 -->
+<div id="paysheet-wrap"><div id="paysheet-dim"></div><div id="paysheet"></div><div id="ps-side" title="雙擊側邊按鈕"><i></i></div></div>
+<div id="kp-detail" class="kp-fs"></div>
+<div id="kp-settings" class="kp-fs"></div>
+<div id="kp-send" class="kp-fs"></div>
 
 <!-- 卡片圖鑑 / 卡片詳情 Overlay -->
 <div id="card-codex-overlay" class="overlay"><div id="codex-scroll" style="padding:50px 14px 60px;max-width:560px;margin:0 auto;"></div><div class="overlay-close" onclick="closeCodex()">X</div></div>
@@ -1170,6 +1279,7 @@
 
     const updateUI = () => {
         try { cardTick(); } catch (e) {}
+        try { kpSync(); } catch (e) {}
         renderBalanceText();
         document.getElementById('deposit-val').innerText = formatMoney(state.bankDeposit);
         document.getElementById('loan-val').innerText = formatMoney(state.bankLoan);
@@ -1504,7 +1614,7 @@
             return Array.isArray(value) ? value : [];
         } catch (e) { return []; }
     }
-    function recordTransaction(isIncome, title, itemName, unitPrice, qty, totalPrice, timeStr) {
+    function recordTransaction(isIncome, title, itemName, unitPrice, qty, totalPrice, timeStr, cardIdx) {
         const history = readTransactionHistory();
         history.unshift({
             id: 'TX' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
@@ -1514,8 +1624,10 @@
             unitPrice: Number(unitPrice) || 0,
             quantity: Number(qty) || 0,
             amount: Number(totalPrice) || 0,
-            income: !!isIncome
+            income: !!isIncome,
+            card: Number.isInteger(cardIdx) ? cardIdx : -1
         });
+        window.__txn = (window.__txn || 0) + 1;
         // 保留最近 500 筆，避免本機資料無限增加
         localStorage.setItem(TX_HISTORY_KEY, JSON.stringify(history.slice(0, 500)));
     }
@@ -1558,32 +1670,10 @@
     };
 
     function showLinePayReceipt(isIncome, title, stockName, unitPrice, qty, totalPrice, onConfirmCallback = null) {
-        document.getElementById('linepay-type-text').innerText = title;
-        document.getElementById('linepay-type-text').style.color = isIncome ? "#00c73c" : "#dc3545";
-        
-        document.getElementById('linepay-total-val').innerText = (isIncome ? "+ " : "- ") + "$" + formatMoney(totalPrice);
-        document.getElementById('linepay-total-val').style.color = isIncome ? "#00c73c" : "#dc3545";
-        
-        document.getElementById('linepay-stock-name').innerText = stockName;
-        document.getElementById('linepay-unit-price').innerText = "$" + formatMoney(unitPrice);
-        document.getElementById('linepay-quantity').innerText = qty + (stockName.includes('祈願') || stockName.includes('對象') ? " 次" : " 股");
-        
-        const confirmBtn = document.getElementById('linepay-confirm-btn');
-        confirmBtn.innerText = onConfirmCallback ? "確認付款" : "確認";
-
-        pendingLinePayCallback = onConfirmCallback;
-
-        const now = new Date();
-        const timeStr = now.getFullYear() + "/" + 
-            String(now.getMonth()+1).padStart(2, '0') + "/" + 
-            String(now.getDate()).padStart(2, '0') + " " + 
-            String(now.getHours()).padStart(2, '0') + ":" + 
-            String(now.getMinutes()).padStart(2, '0') + ":" + 
-            String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('linepay-time').innerText = timeStr;
-        recordTransaction(isIncome, title, stockName, unitPrice, qty, totalPrice, timeStr);
-        
-        document.getElementById('linepay-modal').style.display = 'flex';
+        if (!isIncome && onConfirmCallback) { openPaySheet({ title, item: stockName, unit: unitPrice, qty, total: totalPrice, onConfirm: onConfirmCallback }); return; }
+        recordTransaction(isIncome, title, stockName, unitPrice, qty, totalPrice, nowStamp(), isIncome ? -1 : payCardIdx());
+        showPayBanner(isIncome, title, stockName, totalPrice); try { kpRender(); } catch (e) {}
+        if (onConfirmCallback) onConfirmCallback();
     }
 
     window.closeLinePayModal = () => {
@@ -2299,6 +2389,180 @@
     };
     document.getElementById('open-codex').addEventListener('click', () => openCodex());
 
+
+    // ===== KUN Pay 錢包（Apple Pay 風格）=====
+    const kpOwned = () => { const a = []; for (let i = 0; i <= state.maxCardOwnedLevel; i++) a.push(i); for (let k = NORMAL_CARDS; k < TOTAL_CARDS; k++) if (state.codex[k]) a.push(k); return a; };
+    const payCardIdx = () => { const o = kpOwned(); return o.includes(state.payCard) ? state.payCard : (o.includes(state.currentCardLevel) ? state.currentCardLevel : 0); };
+    const kpLast4 = (i) => String(((i + 1) * 7919 + 1357) % 9000 + 1000);
+    const kpSet = () => Object.assign({ faceId: true, banner: true }, state.paySet);
+    const kpPad = (n) => String(n).padStart(2, '0');
+    const nowStamp = () => { const d = new Date(); return `${d.getFullYear()}/${kpPad(d.getMonth() + 1)}/${kpPad(d.getDate())} ${kpPad(d.getHours())}:${kpPad(d.getMinutes())}:${kpPad(d.getSeconds())}`; };
+    const kpAmt = (n) => (n >= 1e12 ? fmtCN(n) : formatMoney(n));
+    const kpHue = (s) => { let x = 7; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) % 360; return x; };
+    const kpAv = (name, size) => `<div class="kp-av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.44)}px;background:hsl(${kpHue(name)} 58% 48%)">${escapeTxText(String(name).trim().charAt(0) || 'K')}</div>`;
+    const kpBuzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+    const FACE_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M8 22V14a6 6 0 0 1 6-6h8M42 8h8a6 6 0 0 1 6 6v8M56 42v8a6 6 0 0 1-6 6h-8M22 56h-8a6 6 0 0 1-6-6v-8"/><path d="M23 25v5M41 25v5M32 26v10h-3M24 43c4 4 12 4 16 0"/></svg>';
+
+    window.showPayBanner = (income, title, item, amount) => {
+        if (!kpSet().banner) return;
+        const b = document.createElement('div'); b.className = 'kp-banner';
+        b.innerHTML = `<div class="kp-bi">K</div><div class="kp-bt"><div class="kp-bh"><b>KUN Pay</b><span>現在</span></div><div>${escapeTxText(title)}：${escapeTxText(item)}</div><div class="kp-bamt ${income ? 'in' : ''}">${income ? '+' : '-'}$${kpAmt(amount)}</div></div>`;
+        document.body.appendChild(b); requestAnimationFrame(() => b.classList.add('show'));
+        setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 450); }, 3400);
+    };
+    window.kunReceived = (msg, amount) => {
+        const m = /^(?:\S+\s)?(.+?) 轉給你/.exec(String(msg || '')), name = m ? m[1] : '好友';
+        recordTransaction(true, '收到轉帳', name, amount, 1, amount, nowStamp(), -1); showPayBanner(true, '收到轉帳', name, amount); try { kpRender(); } catch (e) {}
+    };
+
+    // ----- 付款面板 -----
+    let kpPay = null;
+    const closePaySheet = () => { const w = document.getElementById('paysheet-wrap'); w.classList.remove('open'); kpPay = null; setTimeout(() => { if (!kpPay) { w.style.display = 'none'; document.getElementById('paysheet').innerHTML = ''; } }, 300); };
+    const openPaySheet = (o) => { initAudio(); kpPay = Object.assign({ record: true, busy: false, pick: false }, o); const w = document.getElementById('paysheet-wrap'); w.style.display = 'block'; renderPaySheet(); requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('open'))); };
+    const completePay = () => {
+        const o = kpPay; if (!o) return; const ci = payCardIdx(); closePaySheet(); kpBuzz([30, 40, 30]);
+        if (o.record) { recordTransaction(false, o.title, o.item, o.unit, o.qty, o.total, nowStamp(), ci); showPayBanner(false, o.title, o.item, o.total); try { kpRender(); } catch (e) {} }
+        try { o.onConfirm && o.onConfirm(); } catch (e) { console.error(e); }
+    };
+    const startFace = () => {
+        const o = kpPay; if (!o || o.busy) return; o.busy = true; const bottom = document.getElementById('ps-bottom'); if (!bottom) return;
+        bottom.innerHTML = `<div class="ps-scan"><div class="ps-fid scanning">${FACE_SVG}</div><div class="ps-scan-t">正在驗證 Face ID…</div></div>`; try { soundClick(); } catch (e) {} kpBuzz(15);
+        setTimeout(() => { const b = document.getElementById('ps-bottom'); if (!b || !kpPay) return; b.innerHTML = `<div class="ps-scan"><svg class="ps-check" viewBox="0 0 52 52"><circle cx="26" cy="26" r="23"/><path d="M15 27l8 8 14-16"/></svg><div class="ps-scan-t ok">完成</div></div>`; try { soundBuy(); } catch (e) {} setTimeout(completePay, 750); }, 950);
+    };
+    const renderPaySheet = () => {
+        const o = kpPay, sheet = document.getElementById('paysheet'); if (!o) return;
+        const ci = payCardIdx(), card = cards[ci], set = kpSet(), unitTxt = /祈願|對象/.test(o.item) ? '次' : '股', bal = Number(state.balance);
+        const rows = o.pick ? `<div class="ps-rows ps-picklist">${kpOwned().slice().reverse().map(i => `<div class="ps-row ps-opt" data-i="${i}"><div class="ps-mini" style="background:${cards[i].gradient}"></div><div class="ps-cn"><b>${cards[i].name}</b><span>•••• ${kpLast4(i)}</span></div><span class="ps-tick">${i === ci ? '✓' : ''}</span></div>`).join('')}</div>`
+            : `<div class="ps-rows"><div class="ps-row ps-pick" id="ps-pick"><div class="ps-mini" style="background:${card.gradient}"></div><div class="ps-cn"><b>${card.name}</b><span>•••• ${kpLast4(ci)}</span></div><span class="ps-chev">更換 ›</span></div>
+                <div class="ps-row"><span>數量 × 單價</span><b>${o.qty} ${unitTxt} × $${kpAmt(o.unit)}</b></div><div class="ps-row"><span>付款後餘額</span><b>$${kpAmt(Math.max(0, bal - o.total))}</b></div></div>`;
+        const bottom = o.pick ? '' : (set.faceId ? `<div class="ps-hint"><div class="ps-fid">${FACE_SVG}</div><div class="ps-ht">雙擊側邊按鈕付款</div><div class="ps-hs">右側按鈕連點兩下，或點下方按鈕</div></div><button class="ps-btn ps-ghost" id="ps-face">使用 Face ID 付款</button>` : `<button class="ps-btn" id="ps-pay">用 KUN Pay 付款</button>`);
+        document.getElementById('paysheet-wrap').classList.toggle('pickmode', !!o.pick);
+        sheet.innerHTML = `<div class="ps-handle"></div><div class="ps-top"><div class="ps-logo"><i>K</i>Pay</div><button class="ps-x" id="ps-cancel">${o.pick ? '完成' : '取消'}</button></div>
+            <div class="ps-mer"><div class="ps-mi">${escapeTxText(String(o.title).charAt(0))}</div><div class="ps-mm"><div class="ps-mt">${escapeTxText(o.title)}</div><div class="ps-ms">${escapeTxText(o.item)}</div></div><div class="ps-ma">$${kpAmt(o.total)}</div></div>${rows}<div id="ps-bottom" class="ps-bottom">${bottom}</div>`;
+        sheet.querySelector('#ps-cancel').onclick = () => { if (o.pick) { o.pick = false; renderPaySheet(); } else closePaySheet(); };
+        const pk = sheet.querySelector('#ps-pick'); if (pk) pk.onclick = () => { o.pick = true; renderPaySheet(); };
+        sheet.querySelectorAll('.ps-opt').forEach(el => el.onclick = () => { state.payCard = +el.dataset.i; o.pick = false; renderPaySheet(); kpRender(); });
+        const fb = sheet.querySelector('#ps-face'); if (fb) fb.onclick = startFace; const pb = sheet.querySelector('#ps-pay'); if (pb) pb.onclick = () => { try { soundBuy(); } catch (e) {} completePay(); };
+    };
+    document.getElementById('paysheet-dim').addEventListener('click', () => { if (kpPay && !kpPay.busy) closePaySheet(); });
+    (() => { const side = document.getElementById('ps-side'); let last = 0; side.addEventListener('pointerdown', (e) => { e.preventDefault(); const t = Date.now(); try { initAudio(); soundClick(); } catch (er) {} kpBuzz(10); if (t - last < 450) { last = 0; if (kpPay && kpSet().faceId && !kpPay.pick) startFace(); } else last = t; }); })();
+
+    // ----- 交易清單 -----
+    const kpDay = (t) => { const m = /(\d{4})\/(\d{1,2})\/(\d{1,2})/.exec(String(t || '')); if (!m) return '更早'; const d = new Date(+m[1], +m[2] - 1, +m[3]), n = new Date(), z = new Date(n.getFullYear(), n.getMonth(), n.getDate()), diff = Math.round((z - d) / 86400000); return diff === 0 ? '今天' : diff === 1 ? '昨天' : `${m[1]}年${+m[2]}月${+m[3]}日`; };
+    const kpTime = (t) => { const m = /(\d{1,2}):(\d{2})/.exec(String(t || '')); return m ? `${kpPad(m[1])}:${m[2]}` : ''; };
+    const kpTxHtml = (list, limit) => {
+        if (!list.length) return '<div class="kp-empty">還沒有交易紀錄</div>'; let day = '', out = '';
+        list.slice(0, limit).forEach(tx => { const d = kpDay(tx.time); if (d !== day) { day = d; out += `<div class="kp-day">${d}</div>`; }
+            const c = tx.card >= 0 && cards[tx.card] ? cards[tx.card].name : 'KUN Cash';
+            out += `<div class="kp-tx">${kpAv(tx.item === '--' ? tx.type : tx.item, 40)}<div class="kp-tx-m"><b>${escapeTxText(tx.item === '--' ? tx.type : tx.item)}</b><span>${escapeTxText(tx.type)}・${escapeTxText(c)}</span></div><div class="kp-tx-a ${tx.income ? 'in' : ''}"><b>${tx.income ? '+' : '-'}$${kpAmt(tx.amount)}</b><span>${kpTime(tx.time)}</span></div></div>`; });
+        return out;
+    };
+
+    // ----- 錢包主頁 -----
+    let kpKey = '', kpBal = null;
+    const kpCashCardHtml = () => `<div class="kp-cash" id="kp-cash"><div class="kp-row"><b>KUN Cash</b><span class="kp-k">K</span></div><div class="kp-cashbal">$<span id="kp-balance"></span></div><div class="kp-cash-act"><button data-act="send">傳送</button><button data-act="request">請求</button><button data-act="history">交易紀錄</button></div></div>`;
+    window.kpRender = () => {
+        const body = document.getElementById('kp-body'); if (!body) return; const pc = payCardIdx(), order = kpOwned().filter(i => i !== pc).concat([pc]), tx = readTransactionHistory();
+        body.innerHTML = `${kpCashCardHtml()}<div class="kp-sec">卡片 <small>${order.length} 張</small></div><div class="kp-stack">${order.map((i, k) => `<div class="kp-slot${k === order.length - 1 ? ' last' : ''}" data-i="${i}" style="z-index:${k + 1}"><div class="kp-wc${cardMeta[i].light ? ' light' : ''}" style="background:${cards[i].gradient}"><div class="kp-wc-top"><b>${cards[i].name}</b>${i === pc ? '<em>預設</em>' : ''}</div><div class="kp-wc-chip"></div><div class="kp-wc-bot"><span>•••• ${kpLast4(i)}</span><span class="kp-brandc"><i></i><i></i></span></div></div></div>`).join('')}</div>
+            <div class="kp-sec">最近交易 ${tx.length > 8 ? '<button class="kp-more" data-act="history">查看全部</button>' : ''}</div><div class="kp-group">${kpTxHtml(tx, 8)}</div><div style="height:90px"></div>`;
+        kpBal = null; kpBalance();
+    };
+    const kpBalance = () => { const el = document.getElementById('kp-balance'); if (!el) return; const b = state.balance; if (kpBal === b) return; kpBal = b; el.innerText = formatMoney(b); const box = el.parentElement; box.style.fontSize = ''; fitBox(box, 18, () => { el.innerText = fmtCN(b); }); };
+    const kpSync = () => {
+        if (!document.getElementById('kp-body')) return;
+        const key = [state.maxCardOwnedLevel, state.codex[35], state.codex[36], state.codex[37], state.payCard, window.__txn || 0].join('|');
+        if (key !== kpKey) { kpKey = key; kpRender(); } else kpBalance();
+    };
+    document.getElementById('kp-body').addEventListener('click', (e) => {
+        const act = e.target.closest('[data-act]'); if (act) { e.stopPropagation(); initAudio(); soundClick(); const a = act.dataset.act; if (a === 'send' || a === 'request') kpSendFlow(a); else if (a === 'history') kpCashDetail(); return; }
+        const slot = e.target.closest('.kp-slot'); if (slot) { initAudio(); soundClick(); kpCardDetail(+slot.dataset.i); return; }
+        if (e.target.closest('#kp-cash')) { initAudio(); soundClick(); kpCashDetail(); }
+    });
+    document.getElementById('kp-add').addEventListener('click', () => { initAudio(); document.getElementById('main-card-container').click(); });
+    document.getElementById('kp-set').addEventListener('click', () => { initAudio(); kpSettings(); });
+    const kpClose = (id) => { document.getElementById(id).style.display = 'none'; };
+    const kpOpen = (id, html) => { const el = document.getElementById(id); el.innerHTML = html; el.style.display = 'block'; el.scrollTop = 0; return el; };
+    const kpHead = (title, back) => `<div class="kp-fs-head"><button class="kp-back" data-close>‹ ${back || '錢包'}</button><b>${title}</b><span style="width:60px"></span></div>`;
+    const kpWireClose = (el, id) => el.querySelectorAll('[data-close]').forEach(b => b.onclick = () => kpClose(id));
+
+    const kpCardDetail = (i) => {
+        const card = cards[i], pc = payCardIdx(), tx = readTransactionHistory().filter(t => t.card === i), s = starsOf(i);
+        const el = kpOpen('kp-detail', `${kpHead(card.name)}<div class="kp-bigcard" id="kd-card"></div><div class="kp-acts"><button class="kp-btn ${i === pc ? 'dis' : ''}" id="kd-def" ${i === pc ? 'disabled' : ''}>${i === pc ? '目前的預設卡片' : '設為預設卡片'}</button><button class="kp-btn ghost" id="kd-more">卡片詳情（升星・覺醒・技能）</button></div>
+            <div class="kp-sec">卡片資訊</div><div class="kp-group kp-info"><div><span>裝置帳號號碼</span><b>•••• ${kpLast4(i)}</b></div><div><span>等級／稀有度</span><b>LV.${i}｜${CARD_RARITY(i)}</b></div><div><span>點擊倍率</span><b>×${(card.multi * (1 + 0.15 * s) * (awakeOf(i) ? 1.5 : 1)).toFixed(2)}</b></div><div><span>企業倍率</span><b>×${(card.compMulti * (1 + 0.15 * s) * (awakeOf(i) ? 1.5 : 1)).toFixed(2)}</b></div><div><span>星級</span><b>${s} / 10${awakeOf(i) ? '・已覺醒' : ''}</b></div><div><span>專屬技能</span><b>${SKILL_NAMES[i]}</b></div></div>
+            <div class="kp-sec">此卡的交易</div><div class="kp-group">${kpTxHtml(tx, 30)}</div><div style="height:60px"></div>`);
+        const c = document.createElement('div'); c.className = `credit-card owned ${cardCls(card)}`; c.style.background = card.gradient; c.style.setProperty('--glowc', cardMeta[i].glow); c.innerHTML = buildCardHtml(card, true); el.querySelector('#kd-card').appendChild(c);
+        kpWireClose(el, 'kp-detail'); el.querySelector('#kd-def').onclick = () => { state.payCard = i; kpBuzz(15); try { soundBuy(); } catch (e) {} kpCardDetail(i); kpRender(); };
+        el.querySelector('#kd-more').onclick = () => { openCardDetail(i); };
+    };
+    const kpCashDetail = () => {
+        const tx = readTransactionHistory();
+        const el = kpOpen('kp-detail', `${kpHead('KUN Cash')}<div class="kp-cash big"><div class="kp-row"><b>KUN Cash</b><span class="kp-k">K</span></div><div style="opacity:.7;font-size:.8rem;margin-top:14px;">可用餘額</div><div class="kp-cashbal" id="kc-bal">$${formatMoney(state.balance)}</div><div class="kp-cash-act"><button data-act="send">傳送</button><button data-act="request">請求</button></div></div>
+            <div class="kp-sec">全部交易 <span><button class="kp-more" id="kc-export">匯出</button> <button class="kp-more red" id="kc-clear">清除</button></span></div><div class="kp-group">${kpTxHtml(tx, 200)}</div><div style="height:60px"></div>`);
+        kpWireClose(el, 'kp-detail'); fitBox(el.querySelector('#kc-bal'), 18, () => { el.querySelector('#kc-bal').innerText = '$' + fmtCN(state.balance); });
+        el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => kpSendFlow(b.dataset.act));
+        el.querySelector('#kc-export').onclick = () => { try { exportTransactionHistory(); } catch (e) { alert('匯出功能無法使用'); } };
+        el.querySelector('#kc-clear').onclick = () => { try { clearTransactionHistory(); setTimeout(() => { kpRender(); kpCashDetail(); }, 100); } catch (e) {} };
+    };
+    const kpSettings = () => {
+        const s = kpSet(), pc = payCardIdx();
+        const el = kpOpen('kp-settings', `${kpHead('錢包與 KUN Pay 設定')}<div class="kp-sec">付款</div><div class="kp-group kp-setlist">
+            <label><span>雙擊側邊按鈕並驗證 Face ID</span><input type="checkbox" id="ks-face" ${s.faceId ? 'checked' : ''}></label><label><span>付款與收款通知橫幅</span><input type="checkbox" id="ks-ban" ${s.banner ? 'checked' : ''}></label>
+            <div class="kp-pickrow" id="ks-card"><span>預設付款卡片</span><b>${cards[pc].name} ›</b></div></div><div class="kp-foot">關閉 Face ID 驗證後，付款只需點一下確認。</div>
+            <div class="kp-sec">紀錄</div><div class="kp-group kp-setlist"><div class="kp-pickrow" id="ks-his"><span>查看全部交易紀錄</span><b>›</b></div><div class="kp-pickrow red" id="ks-clr"><span>清除交易紀錄</span><b>›</b></div></div><div style="height:60px"></div>`);
+        kpWireClose(el, 'kp-settings');
+        el.querySelector('#ks-face').onchange = (e) => { state.paySet = Object.assign(kpSet(), { faceId: e.target.checked }); };
+        el.querySelector('#ks-ban').onchange = (e) => { state.paySet = Object.assign(kpSet(), { banner: e.target.checked }); };
+        el.querySelector('#ks-card').onclick = () => { kpClose('kp-settings'); kpCardPicker(); };
+        el.querySelector('#ks-his').onclick = () => { kpClose('kp-settings'); kpCashDetail(); };
+        el.querySelector('#ks-clr').onclick = () => { try { clearTransactionHistory(); setTimeout(() => kpRender(), 100); } catch (e) {} };
+    };
+    const kpCardPicker = () => {
+        const pc = payCardIdx(), el = kpOpen('kp-settings', `${kpHead('預設付款卡片', '設定')}<div class="kp-group">${kpOwned().slice().reverse().map(i => `<div class="kp-pickrow" data-i="${i}"><span style="display:flex;align-items:center;gap:10px"><i class="ps-mini" style="background:${cards[i].gradient}"></i>${cards[i].name}</span><b>${i === pc ? '✓' : ''}</b></div>`).join('')}</div><div style="height:60px"></div>`);
+        el.querySelector('[data-close]').onclick = () => kpSettings(); el.querySelectorAll('[data-i]').forEach(r => r.onclick = () => { state.payCard = +r.dataset.i; kpRender(); kpSettings(); });
+    };
+
+    // ----- 傳送 / 請求（Apple Cash 風格）-----
+    const kpSendFlow = async (mode) => {
+        initAudio(); const isSend = mode === 'send';
+        if (!window.mcOnline) { alert('傳送與請求需要連線到伺服器，並且要有好友。'); return; }
+        let friends = []; const el = kpOpen('kp-send', `${kpHead(isSend ? '傳送' : '請求', '取消')}<div class="kp-empty">載入好友中…</div>`); kpWireClose(el, 'kp-send');
+        try { friends = await window.mcFriendsList(); } catch (e) { friends = []; }
+        const draw = (q) => {
+            const list = friends.filter(f => (f.nick + f.name).toLowerCase().includes((q || '').toLowerCase()));
+            el.innerHTML = `${kpHead(isSend ? '傳送給' : '向誰請求', '取消')}<div class="kp-search"><input id="ksd-q" placeholder="搜尋好友" value="${escapeTxText(q || '')}"></div><div class="kp-group">${list.map(f => `<div class="kp-friend" data-id="${f.id}">${kpAv(f.nick || f.name, 44)}<div class="kp-tx-m"><b>${escapeTxText(f.nick || f.name)}</b><span>${f.online ? '在線' : '離線'}</span></div><span class="kp-chev">›</span></div>`).join('') || '<div class="kp-empty">還沒有好友。先到「金融區」的好友中心加好友吧。</div>'}</div>`;
+            kpWireClose(el, 'kp-send'); const qi = el.querySelector('#ksd-q'); qi.oninput = () => { draw(qi.value); const n = el.querySelector('#ksd-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+            el.querySelectorAll('.kp-friend').forEach(r => r.onclick = () => kpAmountStep(friends.find(f => f.id === r.dataset.id), isSend, () => draw('')));
+        };
+        draw('');
+    };
+    const kpAmountStep = (friend, isSend, back) => {
+        let digits = '', el = document.getElementById('kp-send');
+        const val = () => Number(digits || 0);
+        const draw = () => {
+            const v = val(), ok = v >= 1 && (!isSend || v <= state.balance);
+            el.innerHTML = `<div class="kp-fs-head"><button class="kp-back" id="ka-back">‹ 返回</button><b>${isSend ? '傳送' : '請求'}</b><span style="width:60px"></span></div>
+                <div class="kp-to">${kpAv(friend.nick || friend.name, 56)}<div>${isSend ? '傳送給' : '向'} <b>${escapeTxText(friend.nick || friend.name)}</b>${isSend ? '' : ' 請求'}</div></div>
+                <div class="kp-amt" id="ka-amt">$${digits ? formatMoney(v) : '0'}</div><div class="kp-amt-sub">${v >= 1e4 ? fmtCN(v) : '&nbsp;'}${isSend ? ` ・ 可用 $${kpAmt(state.balance)}` : ''}</div>
+                <div class="kp-chips"><button data-add="10000">+1萬</button><button data-add="100000000">+1億</button><button data-add="1000000000000">+1兆</button>${isSend ? '<button data-all="1">全部</button>' : ''}</div>
+                <div class="kp-pad">${['1','2','3','4','5','6','7','8','9','00','0','⌫'].map(k => `<button data-k="${k}">${k}</button>`).join('')}</div>
+                <button class="kp-go ${ok ? '' : 'dis'}" id="ka-go" ${ok ? '' : 'disabled'}>${isSend ? '傳送' : '請求'}${v ? ' $' + kpAmt(v) : ''}</button>`;
+            fitBox(el.querySelector('#ka-amt'), 22, () => { el.querySelector('#ka-amt').innerText = '$' + fmtCN(v); });
+            el.querySelector('#ka-back').onclick = back;
+            el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { soundClick(); kpBuzz(8); const k = b.dataset.k; if (k === '⌫') digits = digits.slice(0, -1); else if ((digits + k).length <= 17) digits = (digits + k).replace(/^0+/, ''); draw(); });
+            el.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { soundClick(); digits = String(Math.min(9e16, val() + Number(b.dataset.add))); draw(); });
+            const all = el.querySelector('[data-all]'); if (all) all.onclick = () => { digits = String(Math.floor(state.balance)); draw(); };
+            el.querySelector('#ka-go').onclick = () => {
+                const v2 = val(); if (v2 < 1) return;
+                if (!isSend) { window.mcChatSend(friend.id, `KUN Pay 收款請求：$${formatMoney(v2)}（${fmtCN(v2)}），請在錢包頁用「傳送」給我`).then(() => { kpClose('kp-send'); showPayBanner(false, '已送出收款請求', friend.nick || friend.name, v2); }).catch(e => alert(e.message)); return; }
+                kpClose('kp-send');
+                openPaySheet({ title: 'KUN Cash 傳送', item: `對象：${friend.nick || friend.name}`, unit: v2, qty: 1, total: v2, record: false, onConfirm: () => {
+                    window.mcSendMoney(friend.id, v2).then(() => { recordTransaction(false, '傳送給好友', friend.nick || friend.name, v2, 1, v2, nowStamp(), -1); showPayBanner(false, '傳送給好友', friend.nick || friend.name, v2); kpRender(); })
+                        .catch(e => { try { soundError(); } catch (er) {} alert(e.message || '傳送失敗'); });
+                } });
+            };
+        };
+        draw();
+    };
     const renderCurrentCard = () => {
         const display = document.getElementById('current-card-display'); display.innerHTML = '';
         const card = cards[state.currentCardLevel]; const el = document.createElement('div');
@@ -2782,7 +3046,7 @@
 
     const tutorialTexts = [
         "歡迎來到《極簡資本》！<br><br>點擊下方的綠色大『$』按鈕來賺取第一桶金吧！",
-        "資產多樣化是關鍵！<br><br>向左滑動進入企業面板（再往左是 KUN Pay 錢包：掃碼轉帳、買／送優惠券），向右滑動進入金融區、股市與祈願系統。",
+        "資產多樣化是關鍵！<br><br>向左滑動進入企業面板與 KUN Pay 錢包，向右滑動進入金融區、股市與祈願系統。",
         "當你賺到 1 萬兆時可以進行『重生』獲得【資本核心】，購買永久天賦！"
     ];
     let currentTutorialStep = 0;
