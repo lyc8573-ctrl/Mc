@@ -79,6 +79,9 @@ window.mcOnline = true;
 window.mcFriendsList = () => api('/api/friends').then(r => r.friends || []);
 window.mcSendMoney = (id, amt) => save().catch(() => {}).then(() => api('/api/friends/send', { body: { id, amount: amt } }));
 window.mcChatSend = (id, text) => api('/api/chat', { body: { to: id, text } });
+window.mcPayMe = () => api('/api/pay/lookup?me=1');
+window.mcPayLookup = (id) => api('/api/pay/lookup?id=' + encodeURIComponent(id));
+window.mcPayTo = (id, amt) => save().catch(() => {}).then(() => api('/api/pay/send', { body: { to: id, amount: amt } }));
 const resync = () => api('/api/save').then(r => { if (r.save) { applySavePackage(r.save); refresh(); } rev = r.rev || 0; toast('帳號進度已同步為伺服器最新版本', '#fd7e14'); }).catch(() => {});
 
 function calcEvents() {
