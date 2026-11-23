@@ -135,7 +135,8 @@ setInterval(() => { if (SUB.tier && window.MC_MEMBER_MULT > 1 && !subLeft()) app
 
 function connect() {
   es = new EventSource('/api/stream?key=' + encodeURIComponent(acc.key));
-  es.addEventListener('hello', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
+  es.addEventListener('hello', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; if (d.pts) window.MC_PTS = d.pts; });
+  es.addEventListener('pts', e => { window.MC_PTS = JSON.parse(e.data); });
   es.addEventListener('events', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
   es.addEventListener('sub', e => setSub(JSON.parse(e.data)));
   es.addEventListener('market', e => { const d = JSON.parse(e.data); try {

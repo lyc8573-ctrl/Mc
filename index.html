@@ -366,6 +366,8 @@
 .kp-row { display: flex; justify-content: space-between; align-items: center; font-size: 1rem; }
 .kp-k { width: 26px; height: 26px; border-radius: 8px; background: #fff; color: #000; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: .9rem; }
 .kp-cashbal { font-size: 2.3rem; font-weight: 700; margin: 14px 0 12px; white-space: nowrap; letter-spacing: -.5px; }
+.kp-pts { display: flex; align-items: center; justify-content: space-between; margin: -4px 0 12px; font-size: .85rem; position: relative; z-index: 2; }
+.kp-pts button { border: none; border-radius: 14px; padding: 5px 14px; background: rgba(255,255,255,.18); color: #fff; font-weight: 600; font-size: .8rem; cursor: pointer; }
 .kp-cash-act { display: flex; gap: 8px; position: relative; z-index: 2; }
 .kp-cash-act button { flex: 1; border: none; border-radius: 18px; padding: 9px 0; background: rgba(255,255,255,.18); color: #fff; font-weight: 600; font-size: .9rem; cursor: pointer; backdrop-filter: blur(6px); }
 .kp-sec { display: flex; justify-content: space-between; align-items: center; margin: 22px 4px 8px; font-size: 1.15rem; font-weight: 700; color: #000; }
@@ -2148,7 +2150,7 @@
         }
 
         showLinePayReceipt(false, "祈願購買扣款", `增益祈願 x${count}`, singleCost, count, totalCost, () => {
-            if (!spendGameMoney(totalCost)) { soundError(); alert('扣款失敗：餘額不足或資料異常。'); return; }
+            if (!spendGameMoney(totalCost)) { soundError(); alert('扣款失敗：餘額不足或資料異常。'); return; } kpEarn(totalCost);
             startGachaAnimationAndExecute(count);
         });
     };
@@ -2488,18 +2490,18 @@
 
     // ----- 錢包主頁 -----
     let kpKey = '', kpBal = null;
-    const kpCashCardHtml = () => `<div class="kp-cash" id="kp-cash"><div class="kp-row"><b>KUN Cash</b><span class="kp-k">K</span></div><div class="kp-cashbal">$<span id="kp-balance"></span></div><div class="kp-cash-act"><button data-act="scan">掃碼</button><button data-act="mycode">收款碼</button><button data-act="send">傳送</button><button data-act="request">請求</button></div></div>`;
+    const kpCashCardHtml = () => `<div class="kp-cash" id="kp-cash"><div class="kp-row"><b>KUN Cash</b><span class="kp-k">K</span></div><div class="kp-cashbal">$<span id="kp-balance"></span></div><div class="kp-pts"><span>⭐ KUN 點數 <b id="kp-ptsv">0</b></span><button data-act="redeem">兌換</button></div><div class="kp-cash-act"><button data-act="scan">掃碼</button><button data-act="mycode">收款碼</button><button data-act="send">傳送</button><button data-act="request">請求</button></div></div>`;
     window.kpRender = () => {
         const body = document.getElementById('kp-body'); if (!body) return; const pc = payCardIdx(), order = kpOwned().filter(i => i !== pc).concat([pc]), tx = readTransactionHistory();
         body.innerHTML = `${kpCashCardHtml()}<div class="kp-sec">卡片 <small>${order.length} 張</small></div><div class="kp-stack">${order.map((i, k) => `<div class="kp-slot${k === order.length - 1 ? ' last' : ''}" data-i="${i}" style="z-index:${k + 1}"><div class="kp-wc${cardMeta[i].light ? ' light' : ''}" style="background:${cards[i].gradient}"><div class="kp-wc-top"><b>${cards[i].name}</b>${i === pc ? '<em>預設</em>' : ''}</div><div class="kp-wc-chip"></div><div class="kp-wc-bot"><span>•••• ${kpLast4(i)}</span><span class="kp-brandc"><i></i><i></i></span></div></div></div>`).join('')}</div>
             <div class="kp-sec">最近交易 ${tx.length > 8 ? '<button class="kp-more" data-act="history">查看全部</button>' : ''}</div><div class="kp-group">${kpTxHtml(tx, 8)}</div><div style="height:90px"></div>`;
-        kpBal = null; kpBalance();
+        kpBal = null; kpBalance(); kpPtsRefresh();
     };
     const kpBalance = () => { const el = document.getElementById('kp-balance'); if (!el) return; const b = state.balance; if (kpBal === b) return; kpBal = b; el.innerText = formatMoney(b); const box = el.parentElement; box.style.fontSize = ''; fitBox(box, 18, () => { el.innerText = fmtCN(b); }); };
     const kpSync = () => {
         if (!document.getElementById('kp-body')) return;
         const key = [state.maxCardOwnedLevel, state.codex[35], state.codex[36], state.codex[37], state.payCard, window.__txn || 0].join('|');
-        if (key !== kpKey) { kpKey = key; kpRender(); } else kpBalance();
+        if (key !== kpKey) { kpKey = key; kpRender(); } else { kpBalance(); kpPtsRefresh(); }
     };
     document.getElementById('kp-body').addEventListener('click', (e) => {
         const act = e.target.closest('[data-act]'); if (act) { e.stopPropagation(); initAudio(); soundClick(); kpAct(act.dataset.act); return; }
@@ -2552,7 +2554,23 @@
     // ----- 傳送 / 請求（Apple Cash 風格）-----
 
     // ----- 掃碼轉帳 / 收款碼 -----
-    const kpAct = (a) => { if (a === 'send' || a === 'request') kpSendFlow(a); else if (a === 'scan') kpScan(); else if (a === 'mycode') kpMyCode(0); else if (a === 'history') kpCashDetail(); };
+    // ----- KUN 點數：用 KUN Pay 買公司／股票／祈願可得消費金額的一定比例（預設 10%）；轉帳不算。每 N 點（預設 1000）可兌換 $1 -----
+    function kpPtsCfg() { const c = window.MC_PTS || {}; return { rate: Number(c.rate) >= 0 ? Number(c.rate) : 0.1, per: Math.max(1, Number(c.per) || 1000) }; }
+    function kpPtsRefresh() { const el = document.getElementById('kp-ptsv'); if (el) el.innerText = kpAmt(Math.floor(Number(state.kpPts) || 0)); }
+    function kpEarn(amount) {
+        const g = Math.floor(Number(amount) * kpPtsCfg().rate); if (!(g > 0)) return;
+        state.kpPts = (Number(state.kpPts) || 0) + g;
+        try { cardToast('⭐ KUN 點數 +' + kpAmt(g)); } catch (e) {} kpPtsRefresh();
+    }
+    function kpRedeem() {
+        const per = kpPtsCfg().per, pts = Math.floor(Number(state.kpPts) || 0), dollars = Math.floor(pts / per);
+        if (dollars < 1) { try { soundError(); } catch (e) {} alert(`點數不足：每 ${kpAmt(per)} 點可兌換 $1，目前有 ${kpAmt(pts)} 點。`); return; }
+        if (!confirm(`用 ${kpAmt(dollars * per)} 點兌換 $${kpAmt(dollars)}？`)) return;
+        state.kpPts = pts - dollars * per; state.balance = Number(state.balance) + dollars;
+        try { recordTransaction(true, '點數兌換', 'KUN 點數', dollars, 1, dollars, nowStamp(), -1); showPayBanner(true, '點數兌換', 'KUN 點數', dollars); } catch (e) {}
+        try { soundBuy(); } catch (e) {} saveGame(false); updateUI(); kpPtsRefresh(); try { kpRender(); } catch (e) {}
+    }
+    const kpAct = (a) => { if (a === 'redeem') kpRedeem(); else if (a === 'send' || a === 'request') kpSendFlow(a); else if (a === 'scan') kpScan(); else if (a === 'mycode') kpMyCode(0); else if (a === 'history') kpCashDetail(); };
     const kpQrText = (id, amount) => `KUNPAY1|${id}|${Math.max(0, Math.floor(amount || 0))}`;
     const kpCodeText = (id, amount) => `KP-${id}${amount > 0 ? '-' + Math.floor(amount) : ''}`;
     const kpParseQr = (raw) => {
@@ -2785,7 +2803,7 @@
         if (isBuy) {
             if (Number(state.balance) < cost) { soundError(); alert(`現金餘額不足！無法買進股票，需要 $${formatMoney(cost)}。`); return; }
             showLinePayReceipt(false, "股票買進付款確認", stocks[i].name, stocks[i].price, lev, cost, () => {
-                if (!spendGameMoney(cost)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; }
+                if (!spendGameMoney(cost)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; } kpEarn(cost);
                 stocks[i].owned += lev;
                 soundBuy(); saveGame(false); updateUI(); renderStocks();
             });
@@ -2804,7 +2822,7 @@
             if (maxQty <= 0) { soundError(); alert("現金餘額連 1 股都無法買進！"); return; }
             let totalPrice = maxQty * stocks[i].price;
             showLinePayReceipt(false, "股票全數買進付款確認", stocks[i].name, stocks[i].price, maxQty, totalPrice, () => {
-                if (!spendGameMoney(totalPrice)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; }
+                if (!spendGameMoney(totalPrice)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; } kpEarn(totalPrice);
                 stocks[i].owned += maxQty; soundBuy(); saveGame(false); updateUI(); renderStocks();
             });
             return;
@@ -2854,7 +2872,7 @@
         const purchaseCost = c.cost;
         const purchaseLevel = c.level + 1;
         showLinePayReceipt(false, "公司升級付款確認", `${c.name} 升至 Lv.${purchaseLevel}`, purchaseCost, 1, purchaseCost, () => {
-            if (!spendGameMoney(purchaseCost)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; }
+            if (!spendGameMoney(purchaseCost)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; } kpEarn(purchaseCost);
             c.level++; c.cost = Math.floor(c.cost * 1.5);
             soundBuy(); saveGame(false); updateUI(); renderCompanies();
         });
@@ -2870,7 +2888,7 @@
         if (!boughtCount) { soundError(); alert(`現金餘額不足升級 ${c.name}！至少需要 $${formatMoney(c.cost)}。`); return; }
         const startLevel = c.level;
         showLinePayReceipt(false, "公司最大化升級付款確認", `${c.name} 預計升級 ${boughtCount} 次`, totalCost / boughtCount, boughtCount, totalCost, () => {
-            if (!spendGameMoney(totalCost)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; }
+            if (!spendGameMoney(totalCost)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; } kpEarn(totalCost);
             for (let n = 0; n < boughtCount; n++) { c.level++; c.cost = Math.floor(c.cost * 1.5); }
             soundBuy(); saveGame(false); updateUI(); renderCompanies();
         });
@@ -2890,7 +2908,7 @@
         });
         if (!totalBought) { soundError(); alert("目前資金不足以升級任何企業！"); return; }
         showLinePayReceipt(false, "全部公司最大化付款確認", `預計升級 ${totalBought} 次`, totalSpent / totalBought, totalBought, totalSpent, () => {
-            if (!spendGameMoney(totalSpent)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; }
+            if (!spendGameMoney(totalSpent)) { soundError(); alert('付款失敗：餘額不足，請重新操作。'); return; } kpEarn(totalSpent);
             plan.forEach(item => { for (let n=0; n<item.count; n++) { item.company.level++; item.company.cost = Math.floor(item.company.cost * 1.5); } });
             soundBuy(); saveGame(false); updateUI(); renderCompanies();
         });

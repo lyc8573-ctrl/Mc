@@ -47,7 +47,7 @@ if (GH_ON) {
 }
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
 db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
-db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, qrMinAgeMin: 10, xferMax: 0, xferDaily: 0, bucketHour: 1e11, plans: DEFAULT_PLANS }, db.settings);
+db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, qrMinAgeMin: 10, xferMax: 0, xferDaily: 0, bucketHour: 1e11, plans: DEFAULT_PLANS, ptsRate: 0.1, ptsPer: 1000 }, db.settings);
 db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++; db.deleted = db.deleted || {};
 console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
 let preRestore = null; try { preRestore = fs.readFileSync(path.join(DATA_DIR, 'pre-restore.json'), 'utf8'); } catch {}
@@ -105,6 +105,7 @@ const planList = () => (Array.isArray(db.settings.plans) && db.settings.plans.le
 const subTier = p => (p.sub && p.sub.exp > now() && planList()[p.sub.tier - 1]) ? p.sub.tier : 0;
 const subMult = p => { const t = subTier(p); return t ? Math.max(1, Number(planList()[t - 1].mult) || 1) : 1; };
 const subPub = p => { const t = subTier(p), pl = planList()[t - 1]; return { now: now(), tier: t, name: t ? pl.name : '', mult: t ? subMult(p) : 1, exp: t ? p.sub.exp : 0, auto: !!(p.sub && p.sub.auto), plans: planList().map((x, i) => ({ tier: i + 1, name: x.name, price: x.price, mult: x.mult })) }; };
+const ptsPub = () => ({ rate: Number(db.settings.ptsRate) >= 0 ? Number(db.settings.ptsRate) : 0.1, per: Math.max(1, Number(db.settings.ptsPer) || 1000) });
 const pushSub = p => sendTo(p.id, 'sub', subPub(p));
 const balOf = p => Math.max(0, Number(p.save && p.save.state && p.save.state.balance) || 0);
 function chargeSub(p, tier, why) { const pl = planList()[tier - 1]; queue(p, mkCmd({ type: 'money', value: -pl.price, msg: `💎 ${why}：${pl.name}` })); if (p.save && p.save.state) p.save.state.balance = Math.max(0, balOf(p) - pl.price); }
@@ -274,6 +275,7 @@ function structural(s) { // 回傳 {fatal, reasons}
   if (!s || typeof s !== 'object' || !s.state || typeof s.state !== 'object') return bad('存檔格式錯誤');
   const st = s.state;
   if (!NUM(st.balance) || !NUM(st.bankDeposit || 0) || !NUM(st.bankLoan || 0)) return bad('金額數值異常');
+  if (st.kpPts !== undefined && !NUM(st.kpPts)) return bad('點數數值異常');
   if (!Array.isArray(s.stocks || []) || (s.stocks || []).length > 30 || !(s.stocks || []).every(x => INT(x, 1e100))) return bad('股票資料異常');
   if (!Array.isArray(s.companies || []) || (s.companies || []).length > 30 || !(s.companies || []).every(c => c && INT(c.level, 5000))) return bad('公司資料異常');
   st.bankDeposit = st.bankDeposit || 0; st.bankLoan = st.bankLoan || 0; st.upgrades = st.upgrades || { click: 0, company: 0, discount: 0 }; st.inventory = st.inventory || {}; st.equippedBuffs = st.equippedBuffs || [];
@@ -326,15 +328,16 @@ function vet(p, s) {
   nS.forEach((n, i) => { const o = oS[i] || 0; if (n < o) sold += (o - n) * stockCap(i); else bought += n - o; });
   nC.forEach((c, i) => lv += Math.max(0, c.level - ((oC[i] && oC[i].level) || 0)));
   const loanUp = Math.max(0, st.bankLoan - (old.bankLoan || 0));
-  const cash = oldW + earn + g.money + sold + loanUp;
-  const allowed = oldW * 3 + earn + 1e7 + sold + loanUp + g.money + oldD * 0.0003 * dt;
+  const redeemed = Math.max(0, (Number(old.kpPts) || 0) - (Number(st.kpPts) || 0)) / ptsPub().per; // 兌換 KUN 點數得到的錢
+  const cash = oldW + earn + g.money + sold + loanUp + redeemed;
+  const allowed = oldW * 3 + earn + 1e7 + sold + loanUp + g.money + redeemed + oldD * 0.0003 * dt;
   const excess = w - allowed;
   if (excess > 0) {
     p.bucket = Math.min(bucketCap(), (p.bucket === undefined ? bucketCap() : p.bucket) + (t - (p.bucketT || t)) / 1000 * bucketRate()); p.bucketT = t;
     if (excess <= p.bucket) p.bucket -= excess; else r.push(`資產暴增：${Math.floor(oldW)} → ${Math.floor(w)}（合理上限約 ${Math.floor(allowed)}）`);
   }
   // 連續暴增偵測：無法歸因的收入相對於資產的比例，半衰期 60 秒；防止每次存檔都「合理地」暴增 3 倍
-  const explained = earn + sold + loanUp + g.money + oldD * 0.0003 * dt;
+  const explained = earn + sold + loanUp + g.money + redeemed + oldD * 0.0003 * dt;
   p.luck = (p.luck || 0) * Math.pow(0.5, dt / 60) + Math.max(0, w - oldW - explained) / Math.max(oldW, 1e6);
   if (p.luck > 12) r.push(`短時間內連續出現無法解釋的收入暴增（指數 ${p.luck.toFixed(1)}）`);
   // 轉帳保護（不受防作弊模式影響）：伺服器剛扣款後 2 分鐘內，存檔資產不得回彈
@@ -342,6 +345,7 @@ function vet(p, s) {
   if (rd > 0) { const strict = oldW * 1.5 + explained + 1e5; if (w > strict) hard.push(`轉帳後資產不符（剛轉出 ${rd}，存檔資產 ${Math.floor(w)} 高於上限 ${Math.floor(strict)}）`); }
   if (bought > cash) r.push(`股票數量暴增（+${bought} 股，現金不足）`);
   if (lv * 300 > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
+  const ptsGain = (Number(st.kpPts) || 0) - (Number(old.kpPts) || 0); if (ptsGain > cash * ptsPub().rate + 10) r.push(`點數暴增（+${Math.floor(ptsGain)}）`);
   const cnt = x => Object.values(x.inventory || {}).reduce((a, b) => a + b, 0) + (x.equippedBuffs || []).length;
   if (cnt(st) - cnt(old) > Math.floor(cash / 1e19) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
@@ -618,7 +622,7 @@ async function api(req, res, url) {
     if (p === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       if (!conns.has(pl.id)) conns.set(pl.id, new Set()); conns.get(pl.id).add(res);
-      sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance });
+      sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance, pts: ptsPub() });
       sse(res, 'sub', subPub(pl));
       sse(res, 'market', mktFull());
       pl.pending.forEach(c => sse(res, 'cmd', c));
@@ -697,11 +701,15 @@ async function api(req, res, url) {
         for (const [k, mx] of [['xferMinFriendMin', 1440], ['qrMinAgeMin', 1440], ['xferMax', 1e100], ['xferDaily', 1e100], ['bucketHour', 1e100]]) if (b[k] !== undefined) db.settings[k] = Math.min(mx, Math.max(0, Number(b[k]) || 0));
         if (b.maxCps !== undefined) db.settings.maxCps = Math.min(200, Math.max(1, Number(b.maxCps) || 25)); log(`設定更新 maintenance=${db.settings.maintenance}`); touch(); return json(res, 200, db.settings);
       }
-      if (p === '/admin/api/members' && m === 'GET') return json(res, 200, { plans: planList(), now: now(), members: Object.values(db.players).filter(x => x.sub).map(x => ({ id: x.id, name: x.name, tier: x.sub.tier, active: subTier(x) > 0, exp: x.sub.exp, auto: !!x.sub.auto })) });
+      if (p === '/admin/api/members' && m === 'GET') return json(res, 200, { plans: planList(), pts: ptsPub(), now: now(), members: Object.values(db.players).filter(x => x.sub).map(x => ({ id: x.id, name: x.name, tier: x.sub.tier, active: subTier(x) > 0, exp: x.sub.exp, auto: !!x.sub.auto })) });
       if (p === '/admin/api/plans' && m === 'POST') {
         const arr = Array.isArray(b.plans) ? b.plans : []; if (arr.length < 1 || arr.length > 8) throw '方案數量需 1~8';
         db.settings.plans = arr.map((x, i) => { const price = Number(x.price), mult = Number(x.mult); if (!Number.isFinite(price) || price < 0) throw `方案 ${i + 1} 價格不正確`; if (!Number.isFinite(mult) || mult < 1 || mult > 1e9) throw `方案 ${i + 1} 倍率需 1 以上`; return { name: String(x.name || '方案' + (i + 1)).slice(0, 20), price, mult }; });
         log('會員方案已更新'); touch(); conns.forEach((_, id) => db.players[id] && pushSub(db.players[id])); return json(res, 200, { ok: true });
+      }
+      if (p === '/admin/api/pts' && m === 'POST') {
+        const rate = Number(b.rate), per = Number(b.per); if (!Number.isFinite(rate) || rate < 0 || rate > 1) throw '回饋比例需介於 0%~100%'; if (!Number.isFinite(per) || per < 1) throw '兌換點數至少 1';
+        db.settings.ptsRate = rate; db.settings.ptsPer = per; log(`點數設定：回饋 ${rate * 100}%、${per} 點 = $1`); touch(); broadcast('pts', ptsPub()); return json(res, 200, { ok: true });
       }
       if (p === '/admin/api/member/grant' && m === 'POST') {
         const t = db.players[b.id]; if (!t) throw '找不到玩家'; const tier = parseInt(b.tier) || 0;
