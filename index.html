@@ -2003,7 +2003,7 @@
 
     function recalcMultiplier() {
         state.equippedBuffs = state.equippedBuffs.map(b => buffs[b.id] || b); // 以固定倍率為準（修正舊存檔裡的隨機倍率）
-        state.multiplier = Math.floor(state.equippedBuffs.reduce((acc, b) => acc * b.effect, 1));
+        state.multiplier = Math.floor(state.equippedBuffs.reduce((acc, b) => acc * b.effect, 1) * (window.MC_MEMBER_MULT || 1)); // 會員專屬 Buff 倍率（由伺服器決定）
         try { applyClickerStyle(); } catch (e) {}
     }
 

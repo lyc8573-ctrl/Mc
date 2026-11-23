@@ -94,10 +94,50 @@ let lastM = '';
 setInterval(() => { const t = Date.now() + off, act = calcEvents(); const mk = window.EVENT_CLICK_MULT + '/' + window.EVENT_INCOME_MULT; const chg = mk !== lastM; lastM = mk; bar.style.display = act.length ? 'block' : 'none';
   bar.innerHTML = act.map(e => { const s = Math.max(0, Math.floor((e.end - t) / 1000)); return `🎉 ${e.name}${['click', 'income', 'all'].includes(e.type) ? ' x' + e.factor : ''} (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`; }).join('　'); if (chg) { try { updateUI(); } catch {} } }, 1000);
 
+// ================= 會員方案（專屬 Buff）=================
+const CNU = ['', '萬', '億', '兆', '京', '垓', '秭', '穰', '溝', '澗', '正', '載', '極'];
+const cn = n => { n = Number(n) || 0; let u = 0; while (n >= 1e4 && u < CNU.length - 1) { n /= 1e4; u++; } return (Math.round(n * 100) / 100) + CNU[u]; };
+let SUB = { tier: 0, name: '', mult: 1, exp: 0, auto: false, plans: [] }, subOff = 0, subBox = null;
+const subLeft = () => (SUB.tier && SUB.exp + 45000 - (Date.now() + subOff) > 0) ? Math.max(0, SUB.exp - (Date.now() + subOff)) : 0; // 45 秒寬限，讓伺服器有時間自動續訂
+const leftTxt = () => { const s = Math.floor(subLeft() / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d} 天 ${h} 小時` : h ? `${h} 小時 ${m} 分` : `${m} 分`; };
+const SUBC = ['#adb5bd', '#17a2b8', '#6f42c1', 'linear-gradient(135deg,#f39c12,#e6005c)'];
+function drawBadge() {
+  const host = document.getElementById('buff-slots-container'); if (!host) return;
+  let b = document.getElementById('mc-badge');
+  if (!b) { b = $('div', 'margin:-6px 0 12px;padding:7px 10px;border-radius:8px;font-size:.8rem;font-weight:bold;color:#fff;text-align:center;cursor:pointer'); b.id = 'mc-badge'; b.onclick = openMember; host.after(b); }
+  const on = subLeft() > 0;
+  b.style.background = on ? SUBC[Math.min(SUB.tier, 3)] : SUBC[0];
+  b.textContent = on ? `💎 ${SUB.name} 專屬 Buff ×${cn(SUB.mult)}｜剩 ${leftTxt()}` : '💎 加入會員，獲得專屬 Buff';
+}
+function applySub() { window.MC_MEMBER_MULT = subLeft() > 0 ? Math.max(1, SUB.mult) : 1; try { recalcMultiplier(); updateUI(); } catch (e) {} drawBadge(); if (subBox) drawSub(); }
+function setSub(d) { SUB = d; subOff = d.now - Date.now(); applySub(); }
+function openMember() { if (subBox) return; const o = full(); o.style.background = 'rgba(255,255,255,.98)'; o.style.justifyContent = 'flex-start'; o.style.overflowY = 'auto'; subBox = o; document.body.appendChild(o); drawSub(); api('/api/sub').then(setSub).catch(() => {}); }
+function closeMember() { if (subBox) { subBox.remove(); subBox = null; } }
+function drawSub() {
+  const o = subBox; if (!o) return; const on = subLeft() > 0;
+  const cards = SUB.plans.map(p => {
+    const cur = on && SUB.tier === p.tier, low = on && p.tier < SUB.tier, afford = state.balance >= p.price;
+    const label = cur ? '目前方案' : low ? '已有更高方案' : on ? '升級' : '訂閱';
+    return `<div style="width:100%;max-width:340px;border:2px solid ${cur ? '#f39c12' : '#ddd'};border-radius:12px;padding:12px;text-align:left"><div style="font-weight:bold;font-size:1.05rem">${p.name}</div><div style="font-size:.9rem;margin:4px 0">專屬 Buff：<b>×${cn(p.mult)}</b></div><div style="font-size:.9rem;color:#555">每 7 天 <b>${cn(p.price)}</b></div><button class="btn ${cur || low ? 'secondary' : 'gold'}" data-t="${p.tier}" ${cur || low ? 'disabled' : ''} style="margin-top:8px;width:100%">${label}${!cur && !low && !afford ? '（餘額不足）' : ''}</button></div>`;
+  }).join('');
+  o.innerHTML = `<h3>💎 會員方案</h3><div style="font-size:.85rem;color:#666">${on ? `目前：<b>${SUB.name}</b>，剩 ${leftTxt()}（${SUB.auto ? '到期自動續訂' : '到期後不續訂'}）` : '尚未加入會員'}</div>${cards}${on ? `<button class="btn secondary" id="mau">${SUB.auto ? '取消自動續訂' : '恢復自動續訂'}</button>` : ''}<div style="font-size:.75rem;color:#888;max-width:340px">每 7 天用遊戲內金錢扣款；餘額不足時到期即失效。升級會重新計算 7 天、不退差價。</div><button class="btn secondary" id="mcl">關閉</button>`;
+  o.querySelector('#mcl').onclick = closeMember;
+  const au = o.querySelector('#mau'); if (au) au.onclick = () => api('/api/sub', { body: { action: SUB.auto ? 'cancel' : 'resume' } }).then(setSub).catch(e => toast(e.message, '#dc3545'));
+  o.querySelectorAll('button[data-t]').forEach(b => b.onclick = () => buySub(parseInt(b.dataset.t)));
+}
+async function buySub(tier) {
+  const p = SUB.plans[tier - 1]; if (!p) return;
+  if (state.balance < p.price) return toast('餘額不足', '#dc3545');
+  if (!confirm(`確定花 ${cn(p.price)} 訂閱「${p.name}」？之後每 7 天自動續訂，可隨時取消。`)) return;
+  try { await save(); setSub(await api('/api/sub', { body: { action: 'buy', tier } })); toast('💎 訂閱成功：' + SUB.name); } catch (e) { toast(e.message, '#dc3545'); }
+}
+setInterval(() => { if (SUB.tier && window.MC_MEMBER_MULT > 1 && !subLeft()) applySub(); else drawBadge(); }, 30000);
+
 function connect() {
   es = new EventSource('/api/stream?key=' + encodeURIComponent(acc.key));
   es.addEventListener('hello', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
   es.addEventListener('events', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
+  es.addEventListener('sub', e => setSub(JSON.parse(e.data)));
   es.addEventListener('market', e => { const d = JSON.parse(e.data); try {
     stocks.forEach((s, i) => { s.price = d.p[i]; if (d.h) s.history = d.h[i].slice(); else { s.history.push(s.price); s.history.shift(); } });
     drawChart(); renderStocks(); } catch (err) {} });
@@ -206,8 +246,10 @@ function menu() {
   b.className = 'mc-fab'; b.onclick = () => { const o = full(); o.style.background = 'rgba(255,255,255,.97)';
     o.innerHTML = `<h3>👤 ${acc.name}</h3><div style="font-size:.8rem;color:#666">登入金鑰（換裝置用，請勿外流）<br><b style="user-select:all">${acc.key}</b></div>
     <input id="cd" placeholder="輸入兌換碼" style="padding:10px;width:240px;border:1px solid #ccc;border-radius:8px"><button class="btn gold" id="rd">兌換</button>
+    <button class="btn gold" id="mb">💎 會員方案</button>
     <button class="btn secondary" id="cp">${needPw ? '設定密碼' : '修改密碼'}</button><button class="btn danger" id="lo">登出</button><button class="btn secondary" id="cl">關閉</button>`;
     o.querySelector('#cl').onclick = () => o.remove();
+    o.querySelector('#mb').onclick = () => { o.remove(); openMember(); };
     o.querySelector('#cp').onclick = () => { o.remove(); pwModal(); };
     o.querySelector('#rd').onclick = () => api('/api/redeem', { body: { code: o.querySelector('#cd').value } }).then(() => { toast('兌換成功'); o.remove(); }).catch(e => toast(e.message, '#dc3545'));
     o.querySelector('#lo').onclick = () => { save().finally(() => { clearAcc(); localStorage.removeItem('minimalCapitalSave'); location.reload(); }); };
@@ -217,7 +259,7 @@ function menu() {
 async function start() {
   try {
     const r = await api('/api/save'); rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } else await save();
-    unboot(); connect(); menu(); friendsInit(); lbInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
+    unboot(); connect(); menu(); drawBadge(); friendsInit(); lbInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
     window.addEventListener('pagehide', () => navigator.sendBeacon && 0);
   } catch (e) { if (/封鎖/.test(e.message)) blocked(e.message); else if (e.status === 0 || e.status >= 500 || e.status === 429) { waitMsg((e.message || '伺服器連線中') + '，自動重試中…'); await sleep(3000); boot(); } else { acc = null; clearAcc(); loginScreen(e.message || '登入已失效，請重新登入'); } }
 }

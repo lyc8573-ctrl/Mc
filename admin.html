@@ -11,7 +11,7 @@ button.r{background:#dc3545}button.y{background:#fd7e14}button.g{background:#6c7
 </style></head><body>
 <div id="login" style="max-width:320px;margin:90px auto;text-align:center"><h2>後台登入</h2><input id="pw" type="password" placeholder="管理員密碼" style="width:100%"><br><button class="b" onclick="login()" style="width:100%;margin-top:8px">登入</button></div>
 <div id="app" style="display:none"><header><b>🛠 極簡資本 後台</b>
-<button data-t="ov">總覽</button><button data-t="pl">玩家</button><button data-t="bn">封鎖</button><button data-t="mk">股市</button><button data-t="sn">賽季</button><button data-t="ev">活動</button><button data-t="gf">發放/公告</button><button data-t="cd">兌換碼</button><button data-t="st">設定/日誌</button></header><main id="m"></main></div>
+<button data-t="ov">總覽</button><button data-t="pl">玩家</button><button data-t="bn">封鎖</button><button data-t="mk">股市</button><button data-t="sn">賽季</button><button data-t="ev">活動</button><button data-t="gf">發放/公告</button><button data-t="cd">兌換碼</button><button data-t="mb">會員</button><button data-t="st">設定/日誌</button></header><main id="m"></main></div>
 <script>
 const CARDS=["白銀初心卡", "青銅啟航卡", "黑曜獵手卡", "翡翠光輝卡", "藍寶石天際卡", "琥珀流光卡", "紫晶星雲卡", "紅蓮誓約卡", "鈦空量子卡", "極光幻境卡", "深海沉香卡", "烈陽霸者卡", "月華永恆卡", "賽博霓虹卡", "虛空暗物質卡", "黃金王者卡", "白金聖裁卡", "鑽石永恆卡", "星核裂變卡", "超新星爆發卡", "黑洞重力卡", "時空交響卡", "維度崩裂卡", "阿卡西記錄卡", "混沌初始卡", "銀河主宰卡", "宇宙心靈卡", "不朽神性卡", "萬物終焉卡", "創世神域卡", "彼岸星界卡", "天命輪轉卡", "因果律卡", "無界之門卡", "萬象歸一卡"];
 let T=sessionStorage.adm||'',timer,PL=[];const $=s=>document.querySelector(s),v=id=>document.getElementById(id).value;
@@ -129,5 +129,12 @@ document.body.appendChild(el);document.getElementById('impgo').onclick=async()=>
 const R_refresh=()=>{try{tab(window.__cur||'st')}catch(e){}};
 async function undoImp(){if(!confirm('撤銷上次匯入，把資料還原成匯入之前的樣子？'))return;try{const r=await A('restore/undo',{});alert('已還原，目前共 '+r.players+' 位玩家')}catch(e){}}
 function csv(){const h=['名稱','現金','存款','貸款','重生','核心','Buff','可疑','封鎖'];const t=[h].concat(PL.map(p=>[p.name,p.balance,p.bank,p.loan,p.rebirths,p.cores,p.buffs,p.strikes,p.banned?'是':''])).map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');const u=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));Object.assign(document.createElement('a'),{href:u,download:'players.csv'}).click()}
+const cnA=n=>{n=Number(n)||0;const U=['','萬','億','兆','京','垓','秭','穰','溝','澗','正','載','極'];let u=0;while(n>=1e4&&u<U.length-1){n/=1e4;u++}return Math.round(n*100)/100+U[u]};
+R.mb=async function(){const d=await A('members'),pl=await A('players');
+$('#m').innerHTML=`<div class="card"><h3>💎 會員方案（每 7 天扣款）</h3><small>價格是遊戲內金錢的數字（5000垓 = 5e23），倍率是專屬 Buff 的固定倍率。由上到下就是等級高低。</small><table><tr><th>名稱</th><th>每週價格</th><th>專屬 Buff 倍率</th></tr>${d.plans.map((x,i)=>`<tr><td><input id="pn${i}" value="${esc(x.name)}" style="width:110px"></td><td><input id="pp${i}" value="${x.price}" style="width:130px"> <small>${cnA(x.price)}</small></td><td><input id="pm${i}" value="${x.mult}" style="width:90px"></td></tr>`).join('')}</table><button class="b p" onclick="savePlans(${d.plans.length})">儲存方案</button></div>
+<div class="card"><h3>發放 / 收回會員</h3><select id="gp">${pl.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select> <select id="gt"><option value="0">收回（取消會員）</option>${d.plans.map((x,i)=>`<option value="${i+1}" ${i==0?'selected':''}>${esc(x.name)}</option>`).join('')}</select> <input id="gd" value="7" style="width:60px"> 天 <button class="b" onclick="grantMb(v('gp'),v('gt'),v('gd'))">確定</button><br><small>後台發放的會員不會自動續訂，到期即失效。</small></div>
+<div class="card"><h3>目前會員（${d.members.length}）</h3>${d.members.length?`<table>${d.members.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc((d.plans[x.tier-1]||{}).name||'?')}${x.active?'':' <small>(已過期)</small>'}</td><td>${ago(x.exp)}</td><td>${x.auto?'自動續訂':'不續訂'}</td><td><button class="b" onclick="grantMb('${x.id}',0,0)">收回</button></td></tr>`).join('')}</table>`:'<small>目前沒有會員</small>'}</div>`};
+async function savePlans(n){const plans=[];for(let i=0;i<n;i++)plans.push({name:v('pn'+i),price:v('pp'+i),mult:v('pm'+i)});await A('plans',{plans});alert('已儲存');R.mb()}
+async function grantMb(id,tier,days){await A('member/grant',{id,tier,days});R.mb()}
 document.getElementById('pw').addEventListener('keydown',e=>e.key=='Enter'&&login());if(T)A('overview').then(init).catch(()=>{});
 </script></body></html>
