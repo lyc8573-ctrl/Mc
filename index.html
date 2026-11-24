@@ -1322,6 +1322,8 @@
     };
 
     // 統一處理遊戲內購買扣款：驗證餘額後扣款、立即存檔並更新畫面。
+    // 負債過重（貸款 ≥ 現金+存款 × 伺服器設定倍數）時不能轉帳；0 或離線 = 不限制
+    function mcDebtBlocked() { const r = Number(window.MC_DEBT) || 0, loan = Number(state.bankLoan) || 0; return r > 0 && loan > 0 && loan >= r * ((Number(state.balance) || 0) + (Number(state.bankDeposit) || 0)); }
     function spendGameMoney(amount) {
         amount = Number(amount);
         if (!Number.isFinite(amount) || amount < 0 || Number(state.balance) < amount) return false;
@@ -1512,6 +1514,7 @@
             return;
         }
 
+        if (mcDebtBlocked()) { soundError(); alert('負債過重：貸款已達現金與存款的上限，請先還款再轉帳。'); return; }
         showLinePayReceipt(false, "跨裝置 P2P 轉帳確認", `對象: ${targetPeerId}`, amt, 1, amt, () => {
             let isConnected = false;
             let connTimeout = setTimeout(() => {

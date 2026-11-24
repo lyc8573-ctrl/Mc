@@ -47,7 +47,7 @@ if (GH_ON) {
 }
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
 db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
-db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, qrMinAgeMin: 10, xferMax: 0, xferDaily: 0, bucketHour: 1e11, plans: DEFAULT_PLANS, ptsRate: 0.1, ptsPer: 1000, ptsCardStep: 0.01 }, db.settings);
+db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, qrMinAgeMin: 10, xferMax: 0, xferDaily: 0, bucketHour: 1e11, plans: DEFAULT_PLANS, ptsRate: 0.1, ptsPer: 1000, ptsCardStep: 0.01, debtRatio: 1 }, db.settings);
 db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++; db.deleted = db.deleted || {};
 console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
 let preRestore = null; try { preRestore = fs.readFileSync(path.join(DATA_DIR, 'pre-restore.json'), 'utf8'); } catch {}
@@ -114,10 +114,10 @@ setInterval(() => {
   for (const p of Object.values(db.players)) {
     if (!p.sub || p.sub.exp > now()) continue;
     const pl = planList()[p.sub.tier - 1];
-    if (p.sub.auto && pl && !isBanned(p) && balOf(p) >= pl.price) {
+    if (p.sub.auto && pl && !isBanned(p) && !debtGuard(p) && balOf(p) >= pl.price) {
       chargeSub(p, p.sub.tier, '會員自動續訂'); p.sub.exp = (now() - p.sub.exp < 3600e3 ? p.sub.exp : now()) + SUB_PERIOD; log(`會員續訂 ${p.name}：${pl.name}`); touch(); pushSub(p);
     } else {
-      const why = p.sub.auto && pl ? '（餘額不足，無法自動續訂）' : ''; log(`會員到期 ${p.name}：${pl ? pl.name : '?'}${why}`); delete p.sub; touch();
+      const why = p.sub.auto && pl ? (debtGuard(p) ? '（負債過重，無法自動續訂）' : '（餘額不足，無法自動續訂）') : ''; log(`會員到期 ${p.name}：${pl ? pl.name : '?'}${why}`); delete p.sub; touch();
       sendTo(p.id, 'announce', { text: `💎 你的會員已到期${why}`, style: 'info' }); pushSub(p);
     }
   }
@@ -132,6 +132,11 @@ function prizeCmd(e, scale = 1, msg) {
   return mkCmd(pz);
 }
 const onlinePlayers = () => [...conns.keys()].map(id => db.players[id]).filter(Boolean);
+const debtRatio = () => (Number(db.settings.debtRatio) >= 0 ? Number(db.settings.debtRatio) : 1);
+function debtGuard(p) { // 負債過重：貸款 ≥ (現金+存款) × 倍數 → 禁止轉帳與訂閱會員（0 = 關閉）
+  const r = debtRatio(); if (!(r > 0)) return null; const st = (p.save && p.save.state) || {}, loan = Number(st.bankLoan) || 0;
+  return loan > 0 && loan >= r * wealthOf(p) ? `負債過重：貸款已達現金與存款的 ${+(r * 100).toFixed(2)}% 以上，請先還款再操作` : null;
+}
 const wealthOf = p => { const st = (p.save && p.save.state) || {}; return (st.balance || 0) + (st.bankDeposit || 0); };
 function giveLogin(e, pl) { e.claimed = e.claimed || []; if (e.claimed.includes(pl.id)) return; e.claimed.push(pl.id); queue(pl, prizeCmd(e, 1, `🎁 ${e.name}`)); }
 function shockMarket(f) { market.p.forEach((p, i) => { market.p[i] = Math.min(1e9, Math.max(1, p * f)); market.h[i][49] = market.p[i]; }); touch(); broadcast('market', mktFull()); }
@@ -410,6 +415,7 @@ async function friendApi(req, res, pl, p, m) {
   const b = await body(req);
   if (p === '/api/pay/send') {
     if (pl.muted) return J(403, { error: '你已被禁言，無法轉帳' });
+    { const dg = debtGuard(pl); if (dg) return J(403, { error: dg }); }
     const S = db.settings, t = db.players[b.to], amt = Math.floor(Number(b.amount));
     if (!S.xferOn && S.xferOn !== undefined) return J(403, { error: '轉帳功能目前已關閉' });
     if (!t || t === pl) return J(403, { error: '收款對象不存在，或不能轉給自己' }); if (isBanned(t)) return J(403, { error: '對方帳號異常，無法轉帳' });
@@ -449,6 +455,7 @@ async function friendApi(req, res, pl, p, m) {
   }
   if (p === '/api/friends/send') {
     if (pl.muted) return J(403, { error: '你已被禁言，無法轉帳' });
+    { const dg = debtGuard(pl); if (dg) return J(403, { error: dg }); }
     const t = db.players[b.id], amt = Math.floor(Number(b.amount)), S = db.settings, f = pl.friends[b.id];
     if (!t || !f) return J(403, { error: '只能轉帳給好友' });
     if (isBanned(t)) return J(403, { error: '對方帳號異常，無法轉帳' });
@@ -582,6 +589,7 @@ async function api(req, res, url) {
       const tier = parseInt(b.tier), plan = planList()[tier - 1];
       if (!plan) return json(res, 400, { error: '沒有這個方案' });
       if (tier <= cur) return json(res, 400, { error: tier === cur ? '你已經是這個方案了（到期會自動續訂）' : '你已有更高階的方案，無法降級' });
+      { const dg = debtGuard(pl); if (dg) return json(res, 403, { error: dg }); }
       if (balOf(pl) < plan.price) return json(res, 400, { error: '餘額不足' });
       chargeSub(pl, tier, cur ? '升級會員' : '訂閱會員');
       pl.sub = { tier, exp: now() + SUB_PERIOD, auto: true, since: now() };
@@ -623,7 +631,7 @@ async function api(req, res, url) {
     if (p === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       if (!conns.has(pl.id)) conns.set(pl.id, new Set()); conns.get(pl.id).add(res);
-      sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance, pts: ptsPub() });
+      sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance, pts: ptsPub(), debt: debtRatio() });
       sse(res, 'sub', subPub(pl));
       sse(res, 'market', mktFull());
       pl.pending.forEach(c => sse(res, 'cmd', c));
@@ -702,11 +710,15 @@ async function api(req, res, url) {
         for (const [k, mx] of [['xferMinFriendMin', 1440], ['qrMinAgeMin', 1440], ['xferMax', 1e100], ['xferDaily', 1e100], ['bucketHour', 1e100]]) if (b[k] !== undefined) db.settings[k] = Math.min(mx, Math.max(0, Number(b[k]) || 0));
         if (b.maxCps !== undefined) db.settings.maxCps = Math.min(200, Math.max(1, Number(b.maxCps) || 25)); log(`設定更新 maintenance=${db.settings.maintenance}`); touch(); return json(res, 200, db.settings);
       }
-      if (p === '/admin/api/members' && m === 'GET') return json(res, 200, { plans: planList(), pts: ptsPub(), now: now(), members: Object.values(db.players).filter(x => x.sub).map(x => ({ id: x.id, name: x.name, tier: x.sub.tier, active: subTier(x) > 0, exp: x.sub.exp, auto: !!x.sub.auto })) });
+      if (p === '/admin/api/members' && m === 'GET') return json(res, 200, { plans: planList(), pts: ptsPub(), debtRatio: debtRatio(), now: now(), members: Object.values(db.players).filter(x => x.sub).map(x => ({ id: x.id, name: x.name, tier: x.sub.tier, active: subTier(x) > 0, exp: x.sub.exp, auto: !!x.sub.auto })) });
       if (p === '/admin/api/plans' && m === 'POST') {
         const arr = Array.isArray(b.plans) ? b.plans : []; if (arr.length < 1 || arr.length > 8) throw '方案數量需 1~8';
         db.settings.plans = arr.map((x, i) => { const price = Number(x.price), mult = Number(x.mult); if (!Number.isFinite(price) || price < 0) throw `方案 ${i + 1} 價格不正確`; if (!Number.isFinite(mult) || mult < 1 || mult > 1e9) throw `方案 ${i + 1} 倍率需 1 以上`; return { name: String(x.name || '方案' + (i + 1)).slice(0, 20), price, mult }; });
         log('會員方案已更新'); touch(); conns.forEach((_, id) => db.players[id] && pushSub(db.players[id])); return json(res, 200, { ok: true });
+      }
+      if (p === '/admin/api/debt' && m === 'POST') {
+        const r = Number(b.ratio); if (!Number.isFinite(r) || r < 0 || r > 1000) throw '倍數需介於 0~1000（0 = 關閉）';
+        db.settings.debtRatio = r; log(`負債限制：${r > 0 ? `貸款 ≥ 現金+存款 × ${r} 時禁止轉帳/訂閱` : '已關閉'}`); touch(); broadcast('debt', { ratio: r }); return json(res, 200, { ok: true });
       }
       if (p === '/admin/api/pts' && m === 'POST') {
         const rate = Number(b.rate), per = Number(b.per), step = b.step === undefined || b.step === '' ? ptsPub().step : Number(b.step); if (!Number.isFinite(rate) || rate < 0 || rate > 1) throw '回饋比例需介於 0%~100%'; if (!Number.isFinite(per) || per < 1) throw '兌換點數至少 1'; if (!Number.isFinite(step) || step < 0 || step > 0.1) throw '每張卡加成需介於 0%~10%';
