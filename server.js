@@ -47,7 +47,7 @@ if (GH_ON) {
 }
 try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch {}
 db.bans = db.bans || { devices: {}, ips: {} }; db.autoAnn = db.autoAnn || []; db.hist = db.hist || [];
-db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, qrMinAgeMin: 10, xferMax: 0, xferDaily: 0, bucketHour: 1e11, plans: DEFAULT_PLANS, ptsRate: 0.1, ptsPer: 1000 }, db.settings);
+db.settings = Object.assign({ maintenance: false, motd: '', ac: 'flag', autoBan: 0, maxCps: 25, xferMinFriendMin: 5, qrMinAgeMin: 10, xferMax: 0, xferDaily: 0, bucketHour: 1e11, plans: DEFAULT_PLANS, ptsRate: 0.1, ptsPer: 1000, ptsCardStep: 0.01 }, db.settings);
 db.meta = db.meta || { created: Date.now(), boots: 0 }; db.meta.boots++; db.deleted = db.deleted || {};
 console.log(`已載入 ${Object.keys(db.players).length} 位玩家；資料目錄：${DATA_DIR}；第 ${db.meta.boots} 次啟動`);
 let preRestore = null; try { preRestore = fs.readFileSync(path.join(DATA_DIR, 'pre-restore.json'), 'utf8'); } catch {}
@@ -105,7 +105,8 @@ const planList = () => (Array.isArray(db.settings.plans) && db.settings.plans.le
 const subTier = p => (p.sub && p.sub.exp > now() && planList()[p.sub.tier - 1]) ? p.sub.tier : 0;
 const subMult = p => { const t = subTier(p); return t ? Math.max(1, Number(planList()[t - 1].mult) || 1) : 1; };
 const subPub = p => { const t = subTier(p), pl = planList()[t - 1]; return { now: now(), tier: t, name: t ? pl.name : '', mult: t ? subMult(p) : 1, exp: t ? p.sub.exp : 0, auto: !!(p.sub && p.sub.auto), plans: planList().map((x, i) => ({ tier: i + 1, name: x.name, price: x.price, mult: x.mult })) }; };
-const ptsPub = () => ({ rate: Number(db.settings.ptsRate) >= 0 ? Number(db.settings.ptsRate) : 0.1, per: Math.max(1, Number(db.settings.ptsPer) || 1000) });
+const MAX_CARD_LV = 38; // 卡片總數：第 N 張卡額外回饋 N × step
+const ptsPub = () => ({ rate: Number(db.settings.ptsRate) >= 0 ? Number(db.settings.ptsRate) : 0.1, step: Number(db.settings.ptsCardStep) >= 0 ? Number(db.settings.ptsCardStep) : 0.01, per: Math.max(1, Number(db.settings.ptsPer) || 1000) });
 const pushSub = p => sendTo(p.id, 'sub', subPub(p));
 const balOf = p => Math.max(0, Number(p.save && p.save.state && p.save.state.balance) || 0);
 function chargeSub(p, tier, why) { const pl = planList()[tier - 1]; queue(p, mkCmd({ type: 'money', value: -pl.price, msg: `💎 ${why}：${pl.name}` })); if (p.save && p.save.state) p.save.state.balance = Math.max(0, balOf(p) - pl.price); }
@@ -345,7 +346,7 @@ function vet(p, s) {
   if (rd > 0) { const strict = oldW * 1.5 + explained + 1e5; if (w > strict) hard.push(`轉帳後資產不符（剛轉出 ${rd}，存檔資產 ${Math.floor(w)} 高於上限 ${Math.floor(strict)}）`); }
   if (bought > cash) r.push(`股票數量暴增（+${bought} 股，現金不足）`);
   if (lv * 300 > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
-  const ptsGain = (Number(st.kpPts) || 0) - (Number(old.kpPts) || 0); if (ptsGain > cash * ptsPub().rate + 10) r.push(`點數暴增（+${Math.floor(ptsGain)}）`);
+  const ptsGain = (Number(st.kpPts) || 0) - (Number(old.kpPts) || 0); if (ptsGain > cash * (ptsPub().rate + MAX_CARD_LV * ptsPub().step) + 10) r.push(`點數暴增（+${Math.floor(ptsGain)}）`);
   const cnt = x => Object.values(x.inventory || {}).reduce((a, b) => a + b, 0) + (x.equippedBuffs || []).length;
   if (cnt(st) - cnt(old) > Math.floor(cash / 1e19) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
   if (st.capitalCores - (old.capitalCores || 0) > Math.floor((oldB + earn + g.money) / 1e16) + g.cores) r.push(`資本核心暴增（+${st.capitalCores - (old.capitalCores || 0)}）`);
@@ -708,8 +709,8 @@ async function api(req, res, url) {
         log('會員方案已更新'); touch(); conns.forEach((_, id) => db.players[id] && pushSub(db.players[id])); return json(res, 200, { ok: true });
       }
       if (p === '/admin/api/pts' && m === 'POST') {
-        const rate = Number(b.rate), per = Number(b.per); if (!Number.isFinite(rate) || rate < 0 || rate > 1) throw '回饋比例需介於 0%~100%'; if (!Number.isFinite(per) || per < 1) throw '兌換點數至少 1';
-        db.settings.ptsRate = rate; db.settings.ptsPer = per; log(`點數設定：回饋 ${rate * 100}%、${per} 點 = $1`); touch(); broadcast('pts', ptsPub()); return json(res, 200, { ok: true });
+        const rate = Number(b.rate), per = Number(b.per), step = b.step === undefined || b.step === '' ? ptsPub().step : Number(b.step); if (!Number.isFinite(rate) || rate < 0 || rate > 1) throw '回饋比例需介於 0%~100%'; if (!Number.isFinite(per) || per < 1) throw '兌換點數至少 1'; if (!Number.isFinite(step) || step < 0 || step > 0.1) throw '每張卡加成需介於 0%~10%';
+        db.settings.ptsRate = rate; db.settings.ptsPer = per; db.settings.ptsCardStep = step; log(`點數設定：基本回饋 ${rate * 100}%、每張卡 +${step * 100}%、${per} 點 = $1`); touch(); broadcast('pts', ptsPub()); return json(res, 200, { ok: true });
       }
       if (p === '/admin/api/member/grant' && m === 'POST') {
         const t = db.players[b.id]; if (!t) throw '找不到玩家'; const tier = parseInt(b.tier) || 0;
