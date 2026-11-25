@@ -141,11 +141,13 @@ function connect() {
   es.addEventListener('events', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });
   es.addEventListener('sub', e => setSub(JSON.parse(e.data)));
   es.addEventListener('market', e => { const d = JSON.parse(e.data); try {
-    stocks.forEach((s, i) => { s.price = d.p[i]; if (d.h) s.history = d.h[i].slice(); else { s.history.push(s.price); s.history.shift(); } });
+    if (d.p.length !== stocks.length) { if (!window.__catBusy) { window.__catBusy = 1; api('/api/catalog').then(c => { mcApplyCatalog(c); }).catch(() => {}).then(() => setTimeout(() => { window.__catBusy = 0; }, 3000)); } }
+    stocks.forEach((s, i) => { if (d.p[i] === undefined) return; s.price = d.p[i]; if (d.h && d.h[i]) s.history = d.h[i].slice(); else { s.history.push(s.price); s.history.shift(); } });
     drawChart(); renderStocks(); } catch (err) {} });
   es.addEventListener('cmd', e => apply(JSON.parse(e.data)));
   es.addEventListener('announce', e => { const d = JSON.parse(e.data); toast('📢 ' + d.text, d.style === 'event' ? '#6f42c1' : '#17a2b8'); try { speakText(d.text); } catch {} });
-  es.addEventListener('reload', () => api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); toast('管理員已回溯你的存檔進度', '#fd7e14'); } }).catch(() => {}));
+  es.addEventListener('catalog', e => { try { mcApplyCatalog(JSON.parse(e.data)); } catch (err) {} });
+  es.addEventListener('reload', ev => { let msg = ''; try { msg = JSON.parse(ev.data).msg || ''; } catch (err) {} api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); toast(msg || '管理員已回溯你的存檔進度', '#fd7e14'); } }).catch(() => {}); });
   es.addEventListener('packet', e => { const d = JSON.parse(e.data); const t = $('div', 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:99997;background:#dc3545;color:#fff;padding:12px 16px;border-radius:12px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.35)', `🧧 ${d.name}<br><small>限量 ${d.left} 份，手快有！</small><br>`);
     const b = $('button', 'margin-top:6px;padding:8px 22px;border:0;border-radius:8px;background:#ffc107;font-weight:bold;font-size:1rem', '搶紅包'); b.onclick = () => { b.disabled = true; api('/api/claim', { body: { id: d.id } }).then(() => { t.remove(); }).catch(er => { toast(er.message, '#6c757d'); t.remove(); }); }; t.appendChild(b); document.body.appendChild(t); setTimeout(() => t.remove(), 60000); });
   es.addEventListener('friends', () => loadFriends());
@@ -260,6 +262,7 @@ function menu() {
 }
 async function start() {
   try {
+    try { mcApplyCatalog(await api('/api/catalog')); } catch (e) {}
     const r = await api('/api/save'); rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } else await save();
     unboot(); connect(); menu(); drawBadge(); friendsInit(); lbInit(); setInterval(() => !dead && save().catch(e => { if (e.data && e.data.stale) { if (!xferBusy && e.data.rev > rev) resync(); return; } if (/封鎖|未登入/.test(e.message)) blocked(e.message); else if (/異常/.test(e.message)) api('/api/save').then(r => { rev = r.rev || 0; if (r.save) { applySavePackage(r.save); refresh(); } toast('偵測到異常數據，已還原為伺服器進度', '#dc3545'); }).catch(() => {}); }), 5000);
     window.addEventListener('pagehide', () => navigator.sendBeacon && 0);

@@ -254,12 +254,21 @@ function unban(t) {
 
 
 // ---------- 全服統一股市（伺服器統一產生價格）----------
-const SVOL = i => 0.3 - i * 0.009;
-if (!db.market || !db.market.p || db.market.p.length !== 30) db.market = { p: Array.from({ length: 30 }, () => 10 + Math.random() * 100), frozen: false, volMul: 1 };
-db.market.h = db.market.h && db.market.h.length === 30 ? db.market.h : db.market.p.map(p => Array.from({ length: 50 }, () => p * (0.9 + Math.random() * 0.2)));
+// 自訂企業 / 股票目錄（後台新增；編號接在內建 30 之後）
+const cat = () => (db.catalog = db.catalog || { companies: [], stocks: [] });
+const NSTK = () => 30 + (cat().stocks || []).length, NCOMP = () => 30 + (cat().companies || []).length;
+const SVOL = i => i < 30 ? 0.3 - i * 0.009 : Math.max(0, Number(((cat().stocks || [])[i - 30] || {}).vol) || 0.1);
+const compInc = i => i < 30 ? Math.floor(10 * Math.pow(1.45, i)) : Math.floor(Number(((cat().companies || [])[i - 30] || {}).income) || 0);
+const minCompCost = () => Math.max(1, Math.min(300, ...(cat().companies || []).map(c => Number(c.cost) || 300)));
+const pubCat = () => ({ stocks: (cat().stocks || []).map(x => ({ name: x.name, price: x.price, vol: x.vol })), companies: (cat().companies || []).map(x => ({ name: x.name, cost: x.cost, income: x.income })) });
+if (!db.market || !db.market.p || db.market.p.length < 30) db.market = { p: Array.from({ length: 30 }, () => 10 + Math.random() * 100), frozen: false, volMul: 1 };
+if (!db.market.h || db.market.h.length !== db.market.p.length) db.market.h = db.market.p.map(p => Array.from({ length: 50 }, () => p * (0.9 + Math.random() * 0.2)));
 const market = db.market; let mtick = 0;
+function syncMarket() { const n = NSTK(); while (market.p.length < n) { const x = cat().stocks[market.p.length - 30], p0 = Math.max(1, Number(x && x.price) || 10); market.p.push(p0); market.h.push(Array.from({ length: 50 }, () => p0 * (0.97 + Math.random() * 0.06))); } market.p.length = n; market.h.length = n; }
+syncMarket();
 const mktFull = () => ({ p: market.p, h: market.h });
 setInterval(() => {
+  if (market.p.length !== NSTK()) syncMarket();
   if (market.frozen) return;
   market.p.forEach((p, i) => { const v = SVOL(i) * (market.volMul || 1); market.p[i] = Math.min(1e9, Math.max(1, p * (1 + Math.random() * v * 2 - v))); market.h[i].push(market.p[i]); market.h[i].shift(); });
   broadcast('market', { p: market.p });
@@ -282,8 +291,8 @@ function structural(s) { // 回傳 {fatal, reasons}
   const st = s.state;
   if (!NUM(st.balance) || !NUM(st.bankDeposit || 0) || !NUM(st.bankLoan || 0)) return bad('金額數值異常');
   if (st.kpPts !== undefined && !NUM(st.kpPts)) return bad('點數數值異常');
-  if (!Array.isArray(s.stocks || []) || (s.stocks || []).length > 30 || !(s.stocks || []).every(x => INT(x, 1e100))) return bad('股票資料異常');
-  if (!Array.isArray(s.companies || []) || (s.companies || []).length > 30 || !(s.companies || []).every(c => c && INT(c.level, 5000))) return bad('公司資料異常');
+  if (!Array.isArray(s.stocks || []) || (s.stocks || []).length > NSTK() || !(s.stocks || []).every(x => INT(x, 1e100))) return bad('股票資料異常');
+  if (!Array.isArray(s.companies || []) || (s.companies || []).length > NCOMP() || !(s.companies || []).every(c => c && INT(c.level, 5000))) return bad('公司資料異常');
   st.bankDeposit = st.bankDeposit || 0; st.bankLoan = st.bankLoan || 0; st.upgrades = st.upgrades || { click: 0, company: 0, discount: 0 }; st.inventory = st.inventory || {}; st.equippedBuffs = st.equippedBuffs || [];
   const r = [];
   if (!INT(st.rebirths, 300) || !INT(st.capitalCores) || !INT(st.currentCardLevel, 37) || !INT(st.maxCardOwnedLevel, 34) || !NUM(st.baseClick, 1e6)) return bad('進度數值異常');
@@ -323,7 +332,7 @@ function vet(p, s) {
   const skillF = oSt >= 5 ? (oKind === 'crit' ? 5 : 1 + oSp) : 1, burstF = oAw > 1 ? 4 : 1;
   const cardFac = (1 + 0.15 * oSt) * oAw * collF * skillF * burstF;
   const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oL) * mult * Math.pow(BTN_MULT, btnLvl) * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
-  let pas = 0; (p.save.companies || []).forEach((c, i) => pas += ((c && c.level) || 0) * Math.floor(Math.floor(10 * Math.pow(1.45, i)) * 0.75 * (1 + 0.375 * oL) * (1 + ou.company)));
+  let pas = 0; (p.save.companies || []).forEach((c, i) => pas += ((c && c.level) || 0) * Math.floor(compInc(i) * 0.75 * (1 + 0.375 * oL) * (1 + ou.company)));
   const earn = (click * cps + pas * mult * ev.income) * cardFac * dt * 3;
   const oldB = old.balance || 0, oldD = old.bankDeposit || 0, oldW = oldB + oldD;
   const g = { money: 0, buffs: 0, cores: 0, rebirth: 0 };
@@ -350,7 +359,7 @@ function vet(p, s) {
   const rd = (p.debits || []).filter(x => t - x.t < 120000).reduce((a, x) => a + x.amt, 0);
   if (rd > 0) { const strict = oldW * 1.5 + explained + 1e5; if (w > strict) hard.push(`轉帳後資產不符（剛轉出 ${rd}，存檔資產 ${Math.floor(w)} 高於上限 ${Math.floor(strict)}）`); }
   if (bought > cash) r.push(`股票數量暴增（+${bought} 股，現金不足）`);
-  if (lv * 300 > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
+  if (lv * minCompCost() > cash) r.push(`公司等級暴增（+${lv} 級，現金不足）`);
   const ptsGain = (Number(st.kpPts) || 0) - (Number(old.kpPts) || 0); if (ptsGain > cash * (ptsPub().rate + MAX_CARD_LV * ptsPub().step) + 10) r.push(`點數暴增（+${Math.floor(ptsGain)}）`);
   const cnt = x => Object.values(x.inventory || {}).reduce((a, b) => a + b, 0) + (x.equippedBuffs || []).length;
   if (cnt(st) - cnt(old) > Math.floor(cash / 1e19) + g.buffs) r.push(`Buff 數量暴增（+${cnt(st) - cnt(old)}）`);
@@ -581,6 +590,7 @@ async function api(req, res, url) {
       pl.save = s; pl.lastSaveAt = now(); const SS = seasonOn(); if (SS && SS.metric === 'gain') SS.peak[pl.id] = Math.max(SS.peak[pl.id] || 0, (s.state.balance || 0) + (s.state.bankDeposit || 0));
       return json(res, 200, { ok: true, rev: pl.rev || 0 });
     }
+    if (p === '/api/catalog' && m === 'GET') return json(res, 200, pubCat());
     if (p === '/api/sub' && m === 'GET') return json(res, 200, subPub(pl));
     if (p === '/api/sub' && m === 'POST') {
       const b = await body(req), cur = subTier(pl);
@@ -716,6 +726,37 @@ async function api(req, res, url) {
         db.settings.plans = arr.map((x, i) => { const price = Number(x.price), mult = Number(x.mult); if (!Number.isFinite(price) || price < 0) throw `方案 ${i + 1} 價格不正確`; if (!Number.isFinite(mult) || mult < 1 || mult > 1e9) throw `方案 ${i + 1} 倍率需 1 以上`; return { name: String(x.name || '方案' + (i + 1)).slice(0, 20), price, mult }; });
         log('會員方案已更新'); touch(); conns.forEach((_, id) => db.players[id] && pushSub(db.players[id])); return json(res, 200, { ok: true });
       }
+      if (p === '/admin/api/catalog' && m === 'GET') return json(res, 200, { companies: cat().companies.map((x, j) => ({ index: j, id: 30 + j, name: x.name, cost: x.cost, income: x.income })), stocks: cat().stocks.map((x, j) => ({ index: j, id: 30 + j, name: x.name, price: Math.round((market.p[30 + j] || x.price) * 100) / 100, vol: x.vol })) });
+      if (p === '/admin/api/catalog' && m === 'POST') {
+        const kind = b.kind === 'company' ? 'companies' : b.kind === 'stock' ? 'stocks' : null; if (!kind) throw '類型錯誤';
+        const arr = cat()[kind], isC = kind === 'companies', label = isC ? '企業' : '股票';
+        const clean = x => {
+          const name = String(x.name || '').trim().slice(0, 16); if (!name) throw '請輸入名稱';
+          if (isC) { const cost = Math.floor(Number(x.cost)), income = Math.floor(Number(x.income)); if (!(cost >= 1 && cost <= 1e40)) throw '升級費用需介於 1 ~ 1e40'; if (!(income >= 1 && income <= 1e40)) throw '每級收入需介於 1 ~ 1e40'; return { name, cost, income }; }
+          const price = Number(x.price), vol = Number(x.vol); if (!(price >= 1 && price <= 1e9)) throw '股價需介於 1 ~ 1e9'; if (!(vol >= 0 && vol <= 0.5)) throw '波動需介於 0 ~ 0.5'; return { name, price, vol };
+        };
+        if (b.action === 'add') { if (arr.length >= 30) throw `自訂${label}最多 30 個`; arr.push(clean(b)); if (!isC) syncMarket(); log(`後台新增${label}：${arr[arr.length - 1].name}`); }
+        else if (b.action === 'edit') {
+          const j = parseInt(b.index), old = arr[j]; if (!old) throw '找不到項目'; const nx = clean(b);
+          if (!isC) { const cur = market.p[30 + j]; if (Math.abs(nx.price - cur) > 0.01) { market.p[30 + j] = nx.price; market.h[30 + j][49] = nx.price; } nx.price = market.p[30 + j]; }
+          arr[j] = nx; log(`後台修改${label}：${nx.name}`);
+        }
+        else if (b.action === 'delete') {
+          const j = parseInt(b.index), old = arr[j]; if (!old) throw '找不到項目'; const g = 30 + j, price = isC ? 0 : (market.p[g] || old.price);
+          for (const pl of Object.values(db.players)) {
+            const sv = pl.save; if (!sv) continue; let refund = 0;
+            if (isC) { const c = (sv.companies || [])[g]; if (c && c.level > 0) refund = Math.floor(old.cost * (Math.pow(1.5, c.level) - 1) / 0.5); if (Array.isArray(sv.companies) && sv.companies.length > g) sv.companies.splice(g, 1); }
+            else { const n = Math.floor(Number((sv.stocks || [])[g]) || 0); refund = Math.floor(n * price); if (Array.isArray(sv.stocks) && sv.stocks.length > g) sv.stocks.splice(g, 1); }
+            if (refund > 0) { try { queue(pl, mkCmd({ type: 'money', value: refund, msg: `🏷 ${old.name} 已下架，已退款` })); } catch (e) {} }
+            pl.rev = (pl.rev || 0) + 1;
+          }
+          if (!isC) { market.p.splice(g, 1); market.h.splice(g, 1); }
+          arr.splice(j, 1); log(`後台下架${label}：${old.name}（已退款給持有者）`);
+        } else throw '未知操作';
+        touch(); broadcast('catalog', pubCat());
+        if (b.action === 'delete') conns.forEach((_, id) => db.players[id] && sendTo(id, 'reload', { msg: '管理員已調整企業／股票，已同步你的進度' }));
+        broadcast('market', mktFull()); return json(res, 200, { ok: true });
+      }
       if (p === '/admin/api/debt' && m === 'POST') {
         const r = Number(b.ratio); if (!Number.isFinite(r) || r < 0 || r > 1000) throw '倍數需介於 0~1000（0 = 關閉）';
         db.settings.debtRatio = r; log(`負債限制：${r > 0 ? `貸款 ≥ 現金+存款 × ${r} 時禁止轉帳/訂閱` : '已關閉'}`); touch(); broadcast('debt', { ratio: r }); return json(res, 200, { ok: true });
@@ -757,13 +798,18 @@ async function api(req, res, url) {
         delete d._format; delete d._exportedAt; const mode = ['replace', 'missing', 'overwrite'].includes(b.mode) ? b.mode : 'replace';
         const snap = JSON.stringify(db); preRestore = snap; try { fs.writeFileSync(path.join(DATA_DIR, 'pre-restore.json'), snap); } catch {}
         const rep = { mode, added: 0, overwritten: 0, skipped: [] };
-        if (mode === 'replace') { const keep = db.market; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); db.market = keep; rep.added = Object.keys(db.players).length; }
+        if (mode === 'replace') {
+          const keep = db.market, oldDb = db; db = Object.assign({ players: {}, codes: {}, events: [], settings: db.settings, log: [], bans: { devices: {}, ips: {} }, autoAnn: [], hist: [] }, d); db.market = keep; rep.added = Object.keys(db.players).length;
+          // 舊備份沒有的新功能資料（會員方案設定、點數/負債設定、自訂企業股票、玩家會員狀態）不要被洗掉
+          db.settings = Object.assign({}, oldDb.settings, d.settings); if (!d.catalog && oldDb.catalog) db.catalog = oldDb.catalog;
+          rep.keptSubs = 0; for (const [id, pl] of Object.entries(db.players)) { const o = oldDb.players[id]; if (o && o.sub && pl && typeof pl === 'object' && !pl.sub) { pl.sub = o.sub; rep.keptSubs++; } }
+        }
         else {
           const names = new Map(Object.values(db.players).map(x => [x.name, x.id]));
           for (const [id, pl] of Object.entries(d.players)) {
             if (!pl || typeof pl !== 'object') continue; pl.id = pl.id || id;
             const clash = names.get(pl.name); if (clash && clash !== id) { rep.skipped.push(pl.name); continue; }
-            if (!db.players[id]) { db.players[id] = pl; rep.added++; } else if (mode === 'overwrite') { db.players[id] = pl; rep.overwritten++; }
+            if (!db.players[id]) { db.players[id] = pl; rep.added++; } else if (mode === 'overwrite') { const o = db.players[id]; db.players[id] = pl; if (o && o.sub && !pl.sub) pl.sub = o.sub; rep.overwritten++; }
           }
           for (const [k, v] of Object.entries(d.codes || {})) if (mode === 'overwrite' || !db.codes[k]) db.codes[k] = v;
           for (const kind of ['devices', 'ips']) for (const [k, v] of Object.entries((d.bans || {})[kind] || {})) if (!db.bans[kind][k]) db.bans[kind][k] = v;

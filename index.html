@@ -1181,7 +1181,7 @@
         "寰宇不動產", "深藍海洋科技", "星環太空開發", "創世金融帝國", "無限資本控股"
     ];
     let companies = Array.from({length: 30}, (_, i) => ({
-        id: i, name: companyNames[i], cost: Math.floor(300 * Math.pow(1.5, i)), baseIncome: Math.floor(10 * Math.pow(1.45, i)), level: 0
+        id: i, name: companyNames[i], baseCost: Math.floor(300 * Math.pow(1.5, i)), cost: Math.floor(300 * Math.pow(1.5, i)), baseIncome: Math.floor(10 * Math.pow(1.45, i)), level: 0
     }));
 
     const rarities = ["普通", "稀有", "史詩", "傳說", "神話", "創世"];
@@ -1752,7 +1752,7 @@
             parsed.companies.slice(0, companies.length).forEach((cData, i) => {
                 if (!companies[i] || !cData || typeof cData !== 'object') return;
                 companies[i].level = Math.max(0, Math.floor(Number(cData.level) || 0));
-                companies[i].cost = Math.floor(300 * Math.pow(1.5, i) * Math.pow(1.5, companies[i].level));
+                companies[i].cost = Math.floor((companies[i].baseCost || 300 * Math.pow(1.5, i)) * Math.pow(1.5, companies[i].level));
             });
         }
         recalcMultiplier();
@@ -2812,6 +2812,16 @@
         });
     };
 
+    // ----- 後台自訂的企業／股票（編號接在內建 30 之後；伺服器為準）-----
+    window.mcApplyCatalog = (cat) => {
+        const es = (cat && cat.stocks) || [], ec = (cat && cat.companies) || [], oS = stocks.slice(30), oC = companies.slice(30);
+        stocks.length = 30; companies.length = 30;
+        es.forEach((x, j) => { const o = oS[j], p0 = Math.max(1, Number(x.price) || 10); stocks.push({ id: 30 + j, name: String(x.name), price: o ? o.price : p0, volatility: Number(x.vol) || 0.1, history: o ? o.history : Array(50).fill(p0), owned: o ? o.owned : 0 }); });
+        ec.forEach((x, j) => { const o = oC[j], base = Math.max(1, Math.floor(Number(x.cost)) || 300), lv = o ? o.level : 0; companies.push({ id: 30 + j, name: String(x.name), baseCost: base, cost: Math.floor(base * Math.pow(1.5, lv)), baseIncome: Math.max(1, Math.floor(Number(x.income)) || 1), level: lv }); });
+        if (selectedStock >= stocks.length) selectedStock = 0;
+        try { renderStocks(); renderCompanies(); drawChart(); updateUI(); } catch (e) {}
+    };
+
     window.selectStock = (i) => { selectedStock = i; drawChart(); };
     
     window.tradeStock = (i, isBuy) => {
@@ -3046,7 +3056,7 @@
             soundRebirth(); state.rebirths++; state.capitalCores += coresGained;
             state.balance = 0; state.currentCardLevel = 0; state.maxCardOwnedLevel = 0; state.btnOwned = 0; state.btnSel = 0; applyClickerStyle();
             state.equippedBuffs = []; state.inventory = {}; state.multiplier = 1; state.bankDeposit = 0;
-            companies.forEach(c => {c.level = 0; c.cost = Math.floor(300*Math.pow(1.5, c.id));});
+            companies.forEach(c => {c.level = 0; c.cost = Math.floor(c.baseCost || 300*Math.pow(1.5, c.id));});
             stocks.forEach(s => s.owned = 0);
             renderCurrentCard(); renderCompanies(); renderStocks(); renderBuffSlots(); renderFriendList(); updateUI(); saveGame();
             alert(`重生成功！獲得 ${coresGained} 顆資本核心。請前往【重生商店】購買永久天賦！`);
