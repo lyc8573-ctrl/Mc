@@ -11,7 +11,7 @@ button.r{background:#dc3545}button.y{background:#fd7e14}button.g{background:#6c7
 </style></head><body>
 <div id="login" style="max-width:320px;margin:90px auto;text-align:center"><h2>後台登入</h2><input id="pw" type="password" placeholder="管理員密碼" style="width:100%"><br><button class="b" onclick="login()" style="width:100%;margin-top:8px">登入</button></div>
 <div id="app" style="display:none"><header><b>🛠 極簡資本 後台</b>
-<button data-t="ov">總覽</button><button data-t="pl">玩家</button><button data-t="bn">封鎖</button><button data-t="mk">股市</button><button data-t="sn">賽季</button><button data-t="ev">活動</button><button data-t="gf">發放/公告</button><button data-t="cd">兌換碼</button><button data-t="mb">會員</button><button data-t="ct">企業股票</button><button data-t="st">設定/日誌</button></header><main id="m"></main></div>
+<button data-t="ov">總覽</button><button data-t="pl">玩家</button><button data-t="bn">封鎖</button><button data-t="mk">股市</button><button data-t="sn">賽季</button><button data-t="ev">活動</button><button data-t="gf">發放/公告</button><button data-t="cd">兌換碼</button><button data-t="mb">會員</button><button data-t="ct">企業股票</button><button data-t="bt">按鈕</button><button data-t="st">設定/日誌</button></header><main id="m"></main></div>
 <script>
 const CARDS=["白銀初心卡", "青銅啟航卡", "黑曜獵手卡", "翡翠光輝卡", "藍寶石天際卡", "琥珀流光卡", "紫晶星雲卡", "紅蓮誓約卡", "鈦空量子卡", "極光幻境卡", "深海沉香卡", "烈陽霸者卡", "月華永恆卡", "賽博霓虹卡", "虛空暗物質卡", "黃金王者卡", "白金聖裁卡", "鑽石永恆卡", "星核裂變卡", "超新星爆發卡", "黑洞重力卡", "時空交響卡", "維度崩裂卡", "阿卡西記錄卡", "混沌初始卡", "銀河主宰卡", "宇宙心靈卡", "不朽神性卡", "萬物終焉卡", "創世神域卡", "彼岸星界卡", "天命輪轉卡", "因果律卡", "無界之門卡", "萬象歸一卡"];
 let T=sessionStorage.adm||'',timer,PL=[];const $=s=>document.querySelector(s),v=id=>document.getElementById(id).value;
@@ -147,6 +147,16 @@ const ctBody=(kind,k)=>kind=='company'?{name:v('cn'+k),cost:v('cc'+k),income:v('
 async function ctAdd(kind){await A('catalog',Object.assign({action:'add',kind},ctBody(kind,'_new')));R.ct()}
 async function ctSave(kind,j){await A('catalog',Object.assign({action:'edit',kind,index:j},ctBody(kind,j)));alert('已儲存');R.ct()}
 async function ctDel(kind,j){if(!confirm('確定下架？玩家持有的會自動退款。'))return;await A('catalog',{action:'delete',kind,index:j});R.ct()}
+const BTN_TYPES=["基礎", "青銅", "白銀", "黃金", "鉑金", "翡翠", "紅寶石", "藍寶石", "紫水晶", "黑曜石", "鑽石", "烈焰", "寒冰", "雷霆", "暴風", "大地", "星辰", "月華", "日曜", "銀河", "黑洞", "量子", "虛空", "混沌", "秩序", "永恆", "神話", "傳說", "創世", "終焉", "至尊"];
+R.bt=async function(){const d=await A('btn'),pl=await A('players'),g=d.global;
+$('#m').innerHTML=`<div class="card"><h3>🎨 按鈕種類（單一玩家）</h3><small>調整玩家主畫面賺錢按鈕是哪一種（0 基礎 ～ 30 至尊）。「等級與外觀」會同時改變點擊收益（種類越高每次點擊越多，和按鈕商店買到的效果一樣）；「只改外觀」不改收益，且不能超過玩家已買到的種類。套用後玩家畫面會即時更新。</small><br><select id="ks">${pl.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select> <select id="kt">${BTN_TYPES.map((n,i)=>`<option value="${i}">${i} ${n}</option>`).join('')}</select> <select id="km"><option value="full">等級與外觀</option><option value="skin">只改外觀</option></select> <button class="b p" onclick="saveSkin()">套用</button></div>
+<div class="card"><h3>🟢 賺錢按鈕（全服）</h3><small>主畫面綠色按鈕。收益倍率會乘在每次點擊收益上（1 = 原本）；停用後玩家按了沒有收益；符號最多 3 個字，留空 = 用按鈕原本的符號。</small><br>收益倍率 <input id="bm" value="${g.mul}" style="width:70px"> ｜ 停用 <input type="checkbox" id="bo" ${g.off?'checked':''}> ｜ 符號 <input id="bl" value="${esc(g.label||'')}" style="width:50px"> <button class="b p" onclick="saveBtnG()">儲存</button></div>
+<div class="card"><h3>單一玩家覆蓋</h3><small>留空 = 跟全服設定一樣。</small><br><select id="bp">${pl.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select> 倍率 <input id="bpm" style="width:70px"> 狀態 <select id="bpo"><option value="">跟全服</option><option value="false">啟用</option><option value="true">停用</option></select> 符號 <input id="bpl" style="width:50px"> <button class="b p" onclick="saveBtnP()">套用</button></div>
+<div class="card"><h3>已覆蓋的玩家（${d.players.length}）</h3>${d.players.length?`<table>${d.players.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.btn.mul!==undefined?'×'+x.btn.mul:'倍率跟全服'}</td><td>${x.btn.off===undefined?'狀態跟全服':(x.btn.off?'停用':'啟用')}</td><td>${x.btn.label?esc(x.btn.label):'符號跟全服'}</td><td><button class="b" onclick="clearBtnP('${x.id}')">還原</button></td></tr>`).join('')}</table>`:'<small>目前沒有</small>'}</div>`};
+async function saveSkin(){const r=await A('btnskin',{id:v('ks'),level:v('kt'),mode:v('km')});alert('已套用：玩家現在是 '+BTN_TYPES[r.sel]+'（已擁有到 '+BTN_TYPES[r.owned]+'）')}
+async function saveBtnG(){await A('btn',{scope:'global',mul:v('bm'),off:document.getElementById('bo').checked,label:v('bl')});alert('已儲存');R.bt()}
+async function saveBtnP(){await A('btn',{scope:'player',id:v('bp'),mul:v('bpm'),off:v('bpo'),label:v('bpl')});alert('已套用');R.bt()}
+async function clearBtnP(id){await A('btn',{scope:'player',id,clear:true});R.bt()}
 async function saveDebt(){await A('debt',{ratio:v('dr')});alert('已儲存');R.mb()}
 async function savePts(){await A('pts',{rate:v('pr')/100,step:v('ps')/100,per:v('pq')});alert('已儲存');R.mb()}
 async function grantMb(id,tier,days){await A('member/grant',{id,tier,days});R.mb()}

@@ -135,7 +135,8 @@ setInterval(() => { if (SUB.tier && window.MC_MEMBER_MULT > 1 && !subLeft()) app
 
 function connect() {
   es = new EventSource('/api/stream?key=' + encodeURIComponent(acc.key));
-  es.addEventListener('hello', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; if (d.pts) window.MC_PTS = d.pts; if (d.debt !== undefined) window.MC_DEBT = d.debt; });
+  es.addEventListener('hello', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; if (d.pts) window.MC_PTS = d.pts; if (d.debt !== undefined) window.MC_DEBT = d.debt; if (d.btn) { window.MC_BTN = d.btn; try { mcApplyBtn(); } catch (err) {} } });
+  es.addEventListener('btn', e => { try { window.MC_BTN = JSON.parse(e.data); mcApplyBtn(); } catch (err) {} });
   es.addEventListener('debt', e => { window.MC_DEBT = JSON.parse(e.data).ratio; });
   es.addEventListener('pts', e => { window.MC_PTS = JSON.parse(e.data); });
   es.addEventListener('events', e => { const d = JSON.parse(e.data); off = d.now - Date.now(); evs = d.events; });

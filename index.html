@@ -1256,9 +1256,13 @@
         const el = document.getElementById('main-clicker'); if (!el) return;
         const i = Math.min(state.btnSel || 0, BUTTONS.length - 1), b = BUTTONS[i];
         if (el.dataset.skin === String(i)) return; el.dataset.skin = String(i);
-        el.className = 'click-btn skin ' + b.cls; el.setAttribute('style', b.vars); el.innerHTML = '<span class="sym">' + b.sym + '</span>';
+        el.className = 'click-btn skin ' + b.cls; el.setAttribute('style', b.vars); el.innerHTML = '<span class="sym">' + b.sym + '</span>'; try { mcBtnLook(el); } catch (e) {}
     };
-    const getClickValue = () => Math.floor(state.baseClick * cardClickMulti() * state.multiplier * (window.EVENT_CLICK_MULT||1) * Math.pow(BTN_MULT, state.btnOwned || 0) * Math.pow(2, state.rebirths) * (1 + state.upgrades.click));
+    // 後台可調整的賺錢按鈕：收益倍率 / 停用 / 自訂符號（伺服器決定）
+    window.MC_BTN = window.MC_BTN || { mul: 1, off: false, label: '' };
+    window.mcBtnLook = (el) => { const c = window.MC_BTN || {}, sy = el.querySelector('.sym'); if (c.label && sy) sy.textContent = c.label; if (c.off) { el.style.opacity = '.4'; el.style.filter = 'grayscale(1)'; } };
+    window.mcApplyBtn = () => { const el = document.getElementById('main-clicker'); if (!el) return; el.dataset.skin = ''; applyClickerStyle(); try { updateUI(); } catch (e) {} };
+    const getClickValue = () => Math.floor(state.baseClick * cardClickMulti() * ((window.MC_BTN && window.MC_BTN.mul) || 1) * state.multiplier * (window.EVENT_CLICK_MULT||1) * Math.pow(BTN_MULT, state.btnOwned || 0) * Math.pow(2, state.rebirths) * (1 + state.upgrades.click));
 
     function savePermanentLoan(loanVal) {
         localStorage.setItem('minimalCapital_PermanentLoan', loanVal.toString());
@@ -2000,6 +2004,7 @@
     }
 
     document.getElementById('main-clicker').addEventListener('click', () => { 
+        if (window.MC_BTN && window.MC_BTN.off) { try { soundError(); cardToast('賺錢按鈕已被管理員停用'); } catch (e) {} return; }
         initAudio(); soundClick(); 
         const roll = rollClick(), earned = roll.v;
         state.balance += earned; state.stats.clicks = (state.stats.clicks | 0) + 1;

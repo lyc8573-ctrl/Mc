@@ -123,6 +123,11 @@ setInterval(() => {
   }
 }, 30000);
 
+// ---------- 賺錢按鈕（主畫面綠色按鈕）後台設定：全服設定 + 單一玩家覆蓋 ----------
+const btnBool = v => v === true || v === 'true' || v === 1 || v === '1';
+const btnMul = v => { const m = Number(v); if (!(m > 0 && m <= 1e6)) throw '收益倍率需大於 0、不超過 1000000'; return m; };
+const btnEff = p => { const g = db.settings.btn || {}, o = p.btn || {}; return { mul: o.mul !== undefined ? o.mul : (g.mul > 0 ? g.mul : 1), off: o.off !== undefined ? !!o.off : !!g.off, label: o.label !== undefined ? o.label : (g.label || '') }; };
+const pushBtn = p => sendTo(p.id, 'btn', btnEff(p));
 // ---------- 活動引擎 ----------
 const PRIZE_TYPES = ['droprain', 'lottery', 'login', 'packet', 'contest'];
 const MONEYISH = ['money', 'cores'];
@@ -331,7 +336,7 @@ function vet(p, s) {
   const oKind = oCards === 35 ? 'all' : oCards === 36 ? 'crit' : oCards === 37 ? 'all' : ['crit', 'passive', 'click', 'all'][oCards % 4], oSp = (0.05 + 0.02 * oL) * 2;
   const skillF = oSt >= 5 ? (oKind === 'crit' ? 5 : 1 + oSp) : 1, burstF = oAw > 1 ? 4 : 1;
   const cardFac = (1 + 0.15 * oSt) * oAw * collF * skillF * burstF;
-  const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oL) * mult * Math.pow(BTN_MULT, btnLvl) * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
+  const click = Math.floor((old.baseClick || 1) * (1 + 0.75 * oL) * mult * Math.max(1, btnEff(p).mul) * Math.pow(BTN_MULT, btnLvl) * Math.pow(2, oReb) * (1 + ou.click)) * ev.click;
   let pas = 0; (p.save.companies || []).forEach((c, i) => pas += ((c && c.level) || 0) * Math.floor(compInc(i) * 0.75 * (1 + 0.375 * oL) * (1 + ou.company)));
   const earn = (click * cps + pas * mult * ev.income) * cardFac * dt * 3;
   const oldB = old.balance || 0, oldD = old.bankDeposit || 0, oldW = oldB + oldD;
@@ -641,7 +646,7 @@ async function api(req, res, url) {
     if (p === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       if (!conns.has(pl.id)) conns.set(pl.id, new Set()); conns.get(pl.id).add(res);
-      sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance, pts: ptsPub(), debt: debtRatio() });
+      sse(res, 'hello', { now: now(), events: pubEvents(), motd: db.settings.motd, maintenance: db.settings.maintenance, pts: ptsPub(), debt: debtRatio(), btn: btnEff(pl) });
       sse(res, 'sub', subPub(pl));
       sse(res, 'market', mktFull());
       pl.pending.forEach(c => sse(res, 'cmd', c));
@@ -756,6 +761,30 @@ async function api(req, res, url) {
         touch(); broadcast('catalog', pubCat());
         if (b.action === 'delete') conns.forEach((_, id) => db.players[id] && sendTo(id, 'reload', { msg: '管理員已調整企業／股票，已同步你的進度' }));
         broadcast('market', mktFull()); return json(res, 200, { ok: true });
+      }
+      if (p === '/admin/api/btn' && m === 'GET') return json(res, 200, { global: Object.assign({ mul: 1, off: false, label: '' }, db.settings.btn || {}), players: Object.values(db.players).filter(x => x.btn && Object.keys(x.btn).length).map(x => ({ id: x.id, name: x.name, btn: x.btn })) });
+      if (p === '/admin/api/btn' && m === 'POST') {
+        if (b.scope === 'global') {
+          const g = { mul: btnMul(b.mul), off: btnBool(b.off) }, l = String(b.label || '').trim().slice(0, 3); if (l) g.label = l; db.settings.btn = g;
+          log(`賺錢按鈕（全服）：倍率 ×${g.mul}${g.off ? '、停用' : ''}${g.label ? '、符號 ' + g.label : ''}`); touch(); conns.forEach((_, id) => db.players[id] && pushBtn(db.players[id]));
+        } else {
+          const t = db.players[b.id]; if (!t) throw '找不到玩家';
+          if (b.clear) { delete t.btn; log(`賺錢按鈕：還原 ${t.name} 為全服設定`); }
+          else {
+            const o = {}; if (b.mul !== undefined && b.mul !== '' && b.mul !== null) o.mul = btnMul(b.mul); if (b.off !== undefined && b.off !== '') o.off = btnBool(b.off); const l = String(b.label || '').trim().slice(0, 3); if (l) o.label = l;
+            if (!Object.keys(o).length) throw '沒有要設定的項目（全部留空 = 跟全服）'; t.btn = Object.assign({}, t.btn, o); log(`賺錢按鈕：${t.name} ${JSON.stringify(o)}`);
+          }
+          touch(); pushBtn(t);
+        }
+        return json(res, 200, { ok: true });
+      }
+      if (p === '/admin/api/btnskin' && m === 'POST') {
+        const t = db.players[b.id]; if (!t) throw '找不到玩家'; const lv = Math.floor(Number(b.level)); if (!(lv >= 0 && lv <= 30)) throw '按鈕種類需介於 0~30';
+        if (!t.save || !t.save.state) throw '這位玩家還沒有存檔，無法調整'; const st = t.save.state;
+        if (b.mode === 'skin') { const owned = Math.min(30, Math.max(0, Math.floor(Number(st.btnOwned) || 0))); if (lv > owned) throw `只改外觀時不能超過玩家已擁有的種類（目前 ${owned}）`; st.btnSel = lv; }
+        else { st.btnOwned = lv; st.btnSel = lv; }
+        t.rev = (t.rev || 0) + 1; log(`調整按鈕種類：${t.name} → ${lv}（${b.mode === 'skin' ? '只改外觀' : '等級與外觀'}）`); touch(); sendTo(t.id, 'reload', { msg: '管理員調整了你的賺錢按鈕' });
+        return json(res, 200, { ok: true, owned: st.btnOwned, sel: st.btnSel });
       }
       if (p === '/admin/api/debt' && m === 'POST') {
         const r = Number(b.ratio); if (!Number.isFinite(r) || r < 0 || r > 1000) throw '倍數需介於 0~1000（0 = 關閉）';
